@@ -2,7 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { AppConfigService } from '../config.service.js';
+import { AppConfigService, joinConfigPaths } from '../config.service.js';
 
 describe('AppConfigService', () => {
   let tmpDir: string;
@@ -77,5 +77,20 @@ describe('AppConfigService', () => {
     assert.deepStrictEqual(config.inputFolders, uncInputs);
     assert.strictEqual(config.outputFolder, uncOutput);
     assert.strictEqual(config.dbPath, '\\\\ZIMABOARD\\sda1\\media_cataloger\\config\\catalog_history.db');
+  });
+
+  it('should join config paths correctly for Windows drive letters and UNC paths', () => {
+    assert.strictEqual(
+      joinConfigPaths('C:\\Media\\Output', 'config', 'catalog_history.db'),
+      'C:\\Media\\Output\\config\\catalog_history.db'
+    );
+    assert.strictEqual(
+      joinConfigPaths('D:/Media/Output', 'config', 'catalog_history.db'),
+      'D:/Media/Output\\config\\catalog_history.db'
+    );
+    assert.strictEqual(
+      joinConfigPaths('\\\\SERVER\\Share', 'config', 'catalog_history.db'),
+      '\\\\SERVER\\Share\\config\\catalog_history.db'
+    );
   });
 });

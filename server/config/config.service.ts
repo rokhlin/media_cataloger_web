@@ -37,7 +37,7 @@ export function joinConfigPaths(base: string, ...segments: string[]): string {
   const trimmedBase = base.trim();
 
   // If base uses backslashes (Windows UNC or Windows path)
-  if (trimmedBase.startsWith('\\\\') || /^[a-zA-Z]:\\/.test(trimmedBase) || trimmedBase.includes('\\')) {
+  if (trimmedBase.startsWith('\\\\') || /^[a-zA-Z]:[\\\/]/.test(trimmedBase) || trimmedBase.includes('\\')) {
     const cleanSegments = segments.map(s => s.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '').replace(/\//g, '\\'));
     return [trimmedBase.replace(/[\\]+$/, ''), ...cleanSegments].join('\\');
   }
