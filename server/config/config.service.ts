@@ -92,17 +92,23 @@ export class AppConfigService {
     if (process.env.SETTINGS_PATH && process.env.SETTINGS_PATH.trim()) {
       return path.resolve(process.env.SETTINGS_PATH.trim());
     }
-    const configDirSettings = path.resolve(this.projectRoot, 'data', 'config', 'settings.json');
-    if (fs.existsSync(configDirSettings)) {
-      return configDirSettings;
-    }
-    return path.resolve(this.projectRoot, 'settings.json');
+    return path.resolve(this.projectRoot, 'data', 'config', 'settings.json');
   }
 
   getSavedSettings(): Record<string, any> {
-    if (fs.existsSync(this.settingsFilePath)) {
+    const configPath = this.settingsFilePath;
+    if (fs.existsSync(configPath)) {
       try {
-        const raw = fs.readFileSync(this.settingsFilePath, 'utf-8');
+        const raw = fs.readFileSync(configPath, 'utf-8');
+        return JSON.parse(raw);
+      } catch {
+        return {};
+      }
+    }
+    const legacyPath = path.resolve(this.projectRoot, 'settings.json');
+    if (fs.existsSync(legacyPath)) {
+      try {
+        const raw = fs.readFileSync(legacyPath, 'utf-8');
         return JSON.parse(raw);
       } catch {
         return {};
@@ -134,7 +140,12 @@ export class AppConfigService {
         delete data.output_folder;
       }
     }
-    fs.writeFileSync(this.settingsFilePath, JSON.stringify(data, null, 2), 'utf-8');
+    const targetFile = this.settingsFilePath;
+    const targetDir = path.dirname(targetFile);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    fs.writeFileSync(targetFile, JSON.stringify(data, null, 2), 'utf-8');
   }
 
   get inputFolders(): string[] {

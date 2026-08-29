@@ -28,9 +28,13 @@ dist-server
 
 
 # Local databases & media
-media_output/
-media_input/
-data/
+media_output/*
+media_input/*
+data/*
+!data/config/
+!data/config/.gitkeep
+data/config/*.json
+data/config/*.env*
 .env
 .env.local
 *.bak
