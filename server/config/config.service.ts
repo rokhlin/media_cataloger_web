@@ -176,28 +176,25 @@ export class AppConfigService {
 
   get dbPath(): string {
     if (process.env.DB_PATH && process.env.DB_PATH.trim()) {
-      const explicit = normalizeConfigPath(process.env.DB_PATH.trim(), this.projectRoot);
-      if (fs.existsSync(explicit)) return explicit;
+      return normalizeConfigPath(process.env.DB_PATH.trim(), this.projectRoot);
     }
     const saved = this.getSavedSettings();
     const savedOutput = saved.OUTPUT_FOLDER || saved.output_folder;
     if (savedOutput && String(savedOutput).trim()) {
       const out = normalizeConfigPath(String(savedOutput).trim(), this.projectRoot);
-      const configDb = joinConfigPaths(out, 'config', 'catalog_history.db');
-      if (fs.existsSync(configDb)) return configDb;
       const rootDb = joinConfigPaths(out, 'catalog_history.db');
       if (fs.existsSync(rootDb)) return rootDb;
+      return joinConfigPaths(out, 'config', 'catalog_history.db');
     }
     if (process.env.OUTPUT_FOLDER && process.env.OUTPUT_FOLDER.trim()) {
       const out = normalizeConfigPath(process.env.OUTPUT_FOLDER.trim(), this.projectRoot);
-      const configDb = joinConfigPaths(out, 'config', 'catalog_history.db');
-      if (fs.existsSync(configDb)) return configDb;
       const rootDb = joinConfigPaths(out, 'catalog_history.db');
       if (fs.existsSync(rootDb)) return rootDb;
+      return joinConfigPaths(out, 'config', 'catalog_history.db');
     }
-    const fallbackConfigDb = joinConfigPaths(this.outputFolder, 'config', 'catalog_history.db');
-    if (fs.existsSync(fallbackConfigDb)) return fallbackConfigDb;
-    return joinConfigPaths(this.outputFolder, 'catalog_history.db');
+    const legacyRootDb = joinConfigPaths(this.outputFolder, 'catalog_history.db');
+    if (fs.existsSync(legacyRootDb)) return legacyRootDb;
+    return joinConfigPaths(this.outputFolder, 'config', 'catalog_history.db');
   }
 
   get familyTreeDbPath(): string {
