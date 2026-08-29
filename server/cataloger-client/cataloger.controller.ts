@@ -1,0 +1,85 @@
+import { Controller, Get, Post, Delete, Query, HttpException, HttpStatus, Inject } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { CatalogerClientService } from './cataloger.service.js';
+
+@ApiTags('pipeline')
+@Controller('api')
+export class CatalogerController {
+  constructor(@Inject(CatalogerClientService) private readonly catalogerService: CatalogerClientService) {}
+
+  @Post('run')
+  @ApiOperation({ summary: 'Trigger full cataloging sync' })
+  @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-processing of already synced items' })
+  async triggerRun(@Query('force') force?: string) {
+    try {
+      const forceBool = force === 'true' || force === '1';
+      return await this.catalogerService.triggerRun(forceBool);
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('analyze-file')
+  @ApiOperation({ summary: 'Analyze a single media file immediately' })
+  @ApiQuery({ name: 'file', required: true, description: 'Filename or path to the media file' })
+  async triggerAnalyzeFile(@Query('file') file: string) {
+    if (!file || !file.trim()) {
+      throw new HttpException('File parameter cannot be empty.', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      return await this.catalogerService.triggerAnalyzeFile(file.trim());
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('pause')
+  @ApiOperation({ summary: 'Pause current pipeline execution' })
+  async pause() {
+    try {
+      return await this.catalogerService.pause();
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('resume')
+  @ApiOperation({ summary: 'Resume paused execution' })
+  async resume() {
+    try {
+      return await this.catalogerService.resume();
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('stop')
+  @ApiOperation({ summary: 'Stop and cancel current execution' })
+  async stop() {
+    try {
+      return await this.catalogerService.stop();
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('status')
+  @ApiOperation({ summary: 'Get current cataloging pipeline execution status and progress' })
+  @ApiResponse({ status: 200, description: 'Current worker status and progress' })
+  async getStatus() {
+    return this.catalogerService.getStatus();
+  }
+
+  @Get('logs')
+  @ApiOperation({ summary: 'Get real-time execution logs from cataloging worker' })
+  async getLogs() {
+    return this.catalogerService.getLogs();
+  }
+
+  @Post('logs/clear')
+  @Delete('logs')
+  @ApiOperation({ summary: 'Clear execution logs' })
+  async clearLogs() {
+    return this.catalogerService.clearLogs();
+  }
+}

@@ -1,0 +1,268 @@
+import { useState, useMemo } from 'react';
+import { ReactFlowProvider } from '@xyflow/react';
+import { useFamilyTreeData } from '../hooks/useFamilyTreeData.js';
+import { useFamilyTreeStore } from '../state/useFamilyTreeStore.js';
+import { TreeCanvas } from './canvas/TreeCanvas.js';
+import { PersonDetailDrawer } from './modals/PersonDetailDrawer.js';
+import { QuickAddRelativeModal } from './modals/QuickAddRelativeModal.js';
+import { FaceLinkModal } from './modals/FaceLinkModal.js';
+
+export const FamilyTreeTab = () => {
+  const {
+    activeTreeId,
+    selectedPersonId,
+    isQuickAddModalOpen,
+    quickAddTargetPersonId,
+    quickAddInitialRelation,
+    isFaceLinkModalOpen,
+    faceLinkTargetPersonId,
+    openQuickAdd,
+    closeQuickAdd,
+    openFaceLink,
+    closeFaceLink,
+  } = useFamilyTreeStore();
+
+  const {
+    graphData,
+    isLoading,
+    error,
+    refreshGraph,
+    createPerson,
+    updatePerson,
+    deletePerson,
+    quickAddRelative,
+    linkFace,
+    unlinkFace,
+    setRootPerson,
+  } = useFamilyTreeData(activeTreeId);
+
+  const [isCreatePersonOpen, setIsCreatePersonOpen] = useState(false);
+  const [newPersonName, setNewPersonName] = useState('');
+
+  const selectedPerson = useMemo(() => {
+    if (!graphData || !selectedPersonId) return null;
+    return graphData.persons.find((p) => p.id === selectedPersonId) || null;
+  }, [graphData, selectedPersonId]);
+
+  const quickAddTargetPerson = useMemo(() => {
+    if (!graphData || !quickAddTargetPersonId) return null;
+    return graphData.persons.find((p) => p.id === quickAddTargetPersonId) || null;
+  }, [graphData, quickAddTargetPersonId]);
+
+  const faceLinkTargetPerson = useMemo(() => {
+    if (!graphData || !faceLinkTargetPersonId) return null;
+    return graphData.persons.find((p) => p.id === faceLinkTargetPersonId) || null;
+  }, [graphData, faceLinkTargetPersonId]);
+
+  const handleAddNewStandalonePerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPersonName.trim()) return;
+
+    const parts = newPersonName.trim().split(' ');
+    const first_name = parts[0];
+    const last_name = parts.slice(1).join(' ') || undefined;
+
+    await createPerson({
+      tree_id: activeTreeId,
+      first_name,
+      last_name,
+      gender: 'UNKNOWN',
+      is_living: true,
+    });
+
+    setNewPersonName('');
+    setIsCreatePersonOpen(false);
+  };
+
+  return (
+    <ReactFlowProvider>
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'transparent',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Main Canvas Viewport */}
+        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+          <TreeCanvas
+            graphData={graphData}
+            isLoading={isLoading}
+            onAddMember={() => {
+              if (graphData?.persons && graphData.persons.length > 0) {
+                const targetId = selectedPersonId || graphData.root_person_id || graphData.persons[0].id;
+                openQuickAdd(targetId, 'CHILD');
+              } else {
+                setIsCreatePersonOpen(true);
+              }
+            }}
+          />
+
+          {/* Error Banner */}
+          {error && !isLoading && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 70,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 40,
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                color: '#fca5a5',
+                padding: '10px 18px',
+                borderRadius: 10,
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              <span>⚠️ {error}</span>
+              <button
+                type="button"
+                onClick={() => refreshGraph()}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.3)',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  color: '#ffffff',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Sliding Detail Drawer */}
+          <PersonDetailDrawer
+            person={selectedPerson}
+            graphData={graphData}
+            onUpdatePerson={updatePerson}
+            onDeletePerson={deletePerson}
+            onSetRootPerson={setRootPerson}
+            onOpenQuickAdd={openQuickAdd}
+            onOpenFaceLink={openFaceLink}
+          />
+        </div>
+
+        {/* Quick Add Relative Modal */}
+        <QuickAddRelativeModal
+          isOpen={isQuickAddModalOpen}
+          onClose={closeQuickAdd}
+          targetPersonId={quickAddTargetPersonId}
+          targetPersonName={quickAddTargetPerson?.full_name || quickAddTargetPerson?.first_name}
+          initialRelationship={quickAddInitialRelation}
+          onAddRelative={quickAddRelative}
+        />
+
+        {/* Face Link Modal */}
+        <FaceLinkModal
+          isOpen={isFaceLinkModalOpen}
+          onClose={closeFaceLink}
+          person={faceLinkTargetPerson}
+          onLinkFace={linkFace}
+          onUnlinkFace={unlinkFace}
+        />
+
+        {/* New Standalone Member Modal (for empty tree) */}
+        {isCreatePersonOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 100,
+              background: 'rgba(0, 0, 0, 0.75)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+              padding: 20,
+            }}
+            onClick={() => setIsCreatePersonOpen(false)}
+          >
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 16,
+                width: '100%',
+                maxWidth: 440,
+                padding: 24,
+                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 12 }}>
+                Add Initial Family Member
+              </div>
+              <form onSubmit={handleAddNewStandalonePerson}>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newPersonName}
+                  onChange={(e) => setNewPersonName(e.target.value)}
+                  placeholder="Enter full name (e.g. Alex Johnson)"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(30, 41, 59, 0.7)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 8,
+                    padding: '10px 14px',
+                    color: '#f8fafc',
+                    fontSize: 14,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    marginBottom: 16,
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      color: '#cbd5e1',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '8px 16px',
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setIsCreatePersonOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '8px 20px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Create Person
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </ReactFlowProvider>
+  );
+};
