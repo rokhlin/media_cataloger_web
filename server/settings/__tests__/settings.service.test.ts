@@ -44,9 +44,10 @@ describe('SettingsService', () => {
   });
 
   it('should update and persist settings including comma-separated input lists and provider parameters', () => {
+    const testOutput = path.join(tmpDir, 'output');
     const updateResult = settingsService.updateSettings({
       input_folders: ['/test/folder1, /test/folder2', '/test/folder3'],
-      output_folder: '/test/output',
+      output_folder: testOutput,
       model_provider: 'local',
       local_model_name: 'llama-3.2-vision',
       local_max_workers: 4,
@@ -62,7 +63,7 @@ describe('SettingsService', () => {
     // Verify settings were persisted on disk
     const savedDisk = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     assert.deepStrictEqual(savedDisk.INPUT_FOLDERS, ['/test/folder1', '/test/folder2', '/test/folder3']);
-    assert.strictEqual(savedDisk.OUTPUT_FOLDER, '/test/output');
+    assert.strictEqual(savedDisk.OUTPUT_FOLDER, testOutput);
     assert.strictEqual(savedDisk.MODEL_PROVIDER, 'local');
     assert.strictEqual(savedDisk.LOCAL_MAX_WORKERS, 4);
   });
