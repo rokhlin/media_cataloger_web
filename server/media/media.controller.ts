@@ -30,7 +30,11 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
-    return res.sendFile(resolved);
+    res.sendFile(resolved, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({ error: 'file_send_error', detail: err.message });
+      }
+    });
   }
 
   @Get('file-content')
@@ -47,7 +51,11 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
-    return res.sendFile(resolved);
+    res.sendFile(resolved, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({ error: 'file_send_error', detail: err.message });
+      }
+    });
   }
 
   @Get('validate-file')
