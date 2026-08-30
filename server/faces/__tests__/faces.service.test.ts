@@ -145,4 +145,38 @@ describe('FacesService', () => {
       facesService.getFaceImagePath('non_existent_face_999.jpg');
     }, NotFoundException);
   });
+
+  it('should delete batch of faces and associated disk files and sidecar entries', () => {
+    const db = dbService.getDb();
+    const testFaceId = 'face_batch_cleanup_01';
+    const testCropFile = path.join(facesDir, `${testFaceId}.jpg`);
+    fs.writeFileSync(testCropFile, 'crop-bytes');
+
+    const testSidecar = path.join(tmpDir, 'photo_test.jpg.json');
+    fs.writeFileSync(
+      testSidecar,
+      JSON.stringify({
+        faces: [{ face_id: testFaceId, name: 'BatchPerson' }, { face_id: 'face_keep_02', name: 'KeepPerson' }],
+      })
+    );
+
+    db.prepare(`
+      INSERT INTO face_registry (face_id, name, confidence, source_file, image_path, is_reference)
+      VALUES (?, 'BatchPerson', 0.9, ?, ?, 0)
+    `).run(testFaceId, 'photo_test.jpg', testCropFile);
+
+    assert.strictEqual(fs.existsSync(testCropFile), true);
+
+    const batchRes = facesService.deleteFacesBatch([testFaceId]);
+    assert.strictEqual(batchRes.status, 'success');
+    assert.strictEqual(batchRes.deleted_count, 1);
+
+    // Verify crop file on disk was removed
+    assert.strictEqual(fs.existsSync(testCropFile), false);
+
+    // Verify sidecar was updated to remove the deleted face
+    const updatedSidecar = JSON.parse(fs.readFileSync(testSidecar, 'utf-8'));
+    assert.strictEqual(updatedSidecar.faces.length, 1);
+    assert.strictEqual(updatedSidecar.faces[0].face_id, 'face_keep_02');
+  });
 });

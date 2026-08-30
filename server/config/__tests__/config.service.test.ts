@@ -64,11 +64,15 @@ describe('AppConfigService', () => {
     assert.ok(saved.updated_at, 'updated_at timestamp should exist');
   });
 
-  it('should preserve Windows UNC and drive paths without corrupting with relative root', () => {
+  it('should preserve Windows UNC and drive paths in dev build without corrupting with relative root', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.BUILD_TYPE = 'dev';
     const customSettingsFile = path.join(tmpDir, 'unc_settings.json');
     process.env.SETTINGS_PATH = customSettingsFile;
 
     const config = new AppConfigService();
+    assert.strictEqual(config.isDev, true);
+
     const uncInputs = ['\\\\ZIMABOARD\\shares\\Photo', 'C:\\Media\\Pictures'];
     const uncOutput = '\\\\ZIMABOARD\\sda1\\media_cataloger';
 
@@ -77,6 +81,26 @@ describe('AppConfigService', () => {
     assert.deepStrictEqual(config.inputFolders, uncInputs);
     assert.strictEqual(config.outputFolder, uncOutput);
     assert.strictEqual(config.dbPath, '\\\\ZIMABOARD\\sda1\\media_cataloger\\config\\catalog_history.db');
+  });
+
+  it('should map UNC share mounts to /app/media_input and /app/media_output in non-dev/production builds', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.BUILD_TYPE;
+    const customSettingsFile = path.join(tmpDir, 'prod_unc_settings.json');
+    process.env.SETTINGS_PATH = customSettingsFile;
+
+    const config = new AppConfigService();
+    assert.strictEqual(config.isDev, false);
+
+    const uncInputs = ['\\\\ZIMABOARD\\shares\\Photo', '\\ZIMABOARD\\shares\\Photo'];
+    const uncOutput = '\\\\ZIMABOARD\\sda1\\media_cataloger';
+
+    config.saveSettings(uncInputs, uncOutput);
+
+    assert.deepStrictEqual(config.inputFolders, ['/app/media_input', '/app/media_input']);
+    assert.strictEqual(config.outputFolder, '/app/media_output');
+    assert.strictEqual(config.dbPath, '/app/media_output/config/catalog_history.db');
+    assert.strictEqual(config.familyTreeDbPath, '/app/media_output/family_tree.db');
   });
 
   it('should join config paths correctly for Windows drive letters and UNC paths', () => {

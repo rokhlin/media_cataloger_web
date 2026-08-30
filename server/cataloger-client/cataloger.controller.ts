@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Delete, Query, HttpException, HttpStatus, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Query, Body, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { CatalogerClientService } from './cataloger.service.js';
+import { LogLevel } from '../logging/log-buffer.service.js';
 
 @ApiTags('pipeline')
 @Controller('api')
@@ -10,25 +11,32 @@ export class CatalogerController {
   @Post('run')
   @ApiOperation({ summary: 'Trigger full cataloging sync' })
   @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-processing of already synced items' })
-  async triggerRun(@Query('force') force?: string) {
+  async triggerRun(@Query('force') force?: string, @Body() customPayload?: any) {
     try {
       const forceBool = force === 'true' || force === '1';
-      return await this.catalogerService.triggerRun(forceBool);
+      return await this.catalogerService.triggerRun(forceBool, customPayload);
     } catch (err: any) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
     }
   }
 
   @Post('analyze-file')
   @ApiOperation({ summary: 'Analyze a single media file immediately' })
-  @ApiQuery({ name: 'file', required: true, description: 'Filename or path to the media file' })
-  async triggerAnalyzeFile(@Query('file') file: string) {
-    if (!file || !file.trim()) {
+  @ApiQuery({ name: 'file', required: false, description: 'Filename or path to the media file' })
+  async triggerAnalyzeFile(@Query('file') file?: string, @Body() body?: any) {
+    const targetFile = file || body?.file;
+    if (!targetFile || !String(targetFile).trim()) {
       throw new HttpException('File parameter cannot be empty.', HttpStatus.BAD_REQUEST);
     }
     try {
-      return await this.catalogerService.triggerAnalyzeFile(file.trim());
+      return await this.catalogerService.triggerAnalyzeFile(String(targetFile).trim(), body);
     } catch (err: any) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
     }
   }
@@ -70,10 +78,26 @@ export class CatalogerController {
     return this.catalogerService.getStatus();
   }
 
+  @Get('validate-connection')
+  @ApiOperation({ summary: 'Validate HTTP connection to media_cataloger AI service' })
+  @ApiResponse({ status: 200, description: 'Connection status and latency details' })
+  async validateConnection() {
+    return this.catalogerService.validateConnection();
+  }
+
+  @Get('health')
+  @ApiOperation({ summary: 'Health check and connection validation for cataloger AI service' })
+  async getHealth() {
+    return this.catalogerService.validateConnection();
+  }
+
   @Get('logs')
   @ApiOperation({ summary: 'Get real-time execution logs from cataloging worker' })
-  async getLogs() {
-    return this.catalogerService.getLogs();
+  @ApiQuery({ name: 'level', required: false, enum: ['DEBUG', 'INFO', 'WARN', 'ERROR', 'ALL'], description: 'Filter logs by level' })
+  async getLogs(@Query('level') level?: string) {
+    const validLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'ALL'];
+    const selectedLevel = level && validLevels.includes(level.toUpperCase()) ? (level.toUpperCase() as LogLevel | 'ALL') : undefined;
+    return this.catalogerService.getLogs(selectedLevel);
   }
 
   @Post('logs/clear')

@@ -3,18 +3,44 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 
-export function normalizeConfigPath(p: string, baseDir: string): string {
+export interface NormalizePathOptions {
+  isDev?: boolean;
+  fallbackType?: 'input' | 'output';
+}
+
+export function normalizeConfigPath(
+  p: string,
+  baseDir: string,
+  options?: NormalizePathOptions
+): string {
   if (!p) return '';
   const trimmed = p.trim();
   if (!trimmed) return '';
 
+  const isDev = options?.isDev !== undefined
+    ? options.isDev
+    : (process.env.BUILD_TYPE === 'dev' || (process.env.BUILD_TYPE !== 'production' && process.env.BUILD_TYPE !== 'docker' && process.env.NODE_ENV !== 'production'));
+  const fallbackType = options?.fallbackType || 'input';
+
+  const isUnc = trimmed.startsWith('\\') || trimmed.startsWith('//');
+  const isWinDrive = /^[a-zA-Z]:[/\\]/.test(trimmed);
+
+  // In non-dev builds (e.g. docker/production), UNC share mounts and Windows drive paths are not accessible; map them to container mount points
+  if (!isDev && (isUnc || isWinDrive)) {
+    const lower = trimmed.toLowerCase();
+    if (fallbackType === 'output' || lower.includes('output') || lower.includes('cataloger') || lower.includes('sda1')) {
+      return '/app/media_output';
+    }
+    return '/app/media_input';
+  }
+
   // Check if Windows UNC path (e.g. \\server\share or //server/share)
-  if (trimmed.startsWith('\\\\') || trimmed.startsWith('//')) {
+  if (isUnc) {
     return trimmed;
   }
 
   // Check if Windows drive letter (e.g. C:\... or C:/...)
-  if (/^[a-zA-Z]:[/\\]/.test(trimmed)) {
+  if (isWinDrive) {
     return trimmed;
   }
 
@@ -36,8 +62,14 @@ export function joinConfigPaths(base: string, ...segments: string[]): string {
   if (!base) return path.join(...segments);
   const trimmedBase = base.trim();
 
+  // If base starts with '/' (POSIX container path like /app/media_output), join with forward slashes
+  if (trimmedBase.startsWith('/')) {
+    const cleanSegments = segments.map(s => s.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '').replace(/\\/g, '/'));
+    return [trimmedBase.replace(/[/\\]+$/, ''), ...cleanSegments].join('/');
+  }
+
   // If base uses backslashes (Windows UNC or Windows path)
-  if (trimmedBase.startsWith('\\\\') || /^[a-zA-Z]:[\\\/]/.test(trimmedBase) || trimmedBase.includes('\\')) {
+  if (trimmedBase.startsWith('\\') || /^[a-zA-Z]:[\\\/]/.test(trimmedBase) || trimmedBase.includes('\\')) {
     const cleanSegments = segments.map(s => s.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '').replace(/\//g, '\\'));
     return [trimmedBase.replace(/[\\]+$/, ''), ...cleanSegments].join('\\');
   }
@@ -76,7 +108,13 @@ if (fs.existsSync(path.resolve(process.cwd(), 'manage.py'))) {
 @Injectable()
 export class AppConfigService {
   readonly projectRoot: string = projectRoot;
-  
+
+  get isDev(): boolean {
+    if (process.env.BUILD_TYPE === 'dev' || process.env.BUILD_TYPE === 'development') return true;
+    if (process.env.BUILD_TYPE === 'production' || process.env.BUILD_TYPE === 'docker') return false;
+    return process.env.NODE_ENV !== 'production';
+  }
+
   get port(): number {
     return parseInt(process.env.PORT || process.env.API_PORT || '8000', 10);
   }
@@ -152,42 +190,42 @@ export class AppConfigService {
     const saved = this.getSavedSettings();
     const savedInputs = saved.INPUT_FOLDERS || saved.input_folders;
     if (savedInputs && Array.isArray(savedInputs) && savedInputs.length > 0) {
-      return savedInputs.map(p => normalizeConfigPath(String(p), this.projectRoot));
+      return savedInputs.map(p => normalizeConfigPath(String(p), this.projectRoot, { isDev: this.isDev, fallbackType: 'input' }));
     }
     const envInputs = process.env.INPUT_FOLDERS || process.env.MEDIA_INPUT;
     if (envInputs && envInputs.trim()) {
-      return envInputs.split(',').map(p => p.trim()).filter(Boolean).map(p => normalizeConfigPath(p, this.projectRoot));
+      return envInputs.split(',').map(p => p.trim()).filter(Boolean).map(p => normalizeConfigPath(p, this.projectRoot, { isDev: this.isDev, fallbackType: 'input' }));
     }
-    return [normalizeConfigPath('media_input', this.projectRoot)];
+    return [this.isDev ? normalizeConfigPath('media_input', this.projectRoot, { isDev: true }) : '/app/media_input'];
   }
 
   get outputFolder(): string {
     const saved = this.getSavedSettings();
     const savedOutput = saved.OUTPUT_FOLDER || saved.output_folder;
     if (savedOutput && String(savedOutput).trim()) {
-      return normalizeConfigPath(String(savedOutput).trim(), this.projectRoot);
+      return normalizeConfigPath(String(savedOutput).trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
     }
     const envOutput = process.env.OUTPUT_FOLDER || process.env.MEDIA_OUTPUT;
     if (envOutput && envOutput.trim()) {
-      return normalizeConfigPath(envOutput.trim(), this.projectRoot);
+      return normalizeConfigPath(envOutput.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
     }
-    return normalizeConfigPath('media_output', this.projectRoot);
+    return this.isDev ? normalizeConfigPath('media_output', this.projectRoot, { isDev: true }) : '/app/media_output';
   }
 
   get dbPath(): string {
     if (process.env.DB_PATH && process.env.DB_PATH.trim()) {
-      return normalizeConfigPath(process.env.DB_PATH.trim(), this.projectRoot);
+      return normalizeConfigPath(process.env.DB_PATH.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
     }
     const saved = this.getSavedSettings();
     const savedOutput = saved.OUTPUT_FOLDER || saved.output_folder;
     if (savedOutput && String(savedOutput).trim()) {
-      const out = normalizeConfigPath(String(savedOutput).trim(), this.projectRoot);
+      const out = normalizeConfigPath(String(savedOutput).trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
       const rootDb = joinConfigPaths(out, 'catalog_history.db');
       if (fs.existsSync(rootDb)) return rootDb;
       return joinConfigPaths(out, 'config', 'catalog_history.db');
     }
     if (process.env.OUTPUT_FOLDER && process.env.OUTPUT_FOLDER.trim()) {
-      const out = normalizeConfigPath(process.env.OUTPUT_FOLDER.trim(), this.projectRoot);
+      const out = normalizeConfigPath(process.env.OUTPUT_FOLDER.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
       const rootDb = joinConfigPaths(out, 'catalog_history.db');
       if (fs.existsSync(rootDb)) return rootDb;
       return joinConfigPaths(out, 'config', 'catalog_history.db');
@@ -199,16 +237,16 @@ export class AppConfigService {
 
   get familyTreeDbPath(): string {
     if (process.env.FAMILY_TREE_DB_PATH && process.env.FAMILY_TREE_DB_PATH.trim()) {
-      return normalizeConfigPath(process.env.FAMILY_TREE_DB_PATH.trim(), this.projectRoot);
+      return normalizeConfigPath(process.env.FAMILY_TREE_DB_PATH.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
     }
     const saved = this.getSavedSettings();
     const savedOutput = saved.OUTPUT_FOLDER || saved.output_folder;
     if (savedOutput && String(savedOutput).trim()) {
-      const out = normalizeConfigPath(String(savedOutput).trim(), this.projectRoot);
+      const out = normalizeConfigPath(String(savedOutput).trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
       return joinConfigPaths(out, 'family_tree.db');
     }
     if (process.env.OUTPUT_FOLDER && process.env.OUTPUT_FOLDER.trim()) {
-      const out = normalizeConfigPath(process.env.OUTPUT_FOLDER.trim(), this.projectRoot);
+      const out = normalizeConfigPath(process.env.OUTPUT_FOLDER.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
       return joinConfigPaths(out, 'family_tree.db');
     }
     return joinConfigPaths(this.outputFolder, 'family_tree.db');
@@ -216,7 +254,7 @@ export class AppConfigService {
 
   get facesFolder(): string {
     if (process.env.FACES_FOLDER && process.env.FACES_FOLDER.trim()) {
-      return normalizeConfigPath(process.env.FACES_FOLDER.trim(), this.projectRoot);
+      return normalizeConfigPath(process.env.FACES_FOLDER.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
     }
     const facessCandidate = joinConfigPaths(this.outputFolder, 'facess');
     if (fs.existsSync(facessCandidate)) {
@@ -236,4 +274,24 @@ export class AppConfigService {
   get supportedVideoExts(): Set<string> {
     return new Set(['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.m4v', '.webm', '.flv', '.3gp']);
   }
+
+  /**
+   * Export the active execution configuration to pass to the BE pipeline worker.
+   * UI is the single source of truth for all runtime settings and output paths.
+   */
+  getPipelineExecutionConfig(): Record<string, any> {
+    const saved = this.getSavedSettings();
+    return {
+      output_folder: this.outputFolder,
+      model_provider: saved.MODEL_PROVIDER || process.env.MODEL_PROVIDER || 'gemini',
+      gemini_model: saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+      local_model_name: saved.LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || '',
+      gemini_max_workers: saved.GEMINI_MAX_WORKERS ? Number(saved.GEMINI_MAX_WORKERS) : Number(process.env.GEMINI_MAX_WORKERS || 3),
+      local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),
+      whisper_model: saved.WHISPER_MODEL || process.env.WHISPER_MODEL || 'large-v3-turbo',
+      preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
+      ui_base_url: process.env.UI_PUBLIC_URL || `http://localhost:${this.port}`,
+    };
+  }
 }
+

@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Body, Param, Query, Res, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Res, Inject, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios';
 import { FacesService } from './faces.service.js';
 import {
   RenameFaceDto,
@@ -9,6 +12,7 @@ import {
   ResetFaceDto,
   ResetFaceByFilenameDto,
   DeleteFaceDto,
+  DeleteFacesBatchDto,
 } from './dto/faces.dto.js';
 
 @ApiTags('faces')
@@ -51,8 +55,62 @@ export class FacesController {
   @Get('image/:filename')
   @ApiOperation({ summary: 'Serve cropped face thumbnail image' })
   async getFaceImage(@Param('filename') filename: string, @Res() res: Response) {
-    const resolved = this.facesService.getFaceImagePath(filename);
-    return res.sendFile(resolved);
+    try {
+      const resolved = this.facesService.getFaceImagePath(filename);
+      return res.sendFile(resolved);
+    } catch {
+      // Proxy fallback from remote cataloger backend if face image is on the worker daemon
+      const baseUrl = this.facesService.catalogerApiUrl;
+      const cleanName = (filename || '').trim();
+      const baseClean = path.basename(cleanName);
+      const candidates = Array.from(new Set([
+        cleanName,
+        baseClean,
+        `${cleanName}.jpg`,
+        `${baseClean}.jpg`,
+        `${cleanName}.jpeg`,
+        `${baseClean}.jpeg`,
+        `${cleanName}.png`,
+        `${baseClean}.png`,
+        `facess/${cleanName}.jpg`,
+        `facess/${baseClean}.jpg`,
+        `faces/${cleanName}.jpg`,
+        `faces/${baseClean}.jpg`,
+        `crops/${cleanName}.jpg`,
+        `crops/${baseClean}.jpg`,
+      ]));
+
+      for (const cand of candidates) {
+        try {
+          const remoteUrl = `${baseUrl}/api/faces/image/${encodeURIComponent(cand)}`;
+          const response = await axios.get(remoteUrl, { responseType: 'arraybuffer', timeout: 4000 });
+          if (response.data && response.data.byteLength > 0) {
+            const contentType = response.headers['content-type'] ? String(response.headers['content-type']) : 'image/jpeg';
+            res.setHeader('Content-Type', contentType);
+
+            // Cache locally so future loads are instantaneous
+            try {
+              const facesFolder = this.facesService.facesFolder;
+              if (facesFolder) {
+                if (!fs.existsSync(facesFolder)) {
+                  fs.mkdirSync(facesFolder, { recursive: true });
+                }
+                const localPath = path.join(facesFolder, `${baseClean}.jpg`);
+                fs.writeFileSync(localPath, Buffer.from(response.data));
+              }
+            } catch {
+              // ignore cache save errors
+            }
+
+            return res.send(Buffer.from(response.data));
+          }
+        } catch {
+          // try next candidate
+        }
+      }
+
+      throw new NotFoundException(`Face image '${filename}' not found`);
+    }
   }
 
   @Post('rename')
@@ -92,8 +150,20 @@ export class FacesController {
   }
 
   @Post('delete')
-  @ApiOperation({ summary: 'Delete a face entry from the registry' })
+  @ApiOperation({ summary: 'Delete a face entry and its file asset' })
   async deleteFace(@Body() body: DeleteFaceDto) {
     return this.facesService.deleteFace(body.face_id);
+  }
+
+  @Post('delete-batch')
+  @ApiOperation({ summary: 'Delete multiple face entries and their file assets' })
+  async deleteFacesBatch(@Body() body: DeleteFacesBatchDto) {
+    return this.facesService.deleteFacesBatch(body.face_ids);
+  }
+
+  @Post('delete-group')
+  @ApiOperation({ summary: 'Alias for delete-batch to delete an entire face group' })
+  async deleteFaceGroup(@Body() body: DeleteFacesBatchDto) {
+    return this.facesService.deleteFacesBatch(body.face_ids);
   }
 }

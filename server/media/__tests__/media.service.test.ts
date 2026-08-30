@@ -100,4 +100,125 @@ describe('MediaService', () => {
     assert.strictEqual(vacationItem.summary, 'Sunny beach vacation');
     assert.strictEqual(vacationItem.is_image, true);
   });
+
+  it('should ingest metadata, localized attributes, and faces from on-disk sidecar JSON files', async () => {
+    const clipPath = path.join(inputDir, 'clip.mp4');
+    const clipSidecar = path.join(tmpDir, 'clip.json');
+
+    // Write a mock sidecar JSON with full English & Russian AI metadata and faces
+    const sidecarData = {
+      description: 'A cheerful family gathering in a sunny park.',
+      description_ru: 'Веселая семейная встреча в солнечном парке.',
+      summary: 'Family picnic in the park.',
+      summary_ru: 'Семейный пикник в парке.',
+      gemini_analysis: {
+        environment: 'outdoor',
+        lighting: 'bright sunlight',
+        lighting_ru: 'яркий солнечный свет',
+        weather: 'clear sky',
+        weather_ru: 'ясное небо',
+        time_of_day: 'afternoon',
+        time_of_day_ru: 'день',
+        transcription: 'Hello everyone!',
+        transcription_ru: 'Всем привет!',
+        timeline_events: [{ timestamp: '00:01', label: 'Laughing' }],
+      },
+      faces: [
+        {
+          face_id: 'face_clip_0',
+          name: 'Anna Smith',
+          confidence: 0.98,
+          image_path: 'crops/anna_0.jpg',
+        },
+        {
+          face_id: 'face_clip_1',
+          name: 'face_1',
+          confidence: 0.85,
+          image_path: 'crops/unknown_1.jpg',
+        },
+      ],
+      face_names: ['Anna Smith'],
+    };
+
+    fs.writeFileSync(clipSidecar, JSON.stringify(sidecarData, null, 2), 'utf-8');
+    mediaService.invalidateCache();
+
+    const result = await mediaService.listMediaFiles({ refresh: true });
+    const clipItem = result.files.find((f: any) => f.filename === 'clip.mp4');
+
+    assert.ok(clipItem, 'clip.mp4 should be found');
+    assert.strictEqual(clipItem.status, 'PROCESSED');
+    assert.strictEqual(clipItem.description_ru, 'Веселая семейная встреча в солнечном парке.');
+    assert.strictEqual(clipItem.summary_ru, 'Семейный пикник в парке.');
+    assert.strictEqual(clipItem.lighting_ru, 'яркий солнечный свет');
+    assert.strictEqual(clipItem.weather_ru, 'ясное небо');
+    assert.strictEqual(clipItem.time_of_day_ru, 'день');
+    assert.strictEqual(clipItem.transcription_ru, 'Всем привет!');
+    assert.strictEqual(clipItem.faces.length, 2);
+    assert.ok(clipItem.face_names.includes('Anna Smith'));
+    assert.strictEqual(clipItem.has_unassigned_faces, true);
+
+    // Verify sidecar endpoint
+    const sidecarApiResult = await mediaService.getMediaSidecar(clipPath);
+    assert.strictEqual(sidecarApiResult.description, 'A cheerful family gathering in a sunny park.');
+
+    // Verify getFacesForFile
+    const facesResult = await mediaService.getFacesForFile(clipPath);
+    assert.strictEqual(facesResult.length, 2);
+    assert.strictEqual(facesResult[0].name, 'Anna Smith');
+  });
+
+  it('should tag a person on a media file and keep database and sidecar in sync', async () => {
+    const beachPath = path.join(inputDir, '2024', 'beach.png');
+
+    const addRes = mediaService.addPersonToFile(beachPath, 'John Doe');
+    assert.strictEqual(addRes.status, 'success');
+
+    const facesAfterAdd = await mediaService.getFacesForFile(beachPath);
+    assert.ok(facesAfterAdd.some((f) => f.name === 'John Doe'));
+
+    // Remove face
+    const faceToRemove = facesAfterAdd.find((f) => f.name === 'John Doe');
+    assert.ok(faceToRemove);
+    const removeRes = mediaService.removeFaceFromFile(beachPath, faceToRemove.face_id);
+    assert.strictEqual(removeRes.status, 'success');
+
+    const facesAfterRemove = await mediaService.getFacesForFile(beachPath);
+    assert.strictEqual(facesAfterRemove.some((f) => f.name === 'John Doe'), false);
+  });
+
+
+  it('should support pagination, sorting, and filtering on listMediaFiles', async () => {
+    // Test pagination with limit and offset
+    const page1 = await mediaService.listMediaFiles({ limit: 2, offset: 0 });
+    assert.strictEqual(page1.files.length, 2, 'Page 1 should return 2 items');
+    assert.strictEqual(page1.total, 3, 'Total items should be 3');
+    assert.strictEqual(page1.hasMore, true, 'hasMore should be true for page 1');
+    assert.ok(page1.stats, 'Stats should be returned');
+    assert.strictEqual(page1.stats.total, 3);
+
+    const page2 = await mediaService.listMediaFiles({ limit: 2, offset: 2 });
+    assert.strictEqual(page2.files.length, 1, 'Page 2 should return 1 item');
+    assert.strictEqual(page2.hasMore, false, 'hasMore should be false for page 2');
+
+    // Test sorting by name asc
+    const sortedByName = await mediaService.listMediaFiles({ sort_by: 'name', sort_order: 'asc' });
+    const names = sortedByName.files.map((f: any) => f.filename);
+    assert.deepStrictEqual(names, ['beach.png', 'clip.mp4', 'vacation.jpg']);
+
+    // Test filter by type
+    const imagesOnly = await mediaService.listMediaFiles({ type: 'images' });
+    assert.strictEqual(imagesOnly.files.length, 2);
+    assert.ok(imagesOnly.files.every((f: any) => f.is_image));
+
+    const videosOnly = await mediaService.listMediaFiles({ type: 'videos' });
+    assert.strictEqual(videosOnly.files.length, 1);
+    assert.strictEqual(videosOnly.files[0].filename, 'clip.mp4');
+
+    // Test cache invalidation
+    mediaService.invalidateCache();
+    const freshList = await mediaService.listMediaFiles({ refresh: true });
+    assert.strictEqual(freshList.total, 3);
+  });
 });
+

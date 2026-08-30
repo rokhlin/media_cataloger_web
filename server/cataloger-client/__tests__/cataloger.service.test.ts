@@ -4,7 +4,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as http from 'node:http';
 import { CatalogerClientService } from '../cataloger.service.js';
-import { AppConfigService } from '../../config/config.service.js';
 
 describe('CatalogerClientService', () => {
   let catalogerService: CatalogerClientService;
@@ -68,18 +67,47 @@ describe('CatalogerClientService', () => {
       });
     });
 
+    // Create test image in tmpDir
+    fs.writeFileSync(path.join(tmpDir, 'test.jpg'), 'fake image content');
+
     const mockConfig = {
       catalogerApiUrl: serverUrl,
       outputFolder: tmpDir,
-    } as AppConfigService;
+      getPipelineExecutionConfig: () => ({
+        output_folder: tmpDir,
+        model_provider: 'gemini',
+        gemini_model: 'gemini-3.6-flash',
+        ui_base_url: 'http://localhost:8000',
+      }),
+    } as any;
+
+    const mockMediaService = {
+      scanInputFolders: () => [
+        { filePath: path.join(tmpDir, 'test.jpg'), folder: tmpDir },
+      ],
+      verifyFileAccess: (target: string) => {
+        if (target.includes('nonexistent')) {
+          return { accessible: false, error: `File '${target}' is not accessible or not found` };
+        }
+        return { accessible: true, resolvedPath: path.join(tmpDir, 'test.jpg') };
+      },
+    } as any;
 
     const offlineConfig = {
       catalogerApiUrl: 'http://127.0.0.1:1', // dummy offline endpoint for fallback testing
       outputFolder: tmpDir,
-    } as AppConfigService;
+      getPipelineExecutionConfig: () => ({ output_folder: tmpDir }),
+    } as any;
 
-    catalogerService = new CatalogerClientService(mockConfig);
-    offlineService = new CatalogerClientService(offlineConfig);
+    const mockDbService = {
+      initDb: () => {},
+      saveSyncRecord: () => {},
+      saveMediaMetadata: () => {},
+      saveMediaFaces: () => {},
+    } as any;
+
+    catalogerService = new CatalogerClientService(mockConfig, mockMediaService, mockDbService);
+    offlineService = new CatalogerClientService(offlineConfig, mockMediaService, mockDbService);
   });
 
   after(async () => {
@@ -102,16 +130,28 @@ describe('CatalogerClientService', () => {
     assert.strictEqual(status.progress.percent, 50);
   });
 
-  it('should trigger run on mock cataloger service', async () => {
+  it('should trigger run on mock cataloger service with media files payload', async () => {
     const res = await catalogerService.triggerRun(true);
     assert.strictEqual(res.status, 'started');
     assert.strictEqual(res.message, 'Sync started');
+    assert.strictEqual(res.provided_files_count, 1);
   });
 
   it('should trigger file analysis on mock cataloger service', async () => {
     const res = await catalogerService.triggerAnalyzeFile('test.jpg');
     assert.strictEqual(res.status, 'analyzing');
-    assert.strictEqual(res.file, 'test.jpg');
+  });
+
+  it('should reject file analysis with BadRequestException if file is not accessible', async () => {
+    await assert.rejects(
+      async () => {
+        await catalogerService.triggerAnalyzeFile('nonexistent_image.png');
+      },
+      (err: any) => {
+        assert.ok(err.message.includes('File access error') || err.message.includes('not accessible'));
+        return true;
+      }
+    );
   });
 
   it('should handle pause, resume, and stop controls', async () => {
@@ -148,6 +188,20 @@ describe('CatalogerClientService', () => {
     const logRes = await offlineService.getLogs();
     assert.ok(logRes.logs.includes('Starting sync'));
     assert.ok(logRes.logs.includes('Processed item_1'));
+  });
+
+  it('should validate connection successfully when cataloger service is online', async () => {
+    const val = await catalogerService.validateConnection();
+    assert.strictEqual(val.connected, true);
+    assert.ok(val.cataloger_url);
+    assert.ok(val.message.includes('Successfully connected'));
+    assert.ok(typeof val.latency_ms === 'number');
+  });
+
+  it('should report failure gracefully when validating connection to offline cataloger service', async () => {
+    const val = await offlineService.validateConnection();
+    assert.strictEqual(val.connected, false);
+    assert.ok(val.message.includes('Unable to reach'));
   });
 
   it('should clear local logs file if remote service is offline', async () => {

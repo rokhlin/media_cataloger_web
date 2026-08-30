@@ -7,13 +7,19 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { AppModule } from './app.module.js';
 import { AppConfigService } from './config/config.service.js';
+import { LogBufferService } from './logging/log-buffer.service.js';
+import { AllExceptionsFilter } from './logging/all-exceptions.filter.js';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(AppConfigService);
+  const logBuffer = app.get(LogBufferService, { strict: false });
   const port = configService.port;
+
+  // Register global error interception with detailed pipeline logging
+  app.useGlobalFilters(new AllExceptionsFilter(logBuffer));
 
   // Global validation pipe
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -62,6 +68,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   logger.log(`Media Library Server running at: http://0.0.0.0:${port}`);
   logger.log(`Swagger OpenAPI Docs available at: http://localhost:${port}/api/docs`);
+  logBuffer?.info('Bootstrap', `Media Library Server started on port ${port}`);
 }
 
 bootstrap().catch(err => {

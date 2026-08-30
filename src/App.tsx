@@ -11,6 +11,7 @@ import PipelineLogs from './components/PipelineLogs';
 import SettingsModal, { type SettingsTab } from './components/SettingsModal';
 import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
+import { errorInterceptor } from './utils/errorInterceptor';
 import './App.css';
 
 function App() {
@@ -77,10 +78,12 @@ function App() {
     statusRef.current = statusInfo.status;
   }, [statusInfo.status]);
 
-  const appendConsoleMessage = useCallback((message: string) => {
-    const timeStr = new Date().toLocaleTimeString();
-    setLogsList((prev) => [...prev, `[${timeStr}] ${message}`]);
-  }, []);
+  const appendConsoleMessage = useCallback(
+    (message: string, level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' = 'INFO', context = 'App', details?: string) => {
+      errorInterceptor.emitLog(level, context, message, details);
+    },
+    []
+  );
 
   // Fetch logs
   const fetchLogsInternal = useCallback(async () => {
@@ -98,28 +101,14 @@ function App() {
     }
   }, []);
 
-  // Fetch live system status
-  const checkStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
-        const data = await res.json();
-        setStatusInfo(data);
-        if (data.status === 'running' || data.status === 'paused') {
-          // Auto-poll logs when running or paused
-          fetchLogsInternal();
-        }
-      }
-    } catch (err) {
-      console.error('Error checking status:', err);
-    }
-  }, [fetchLogsInternal]);
-
-  const handleRefreshLogs = async () => {
-    setIsRefreshingLogs(true);
-    await fetchLogsInternal();
-    setIsRefreshingLogs(false);
-  };
+  // Initialize error interceptor on mount and subscribe to captured logs
+  useEffect(() => {
+    errorInterceptor.init();
+    const unsubscribe = errorInterceptor.subscribe((entry) => {
+      setLogsList((prev) => [...prev, entry.raw]);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleClearLogs = useCallback(async () => {
     try {
@@ -179,6 +168,35 @@ function App() {
       setFacesLoading(false);
     }
   }, []);
+
+  // Fetch live system status
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/status');
+      if (res.ok) {
+        const data = await res.json();
+        const prev = statusRef.current;
+        setStatusInfo(data);
+        if (data.status === 'running' || data.status === 'paused') {
+          // Auto-poll logs when running or paused
+          fetchLogsInternal();
+        } else if (prev === 'running' || prev === 'paused') {
+          // Process completed or stopped -> refresh media files, faces, and logs immediately
+          loadMediaFiles();
+          loadFaces();
+          fetchLogsInternal();
+        }
+      }
+    } catch (err) {
+      console.error('Error checking status:', err);
+    }
+  }, [fetchLogsInternal, loadMediaFiles, loadFaces]);
+
+  const handleRefreshLogs = async () => {
+    setIsRefreshingLogs(true);
+    await fetchLogsInternal();
+    setIsRefreshingLogs(false);
+  };
 
   // Rename face or person
   const handleRenameFace = async (faceId: string, newName: string) => {
@@ -349,6 +367,34 @@ function App() {
     }
   };
 
+  // Delete batch / group of faces
+  const handleDeleteFacesBatch = async (faceIds: string[]) => {
+    try {
+      const res = await fetch('/api/faces/delete-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ face_ids: faceIds }),
+      });
+
+      if (res.ok) {
+        appendConsoleMessage(`[Face Registry] Deleted ${faceIds.length} face(s) and their file assets`);
+        await loadFaces();
+        await loadMediaFiles();
+        return true;
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.detail || err.message || 'Could not delete faces'}`);
+        await loadFaces();
+        return false;
+      }
+    } catch (err) {
+      console.error('Error deleting faces batch:', err);
+      alert('Network error. Could not delete faces.');
+      await loadFaces();
+      return false;
+    }
+  };
+
   // Load settings
   const loadSettings = useCallback(async () => {
     try {
@@ -434,89 +480,121 @@ function App() {
 
   // Start Sync
   const handleStartSync = async (force: boolean) => {
+    appendConsoleMessage(`Triggering catalog sync pipeline (force=${Boolean(force)})...`, 'INFO', 'Pipeline');
     try {
       const res = await fetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Triggered sync successfully: ${result.message || 'Started'}`);
+        const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
+        appendConsoleMessage(`Triggered sync successfully: ${result.message || 'Started'}${countMsg}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to run sync: ${result.detail || 'Error'}`);
+        const errMsg = result.message || result.detail || result.error || 'Failed to start sync';
+        appendConsoleMessage(
+          `Failed to run sync: ${errMsg}`,
+          'ERROR',
+          'Pipeline',
+          `HTTP ${res.status} on POST /api/run\nDiagnosis: Cataloger backend execution failed.\nSuggestion: Verify cataloger background worker is running.`
+        );
+        alert(`Could not start cataloging sync:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(
+        `Connection failed while starting sync: ${message}`,
+        'ERROR',
+        'Pipeline',
+        `Network error on POST /api/run. Ensure server is reachable.`,
+      );
+      alert(`Network error connecting to server: ${message}`);
     }
   };
 
   // Pause Sync
   const handlePauseSync = async () => {
+    appendConsoleMessage('Requesting pipeline pause...', 'INFO', 'Pipeline');
     try {
       const res = await fetch('/api/pause', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Execution paused: ${result.message || 'Paused'}`);
+        appendConsoleMessage(`Execution paused: ${result.message || 'Paused'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to pause: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to pause: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while pausing: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Resume Sync
   const handleResumeSync = async () => {
+    appendConsoleMessage('Requesting pipeline resume...', 'INFO', 'Pipeline');
     try {
       const res = await fetch('/api/resume', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Execution resumed: ${result.message || 'Resumed'}`);
+        appendConsoleMessage(`Execution resumed: ${result.message || 'Resumed'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to resume: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to resume: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while resuming: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Stop Sync
   const handleStopSync = async () => {
+    appendConsoleMessage('Requesting pipeline stop...', 'WARN', 'Pipeline');
     try {
       const res = await fetch('/api/stop', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Stop requested: ${result.message || 'Stopping'}`);
+        appendConsoleMessage(`Stop requested: ${result.message || 'Stopping'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to stop: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to stop: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while stopping: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Start Single Analysis
   const handleStartSingleAnalysis = async (file: string, onSuccess?: () => void) => {
+    appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
     try {
       const res = await fetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
         method: 'POST',
       });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Triggered file analysis successfully: ${result.message || 'Started'}`);
+        appendConsoleMessage(`Triggered file analysis successfully: ${result.message || 'Started'}`, 'INFO', 'Pipeline');
         if (onSuccess) onSuccess();
         checkStatus();
+        fetchLogsInternal();
+        // Follow-up refreshes to ensure new metadata/faces are shown as soon as worker completes
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 2500);
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 6000);
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 12000);
       } else {
-        appendConsoleMessage(`[API Error] Failed to start analysis: ${result.detail || 'Error'}`);
+        const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
+        appendConsoleMessage(
+          `Failed to analyze file '${file}': ${errMsg}`,
+          'ERROR',
+          'Pipeline',
+          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check file permissions and supported formats.`
+        );
+        alert(`Analysis Error:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Network error during single file analysis: ${message}`, 'ERROR', 'Pipeline');
+      alert(`Network error connecting to server: ${message}`);
     }
   };
 
@@ -621,6 +699,7 @@ function App() {
               onResetFace={handleResetFace}
               onResetFacesByFilename={handleResetFacesByFilename}
               onDeleteFace={handleDeleteFace}
+              onDeleteFacesBatch={handleDeleteFacesBatch}
               disabled={isRunning || isPaused}
               uiSettings={uiSettings}
               onViewInFamilyTree={handleViewInFamilyTree}

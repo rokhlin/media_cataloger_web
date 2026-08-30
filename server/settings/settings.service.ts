@@ -34,11 +34,11 @@ export class SettingsService {
       .map(p => p.trim())
       .filter(Boolean);
     const defaultInputs = envInputs.length > 0
-      ? envInputs.map(p => normalizeConfigPath(p, this.config.projectRoot))
-      : [normalizeConfigPath('media_input', this.config.projectRoot)];
+      ? envInputs.map(p => normalizeConfigPath(p, this.config.projectRoot, { isDev: this.config.isDev, fallbackType: 'input' }))
+      : [this.config.isDev ? normalizeConfigPath('media_input', this.config.projectRoot, { isDev: true }) : '/app/media_input'];
     const defaultOutput = process.env.OUTPUT_FOLDER 
-      ? normalizeConfigPath(process.env.OUTPUT_FOLDER, this.config.projectRoot)
-      : normalizeConfigPath('media_output', this.config.projectRoot);
+      ? normalizeConfigPath(process.env.OUTPUT_FOLDER, this.config.projectRoot, { isDev: this.config.isDev, fallbackType: 'output' })
+      : (this.config.isDev ? normalizeConfigPath('media_output', this.config.projectRoot, { isDev: true }) : '/app/media_output');
 
     return {
       input_folders: this.config.inputFolders.map(p => String(p)),
@@ -47,6 +47,7 @@ export class SettingsService {
       default_output_folder: String(defaultOutput),
       is_custom_input: Boolean(saved.INPUT_FOLDERS || saved.input_folders),
       is_custom_output: Boolean(saved.OUTPUT_FOLDER || saved.output_folder),
+      is_dev: this.config.isDev,
       model_provider: saved.MODEL_PROVIDER || process.env.MODEL_PROVIDER || 'gemini',
       gemini_model: saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
       local_model_name: saved.LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || '',
@@ -101,7 +102,7 @@ export class SettingsService {
     // Project root shortcut
     shortcuts.push({ label: 'Project Root', path: this.config.projectRoot });
 
-    if (os.platform() === 'win32') {
+    if (this.config.isDev && os.platform() === 'win32') {
       const drives = ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'Z:\\'];
       for (const drive of drives) {
         try {
@@ -113,7 +114,7 @@ export class SettingsService {
         }
       }
     } else {
-      const candidates = ['/', '/shares', '/media', '/mnt', '/data', '/app', '/home'];
+      const candidates = ['/app/media_input', '/app/media_output', '/app/data/config', '/shares', '/media', '/mnt', '/data', '/app', '/home', '/'];
       for (const cand of candidates) {
         try {
           if (fs.existsSync(cand)) {
@@ -136,8 +137,20 @@ export class SettingsService {
       current = this.config.projectRoot;
     }
 
+    // In non-dev builds (e.g. Docker container), map Windows UNC or drive paths to container volume mount points
+    if (!this.config.isDev && current) {
+      const isUnc = current.startsWith('\\') || current.startsWith('//');
+      const isWinDrive = /^[a-zA-Z]:[/\\]/.test(current);
+      if (isUnc || isWinDrive) {
+        const lower = current.toLowerCase();
+        current = (lower.includes('output') || lower.includes('cataloger') || lower.includes('sda1'))
+          ? '/app/media_output'
+          : '/app/media_input';
+      }
+    }
+
     // Windows UNC path or drive letter handling
-    const isUnc = current.startsWith('\\\\') || current.startsWith('//');
+    const isUnc = current.startsWith('\\') || current.startsWith('//');
     const isWinDrive = /^[a-zA-Z]:[/\\]/.test(current);
 
     if (!isUnc && !isWinDrive && !path.isAbsolute(current)) {

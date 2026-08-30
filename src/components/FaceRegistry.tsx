@@ -25,6 +25,7 @@ interface FaceRegistryProps {
   onResetFace: (faceId: string) => Promise<boolean>;
   onResetFacesByFilename: (filename: string) => Promise<boolean>;
   onDeleteFace: (faceId: string) => Promise<boolean>;
+  onDeleteFacesBatch?: (faceIds: string[]) => Promise<boolean>;
   disabled?: boolean;
   uiSettings?: UISettings;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
@@ -43,6 +44,7 @@ export default function FaceRegistry({
   onResetFace,
   onResetFacesByFilename,
   onDeleteFace,
+  onDeleteFacesBatch,
   disabled = false,
   uiSettings = { maxImagesPerRow: 10, maxRows: 1, maxWidth: 1600 },
   onViewInFamilyTree,
@@ -205,15 +207,48 @@ export default function FaceRegistry({
 
   const handleDelete = async (faceId: string) => {
     if (window.confirm(t('promptDeleteFaceConfirm'))) {
-      await onDeleteFace(faceId);
+      setIsSaving(true);
+      try {
+        await onDeleteFace(faceId);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  // Get image URL helper
-  const getImageUrl = (imagePath?: string | null) => {
-    if (!imagePath) return null;
-    const filename = imagePath.split(/[/\\]/).pop();
-    return `/api/faces/image/${filename}`;
+  const handleDeleteGroup = async (group: FaceRegistryGroup) => {
+    const faceIds = group.face_ids && group.face_ids.length > 0
+      ? group.face_ids
+      : (group.faces?.map((f) => f.face_id).filter(Boolean) || [group.group_id.replace(/^group_/, '')]);
+
+    if (!faceIds || faceIds.length === 0) return;
+
+    if (window.confirm(t('promptDeleteGroupConfirm'))) {
+      setIsSaving(true);
+      try {
+        if (onDeleteFacesBatch) {
+          await onDeleteFacesBatch(faceIds);
+        } else {
+          for (const fid of faceIds) {
+            await onDeleteFace(fid);
+          }
+        }
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  // Get image URL helper with faceId fallback
+  const getImageUrl = (imagePath?: string | null, fallbackFaceId?: string | null) => {
+    if (imagePath && String(imagePath).trim()) {
+      const filename = imagePath.split(/[/\\]/).pop();
+      return `/api/faces/image/${filename}`;
+    }
+    if (fallbackFaceId && String(fallbackFaceId).trim()) {
+      return `/api/faces/image/${fallbackFaceId.trim()}`;
+    }
+    return null;
   };
 
   // Known person names list for dropdown
@@ -346,7 +381,7 @@ export default function FaceRegistry({
               {filteredGroups.map((group) => {
                 const currentConfig = groupAssignmentMap[group.group_id] || { targetPerson: '', customName: '' };
                 const repFace = group.representative_face;
-                const repUrl = repFace?.image_path ? getImageUrl(repFace.image_path) : null;
+                const repUrl = getImageUrl(repFace?.image_path, repFace?.face_id || group.sample_face_id);
 
                 return (
                   <div className="face-group-card" key={group.group_id} id={`group-card-${group.group_id}`}>
@@ -361,18 +396,25 @@ export default function FaceRegistry({
                             style={{ cursor: repFace?.source_file ? 'pointer' : 'default' }}
                             title={repFace?.source_file ? t('clickToView') : group.group_id}
                             onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
+                              const target = e.target as HTMLElement;
+                              target.style.display = 'none';
+                              const fb = target.parentElement?.querySelector('.fallback-group-avatar') as HTMLElement;
+                              if (fb) fb.style.display = 'flex';
                             }}
                           />
-                        ) : (
-                          <div
-                            className="face-group-avatar"
-                            onClick={() => handleOpenSourceImage(repFace || null)}
-                            style={{ cursor: repFace?.source_file ? 'pointer' : 'default' }}
-                          >
-                            👥
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="face-group-avatar fallback-group-avatar"
+                          onClick={() => handleOpenSourceImage(repFace || null)}
+                          style={{
+                            display: repUrl ? 'none' : 'flex',
+                            cursor: repFace?.source_file ? 'pointer' : 'default',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          👥
+                        </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <span className="face-group-name">{group.group_id}</span>
@@ -409,7 +451,7 @@ export default function FaceRegistry({
                           style={{ '--gallery-cols': maxCols } as React.CSSProperties}
                         >
                           {visibleFaces.map((f, idx) => {
-                            const cropUrl = f.image_path ? getImageUrl(f.image_path) : null;
+                            const cropUrl = getImageUrl(f.image_path, f.face_id);
                             return (
                               <div className="person-ref-thumb-wrap" key={f.face_id || idx} title={`${t('clickToView')} • ${f.face_id} (${f.source_file || ''})`}>
                                 {cropUrl ? (
@@ -420,18 +462,26 @@ export default function FaceRegistry({
                                     onClick={() => handleOpenSourceImage(f)}
                                     style={{ cursor: 'pointer' }}
                                     onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
+                                      const target = e.target as HTMLElement;
+                                      target.style.display = 'none';
+                                      const fb = target.parentElement?.querySelector('.fallback-face-thumb') as HTMLElement;
+                                      if (fb) fb.style.display = 'flex';
                                     }}
                                   />
-                                ) : (
-                                  <div
-                                    className="person-ref-thumb"
-                                    onClick={() => handleOpenSourceImage(f)}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', cursor: 'pointer' }}
-                                  >
-                                    {f.face_id}
-                                  </div>
-                                )}
+                                ) : null}
+                                <div
+                                  className="person-ref-thumb fallback-face-thumb"
+                                  onClick={() => handleOpenSourceImage(f)}
+                                  style={{
+                                    display: cropUrl ? 'none' : 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {f.face_id}
+                                </div>
                                 <button
                                   className="person-ref-del-btn"
                                   onClick={(e) => {
@@ -533,6 +583,24 @@ export default function FaceRegistry({
                       >
                         {isSaving ? t('btnAssigning') : `✓ ${t('btnAssignGroup')} (${group.count})`}
                       </button>
+
+                      <button
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          fontSize: '0.82rem',
+                          whiteSpace: 'nowrap',
+                          color: '#f87171',
+                          borderColor: 'rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                        }}
+                        onClick={() => handleDeleteGroup(group)}
+                        disabled={isSaving || disabled}
+                        type="button"
+                        title={t('btnDeleteGroup')}
+                      >
+                        🗑️ {t('btnDeleteGroup')} ({group.count})
+                      </button>
                     </div>
                   </div>
                 );
@@ -549,7 +617,7 @@ export default function FaceRegistry({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {filteredPersons.map((person) => {
                 const isEditing = editingPersonName === person.name;
-                const primaryImg = person.primary_image ? getImageUrl(person.primary_image) : null;
+                const primaryImg = getImageUrl(person.primary_image || person.sample_image, person.reference_faces?.[0]?.face_id);
                 const refCount = person.reference_faces?.length || person.reference_count || 1;
                 const primaryRef: FaceRegistryFace = person.reference_faces?.[0] || {
                   face_id: person.name,
@@ -605,18 +673,25 @@ export default function FaceRegistry({
                                 style={{ cursor: primaryRef.source_file ? 'pointer' : 'default' }}
                                 title={primaryRef.source_file ? t('clickToView') : person.name}
                                 onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
+                                  const target = e.target as HTMLElement;
+                                  target.style.display = 'none';
+                                  const fb = target.parentElement?.querySelector('.fallback-person-avatar') as HTMLElement;
+                                  if (fb) fb.style.display = 'flex';
                                 }}
                               />
-                            ) : (
-                              <div
-                                className="person-avatar-circle"
-                                onClick={() => handleOpenSourceImage(primaryRef)}
-                                style={{ cursor: primaryRef.source_file ? 'pointer' : 'default' }}
-                              >
-                                {(person.name || '?')[0].toUpperCase()}
-                              </div>
-                            )}
+                            ) : null}
+                            <div
+                              className="person-avatar-circle fallback-person-avatar"
+                              onClick={() => handleOpenSourceImage(primaryRef)}
+                              style={{
+                                display: primaryImg ? 'none' : 'flex',
+                                cursor: primaryRef.source_file ? 'pointer' : 'default',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {(person.name || '?')[0].toUpperCase()}
+                            </div>
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 <span className="face-name-val" style={{ fontWeight: 600 }}>
@@ -696,7 +771,7 @@ export default function FaceRegistry({
                           style={{ '--gallery-cols': maxCols } as React.CSSProperties}
                         >
                           {visibleRefs.map((refFace, idx) => {
-                            const refUrl = refFace.image_path ? getImageUrl(refFace.image_path) : null;
+                            const refUrl = getImageUrl(refFace.image_path, refFace.face_id);
                             return (
                               <div className="person-ref-thumb-wrap" key={refFace.face_id || idx} title={`${t('clickToView')} • ${refFace.face_id} (${refFace.source_file || ''})`}>
                                 {refUrl ? (
@@ -707,25 +782,27 @@ export default function FaceRegistry({
                                     onClick={() => handleOpenSourceImage(refFace)}
                                     style={{ cursor: 'pointer' }}
                                     onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
+                                      const target = e.target as HTMLElement;
+                                      target.style.display = 'none';
+                                      const fb = target.parentElement?.querySelector('.fallback-face-thumb') as HTMLElement;
+                                      if (fb) fb.style.display = 'flex';
                                     }}
                                   />
-                                ) : (
-                                  <div
-                                    className="person-ref-thumb"
-                                    onClick={() => handleOpenSourceImage(refFace)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: '0.75rem',
-                                      color: 'var(--text-muted)',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {refFace.face_id || 'Ref'}
-                                  </div>
-                                )}
+                                ) : null}
+                                <div
+                                  className="person-ref-thumb fallback-face-thumb"
+                                  onClick={() => handleOpenSourceImage(refFace)}
+                                  style={{
+                                    display: refUrl ? 'none' : 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {refFace.face_id || 'Ref'}
+                                </div>
                                 {/* Reset individual face assignment */}
                                 <button
                                   className="person-ref-reset-btn"
@@ -788,7 +865,7 @@ export default function FaceRegistry({
           ) : (
             <div className="unrecognized-grid">
               {filteredUnrecognized.map((face) => {
-                const imgUrl = getImageUrl(face.image_path);
+                const imgUrl = getImageUrl(face.image_path, face.face_id);
                 const currentConfig = assignmentMap[face.face_id] || { targetPerson: '', customName: '' };
                 const confPercent = face.confidence ? (face.confidence * 100).toFixed(0) : null;
 
@@ -803,25 +880,27 @@ export default function FaceRegistry({
                         style={{ cursor: 'pointer' }}
                         title={t('clickToView')}
                         onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
+                          const target = e.target as HTMLElement;
+                          target.style.display = 'none';
+                          const fb = target.parentElement?.querySelector('.fallback-unrec-thumb') as HTMLElement;
+                          if (fb) fb.style.display = 'flex';
                         }}
                       />
-                    ) : (
-                      <div
-                        className="unrecognized-thumb"
-                        onClick={() => handleOpenSourceImage(face)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.5rem',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        👤
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="unrecognized-thumb fallback-unrec-thumb"
+                      onClick={() => handleOpenSourceImage(face)}
+                      style={{
+                        display: imgUrl ? 'none' : 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.5rem',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      👤
+                    </div>
 
                     <div className="unrecognized-info">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -928,6 +1007,24 @@ export default function FaceRegistry({
                         >
                           ✓ {t('btnAssign')}
                         </button>
+
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            whiteSpace: 'nowrap',
+                            color: '#f87171',
+                            borderColor: 'rgba(239, 68, 68, 0.4)',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                          }}
+                          onClick={() => handleDelete(face.face_id)}
+                          disabled={isSaving || disabled}
+                          type="button"
+                          title={t('btnDelete')}
+                        >
+                          🗑️ {t('btnDelete')}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -993,10 +1090,10 @@ export default function FaceRegistry({
                 <div className="lightbox-section">
                   <h4 className="lightbox-section-title">👤 {t('faceIdentificationTitle')}</h4>
                   
-                  {sourceImageModal.face?.image_path && (
+                  {sourceImageModal.face && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.8rem' }}>
                       <img
-                        src={getImageUrl(sourceImageModal.face.image_path) || undefined}
+                        src={getImageUrl(sourceImageModal.face.image_path, sourceImageModal.face.face_id) || undefined}
                         alt={sourceImageModal.face.face_id}
                         className="lightbox-face-crop"
                         style={{ width: '60px', height: '60px', borderRadius: '8px' }}
@@ -1135,7 +1232,7 @@ export default function FaceRegistry({
             <div className="modal-body">
               <div className="expanded-photos-grid">
                 {expandedModal.items.map((item, idx) => {
-                  const cropUrl = item.image_path ? getImageUrl(item.image_path) : null;
+                  const cropUrl = getImageUrl(item.image_path, item.face_id);
                   const isPersonType = expandedModal.type === 'person';
 
                   return (
@@ -1148,25 +1245,27 @@ export default function FaceRegistry({
                           onClick={() => handleOpenSourceImage(item)}
                           style={{ cursor: 'pointer' }}
                           onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
+                            const target = e.target as HTMLElement;
+                            target.style.display = 'none';
+                            const fb = target.parentElement?.querySelector('.fallback-expanded-img') as HTMLElement;
+                            if (fb) fb.style.display = 'flex';
                           }}
                         />
-                      ) : (
-                        <div
-                          className="expanded-photo-img"
-                          onClick={() => handleOpenSourceImage(item)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.75rem',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {item.face_id}
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="expanded-photo-img fallback-expanded-img"
+                        onClick={() => handleOpenSourceImage(item)}
+                        style={{
+                          display: cropUrl ? 'none' : 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {item.face_id}
+                      </div>
 
                       {isPersonType && (
                         <button
