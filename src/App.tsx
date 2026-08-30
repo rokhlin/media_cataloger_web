@@ -126,15 +126,10 @@ function App() {
     setLogsList([]);
   }, []);
 
-  // Poll live media scan status while loading
+  // Poll live media scan status continuously so Header status always shows real-time progress
   useEffect(() => {
-    if (!isMediaLoading) {
-      setScanProgress(null);
-      return;
-    }
-
     let isMounted = true;
-    const interval = setInterval(async () => {
+    const fetchScanStatus = async () => {
       try {
         const res = await fetch('/api/media/scan-status');
         if (res.ok && isMounted) {
@@ -144,29 +139,81 @@ function App() {
       } catch {
         // ignore polling errors
       }
-    }, 200);
+    };
+
+    fetchScanStatus();
+    const interval = setInterval(fetchScanStatus, 500);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [isMediaLoading]);
+  }, []);
 
-  // Load media files from input sources
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
+  const [totalKnownFiles, setTotalKnownFiles] = useState<number | null>(null);
+  const chunkAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Load initial portion of media files (100 files) without re-rendering loops
   const loadMediaFiles = useCallback(async (refresh = false) => {
+    if (chunkAbortControllerRef.current) {
+      chunkAbortControllerRef.current.abort();
+    }
+    const abortCtrl = new AbortController();
+    chunkAbortControllerRef.current = abortCtrl;
+
+    const CHUNK_SIZE = 100;
     setIsMediaLoading(true);
+
     try {
-      const res = await fetch(`/api/media/files${refresh ? '?refresh=true' : ''}`);
+      const res = await fetch(
+        `/api/media/files?offset=0&limit=${CHUNK_SIZE}${refresh ? '&refresh=true' : ''}`,
+        { signal: abortCtrl.signal }
+      );
       if (res.ok) {
         const data = await res.json();
-        setMediaFiles(data.files || []);
+        const files = data.files || [];
+        setMediaFiles(files);
+        setTotalKnownFiles(data.total ?? data.total_files ?? files.length);
       }
-    } catch (err) {
-      console.error('Error loading media files:', err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Error loading media files:', err);
+      }
     } finally {
       setIsMediaLoading(false);
     }
   }, []);
+
+  // Fetch more files on scroll on demand
+  const fetchMoreMediaFiles = useCallback(async () => {
+    if (isBackgroundLoading) return;
+    const currentOffset = mediaFiles.length;
+    if (totalKnownFiles !== null && currentOffset >= totalKnownFiles) return;
+
+    setIsBackgroundLoading(true);
+    try {
+      const res = await fetch(`/api/media/files?offset=${currentOffset}&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        const nextFiles = data.files || [];
+        if (nextFiles.length > 0) {
+          setMediaFiles((prev) => {
+            const seen = new Set(prev.map((f) => f.file_path || f.filename));
+            const unique = nextFiles.filter((f: any) => !seen.has(f.file_path || f.filename));
+            return [...prev, ...unique];
+          });
+          if (data.total !== undefined) {
+            setTotalKnownFiles(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching more media files on scroll:', err);
+    } finally {
+      setIsBackgroundLoading(false);
+    }
+  }, [mediaFiles.length, totalKnownFiles, isBackgroundLoading]);
 
   // Load face registry, persons, unrecognized faces and groups
   const loadFaces = useCallback(async () => {
@@ -712,7 +759,10 @@ function App() {
             <InputSourcesGallery
               mediaFiles={mediaFiles}
               isLoading={isMediaLoading}
+              isBackgroundLoading={isBackgroundLoading}
+              totalKnownFiles={totalKnownFiles}
               onRefresh={loadMediaFiles}
+              onFetchMore={fetchMoreMediaFiles}
               onStartSingleAnalysis={handleStartSingleAnalysis}
               onSwitchToControls={() => setActiveTab('media_library')}
               persons={persons}

@@ -19,7 +19,10 @@ export type { GalleryMediaFile, DetectedFaceRecord };
 interface InputSourcesGalleryProps {
   mediaFiles?: GalleryMediaFile[];
   isLoading?: boolean;
+  isBackgroundLoading?: boolean;
+  totalKnownFiles?: number | null;
   onRefresh?: () => void;
+  onFetchMore?: () => void;
   onStartSingleAnalysis?: (filePath: string) => void;
   onSwitchToControls?: () => void;
   persons?: PersonItem[];
@@ -36,7 +39,10 @@ interface InputSourcesGalleryProps {
 export default function InputSourcesGallery({
   mediaFiles = [],
   isLoading = false,
+  isBackgroundLoading = false,
+  totalKnownFiles,
   onRefresh,
+  onFetchMore,
   onStartSingleAnalysis,
   onSwitchToControls,
   persons = [],
@@ -510,13 +516,19 @@ export default function InputSourcesGallery({
   const visibleFiles = useMemo(() => {
     return filteredFiles.slice(0, visibleCount);
   }, [filteredFiles, visibleCount]);
-  const hasMore = visibleCount < filteredFiles.length;
+  const canFetchMoreFromBackend = Boolean(
+    onFetchMore && totalKnownFiles !== null && totalKnownFiles !== undefined && mediaFiles.length < totalKnownFiles
+  );
+  const hasMore = visibleCount < filteredFiles.length || canFetchMoreFromBackend;
 
   const loadMoreRows = useCallback(() => {
-    if (hasMore) {
+    if (visibleCount < filteredFiles.length) {
+      setLoadedRows((prev) => prev + batchRows);
+    } else if (onFetchMore) {
+      onFetchMore();
       setLoadedRows((prev) => prev + batchRows);
     }
-  }, [hasMore, batchRows]);
+  }, [visibleCount, filteredFiles.length, batchRows, onFetchMore]);
 
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(800);
@@ -1430,18 +1442,20 @@ export default function InputSourcesGallery({
           </div>
         ) : (
           <>
-            {isLoading && (
+            {(isLoading || isBackgroundLoading) && (
               <div className="gallery-scanning-banner">
                 <div className="gallery-scanning-banner-left">
                   <span className="spinner-icon" style={{ fontSize: '1.25rem' }}>🔄</span>
                   <div>
                     <strong style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                      {t('scanningSources')}
+                      {isBackgroundLoading
+                        ? (language === 'ru' ? 'Фоновая загрузка медиаархива...' : 'Background loading media library...')
+                        : t('scanningSources')}
                     </strong>
                     <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                       {language === 'ru'
-                        ? 'Обновление списка медиафайлов из папок источников...'
-                        : 'Refreshing media file index from input sources...'}
+                        ? `Загружено ${mediaFiles.length.toLocaleString()} из ${(totalKnownFiles || scannedFilesCount || mediaFiles.length).toLocaleString()} файлов. Галерея готова к работе!`
+                        : `Loaded ${mediaFiles.length.toLocaleString()} of ${(totalKnownFiles || scannedFilesCount || mediaFiles.length).toLocaleString()} files. Gallery is ready to browse!`}
                     </span>
                     {(currentLoadingFilename || currentLoadingFile) && (
                       <span
@@ -1454,7 +1468,7 @@ export default function InputSourcesGallery({
                   </div>
                 </div>
                 <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
-                  {scannedFilesCount > 0 ? `${scannedFilesCount.toLocaleString()} ` : `${totalCount} `}
+                  {totalKnownFiles || scannedFilesCount > 0 ? `${(totalKnownFiles || scannedFilesCount).toLocaleString()} ` : `${totalCount} `}
                   {t('badgeMediaFiles')}
                 </span>
               </div>

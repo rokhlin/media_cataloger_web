@@ -56,7 +56,11 @@ export default function Header({
 
   if (isScanning) {
     dotClass = 'status-dot running';
-    statusText = `Scanning input sources:${scannedFilesCount || 0}:${currentLoadingFilename || ''}`;
+    const countPart = scannedFilesCount > 0 ? ` (${scannedFilesCount.toLocaleString()})` : '';
+    const filePart = currentLoadingFilename ? ` • ${currentLoadingFilename}` : '';
+    statusText = language === 'ru'
+      ? `Сканирование папок источников${countPart}${filePart}`
+      : `Scanning input sources${countPart}${filePart}`;
   } else if (status === 'running' || status === 'paused') {
     dotClass = status === 'paused' ? 'status-dot warning' : 'status-dot running';
     const taskName = current_task === 'sync' ? t('taskSync') : t('taskSingle');

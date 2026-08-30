@@ -615,6 +615,9 @@ export class MediaService {
       }
 
       items.push(item);
+      if (items.length % 50 === 0) {
+        this.cachedMediaList = items;
+      }
     }
 
       this.cachedMediaList = items;
@@ -645,16 +648,27 @@ export class MediaService {
 
     const isRefresh = query?.refresh === true || query?.refresh === 'true';
     const now = Date.now();
+    const targetOffset = Number(query?.offset) || 0;
+    const targetLimit = Number(query?.limit) || 100;
+    const targetCount = targetOffset + targetLimit;
 
-    // If cache is empty, expired, or refresh requested, re-scan and build full index
+    // If cache is empty, expired, or refresh requested, start scan
     if (!this.cachedMediaList || isRefresh || now - this.cacheTimestamp > this.CACHE_TTL_MS) {
       if (!this.inFlightScanPromise || isRefresh) {
-        this.inFlightScanPromise = this.buildMediaIndex(isRefresh);
+        this.inFlightScanPromise = this.buildMediaIndex(isRefresh).finally(() => {
+          this.inFlightScanPromise = null;
+        });
       }
-      try {
-        await this.inFlightScanPromise;
-      } finally {
-        this.inFlightScanPromise = null;
+
+      // Wait up to 3 seconds for initial chunk if in-flight list is still building
+      let waitIter = 0;
+      while (
+        this.scanStatus.is_scanning &&
+        (!this.cachedMediaList || this.cachedMediaList.length < targetCount) &&
+        waitIter < 30
+      ) {
+        waitIter++;
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
@@ -719,35 +733,36 @@ export class MediaService {
         filtered = filtered.filter(
           (f) =>
             (f.folder && f.folder.toLowerCase() === folderTarget) ||
-            (f.file_path && f.file_path.toLowerCase().includes(folderTarget))
+            (f.file_path && f.file_path.toLowerCase().startsWith(folderTarget))
         );
       }
 
       // Sorting
-      if (query.sort_by) {
-        const order = query.sort_order === 'asc' ? 1 : -1;
-        filtered = [...filtered].sort((a, b) => {
-          if (query.sort_by === 'name') {
-            return order * (a.filename || '').localeCompare(b.filename || '');
-          }
-          if (query.sort_by === 'date') {
-            return order * ((a.mtime || 0) - (b.mtime || 0));
-          }
-          if (query.sort_by === 'size') {
-            return order * ((a.file_size || 0) - (b.file_size || 0));
-          }
-          if (query.sort_by === 'status') {
-            return order * (a.status || '').localeCompare(b.status || '');
-          }
-          if (query.sort_by === 'faces') {
-            return order * ((a.face_count || 0) - (b.face_count || 0));
-          }
-          return 0;
-        });
-      }
+      const sortBy = query.sort_by || 'date';
+      const sortOrder = query.sort_order || 'desc';
+
+      filtered = [...filtered].sort((a, b) => {
+        let cmp = 0;
+        if (sortBy === 'name') {
+          cmp = (a.filename || '').localeCompare(b.filename || '');
+        } else if (sortBy === 'size') {
+          cmp = (a.file_size || 0) - (b.file_size || 0);
+        } else if (sortBy === 'faces') {
+          cmp = (a.face_count || 0) - (b.face_count || 0);
+        } else if (sortBy === 'status') {
+          cmp = (a.status || '').localeCompare(b.status || '');
+        } else {
+          // Default: date (mtime)
+          cmp = (a.mtime || 0) - (b.mtime || 0);
+        }
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
     }
 
     const totalFiltered = filtered.length;
+    const totalFilesCount = this.scanStatus.is_scanning
+      ? Math.max(totalFiltered, this.scanStatus.scanned_count)
+      : totalFiltered;
 
     // Pagination
     let limitNum: number | undefined;
@@ -768,12 +783,14 @@ export class MediaService {
 
     if (limitNum !== undefined) {
       pagedFiles = filtered.slice(offsetNum, offsetNum + limitNum);
-      hasMore = offsetNum + limitNum < totalFiltered;
+      hasMore = this.scanStatus.is_scanning
+        ? offsetNum + limitNum < totalFilesCount
+        : offsetNum + limitNum < totalFiltered;
     }
 
     return {
-      total_files: totalFiltered,
-      total: totalFiltered,
+      total_files: totalFilesCount,
+      total: totalFilesCount,
       files: pagedFiles,
       offset: offsetNum,
       limit: limitNum || totalFiltered,
