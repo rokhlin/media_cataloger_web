@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Query, Res, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Res, Inject, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
+import axios from 'axios';
 import { FacesService } from './faces.service.js';
 import {
   RenameFaceDto,
@@ -51,8 +52,23 @@ export class FacesController {
   @Get('image/:filename')
   @ApiOperation({ summary: 'Serve cropped face thumbnail image' })
   async getFaceImage(@Param('filename') filename: string, @Res() res: Response) {
-    const resolved = this.facesService.getFaceImagePath(filename);
-    return res.sendFile(resolved);
+    try {
+      const resolved = this.facesService.getFaceImagePath(filename);
+      return res.sendFile(resolved);
+    } catch {
+      // Proxy fallback from remote cataloger backend if face image is on the worker daemon
+      try {
+        const baseUrl = this.facesService.catalogerApiUrl;
+        const remoteUrl = `${baseUrl}/api/faces/image/${encodeURIComponent(filename)}`;
+        const response = await axios.get(remoteUrl, { responseType: 'stream', timeout: 5000 });
+        if (response.headers['content-type']) {
+          res.setHeader('Content-Type', String(response.headers['content-type']));
+        }
+        return response.data.pipe(res);
+      } catch {
+        throw new NotFoundException(`Face image '${filename}' not found`);
+      }
+    }
   }
 
   @Post('rename')

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AppConfigService } from '../config/config.service.js';
 import { MediaService } from '../media/media.service.js';
+import { DatabaseService } from '../database/database.service.js';
 import { LogBufferService, LogLevel } from '../logging/log-buffer.service.js';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class CatalogerClientService {
   constructor(
     @Inject(AppConfigService) private readonly config: AppConfigService,
     @Inject(MediaService) private readonly mediaService: MediaService,
+    @Inject(DatabaseService) private readonly db: DatabaseService,
     @Inject(LogBufferService) @Optional() private readonly logBuffer?: LogBufferService,
   ) {}
 
@@ -166,6 +168,10 @@ export class CatalogerClientService {
       );
 
       this.logBuffer?.info('Pipeline', `Single file analysis successfully queued for '${path.basename(resolvedPath)}'`, res.data);
+
+      // Start background watcher to track completion, sync results to local DB, and log found faces + metadata
+      this.watchSingleFileAnalysis(resolvedPath, path.basename(resolvedPath), size, mtime);
+
       return res.data;
     } catch (err: any) {
       const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
@@ -183,6 +189,190 @@ export class CatalogerClientService {
       });
 
       throw new Error(`Cataloger service error (${status || 'Network'}): ${detail}`);
+    }
+  }
+
+  /**
+   * Watch single file analysis in the background, poll until completion,
+   * then fetch metadata/faces from the remote engine and persist locally.
+   */
+  private watchSingleFileAnalysis(filePath: string, filename: string, size: number, mtime: number): void {
+    const startTime = Date.now();
+    const maxWaitMs = 180000; // 3 minutes timeout
+    const pollIntervalMs = 1500;
+
+    const checkLoop = async () => {
+      if (Date.now() - startTime > maxWaitMs) {
+        this.logger.warn(`Single file analysis watch timeout for '${filename}'`);
+        return;
+      }
+
+      try {
+        const statusRes = await axios.get(`${this.baseUrl}/api/status`, { timeout: 3000 });
+        const st = statusRes.data;
+
+        // If currently running this task, continue polling
+        if (st.status === 'running' && st.current_task === 'analyze_file') {
+          setTimeout(checkLoop, pollIntervalMs);
+          return;
+        }
+
+        // If completed or idle, attempt to fetch the resulting sidecar and faces
+        const synced = await this.syncRemoteFileAnalysis(filePath, size, mtime);
+        if (synced) {
+          const faces = synced.faces || [];
+          const faceNames = faces.map((f: any) => f.name || f.person_name || f.face_id).filter(Boolean);
+          const faceSummary = faceNames.length > 0 ? faceNames.join(', ') : 'No faces detected';
+          const summary = synced.gemini_analysis?.summary || synced.summary || 'Metadata extracted';
+
+          this.logger.log(`Single-file analysis completed for '${filename}': ${faces.length} face(s), summary: "${summary}"`);
+          this.logBuffer?.info(
+            'Pipeline',
+            `Single file analysis completed for '${filename}': Found ${faces.length} face(s) (${faceSummary}). Summary: "${summary}"`,
+            {
+              file: filePath,
+              filename,
+              facesCount: faces.length,
+              faces: faceNames,
+              summary,
+              description: synced.gemini_analysis?.description || synced.description,
+              environment: synced.gemini_analysis?.environment || synced.environment,
+              lighting: synced.gemini_analysis?.lighting || synced.lighting,
+              sidecar_path: synced._local_sidecar_path,
+            }
+          );
+          return;
+        }
+
+        // If not found yet and still within short window, retry
+        if (Date.now() - startTime < 15000) {
+          setTimeout(checkLoop, pollIntervalMs);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Error during single file analysis watch for '${filename}': ${err.message}`);
+      }
+    };
+
+    setTimeout(checkLoop, pollIntervalMs);
+  }
+
+  /**
+   * Sync sidecar JSON, face records, and thumbnails from remote cataloger backend to local disk and SQLite DB.
+   */
+  async syncRemoteFileAnalysis(filePath: string, fileSize?: number, mtime?: number): Promise<any> {
+    const filename = path.basename(filePath);
+    try {
+      const sidecarRes = await axios.get(
+        `${this.baseUrl}/api/media/sidecar?file=${encodeURIComponent(filePath)}`,
+        { timeout: 5000 }
+      );
+
+      if (!sidecarRes.data || typeof sidecarRes.data !== 'object') {
+        return null;
+      }
+
+      const sidecarData = sidecarRes.data;
+      const resolvedSize = fileSize || sidecarData.file_size || 0;
+      const resolvedMtime = mtime || sidecarData.mtime || Date.now() / 1000;
+
+      // 1. Ensure output folder exists and write local sidecar JSON
+      const outFolder = this.config.outputFolder;
+      if (!fs.existsSync(outFolder)) {
+        fs.mkdirSync(outFolder, { recursive: true });
+      }
+      const localSidecarPath = path.join(outFolder, `${filename}.json`);
+      try {
+        fs.writeFileSync(localSidecarPath, JSON.stringify(sidecarData, null, 2), 'utf-8');
+      } catch (err: any) {
+        this.logger.warn(`Failed to write local sidecar file '${localSidecarPath}': ${err.message}`);
+      }
+
+      // 2. Fetch face detections from remote backend
+      let facesList = Array.isArray(sidecarData.faces) ? sidecarData.faces : [];
+      try {
+        const facesRes = await axios.get(
+          `${this.baseUrl}/api/media/faces-for-file?file=${encodeURIComponent(filePath)}`,
+          { timeout: 4000 }
+        );
+        if (Array.isArray(facesRes.data) && facesRes.data.length > 0) {
+          facesList = facesRes.data;
+        }
+      } catch {
+        // use sidecarData.faces fallback
+      }
+
+      // 3. Download/sync face crop images to local faces directory
+      const facesFolder = this.config.facesFolder;
+      if (!fs.existsSync(facesFolder)) {
+        fs.mkdirSync(facesFolder, { recursive: true });
+      }
+
+      for (const face of facesList) {
+        const faceImgName = path.basename(face.image_path || `${face.face_id || face.id}.jpg`);
+        if (faceImgName && !fs.existsSync(path.join(facesFolder, faceImgName))) {
+          try {
+            const imgRes = await axios.get(
+              `${this.baseUrl}/api/faces/image/${encodeURIComponent(faceImgName)}`,
+              { responseType: 'arraybuffer', timeout: 4000 }
+            );
+            if (imgRes.data && imgRes.data.length > 0) {
+              fs.writeFileSync(path.join(facesFolder, faceImgName), Buffer.from(imgRes.data));
+            }
+          } catch {
+            // ignore individual image download errors
+          }
+        }
+      }
+
+      // 4. Ingest into local SQLite Database
+      this.db.initDb();
+      this.db.saveSyncRecord({
+        filePath: filePath,
+        fileSize: resolvedSize,
+        mtime: resolvedMtime,
+        status: 'PROCESSED',
+        sidecarPath: localSidecarPath,
+      });
+
+      const ga = sidecarData.gemini_analysis || sidecarData.analysis || sidecarData.metadata || {};
+      this.db.saveMediaMetadata(filePath, {
+        summary: ga.summary || sidecarData.summary,
+        summary_ru: ga.summary_ru || sidecarData.summary_ru,
+        description: ga.description || sidecarData.description,
+        description_ru: ga.description_ru || sidecarData.description_ru,
+        environment: ga.environment || sidecarData.environment,
+        lighting: ga.lighting || sidecarData.lighting,
+        lighting_ru: ga.lighting_ru || sidecarData.lighting_ru,
+        weather: ga.weather || sidecarData.weather,
+        weather_ru: ga.weather_ru || sidecarData.weather_ru,
+        time_of_day: ga.time_of_day || sidecarData.time_of_day,
+        time_of_day_ru: ga.time_of_day_ru || sidecarData.time_of_day_ru,
+        ocr_text: ga.ocr_text || sidecarData.ocr_text,
+        exif_analysis: ga.exif_analysis || sidecarData.exif_analysis,
+        exif_analysis_ru: ga.exif_analysis_ru || sidecarData.exif_analysis_ru,
+        transcription: ga.transcription || sidecarData.transcription,
+        transcription_ru: ga.transcription_ru || sidecarData.transcription_ru,
+        timeline_events: ga.timeline_events || sidecarData.timeline_events,
+        camera_make: sidecarData.exif?.camera_make || null,
+        camera_model: sidecarData.exif?.camera_model || null,
+        location_name: ga.location_name || null,
+        media_type: sidecarData.media_type || 'image',
+        file_size: resolvedSize,
+        mtime: resolvedMtime,
+      });
+
+      if (facesList && facesList.length > 0) {
+        this.db.saveMediaFaces(filePath, facesList);
+      }
+
+      return {
+        ...sidecarData,
+        faces: facesList,
+        _local_sidecar_path: localSidecarPath,
+      };
+    } catch (err: any) {
+      this.logger.debug(`Could not sync remote sidecar for '${filePath}': ${err.message}`);
+      return null;
     }
   }
 
@@ -307,11 +497,15 @@ export class CatalogerClientService {
       }
     }
 
+    const cleanRemote = (remoteLogsText || '').trim();
+    const hasValidRemote = cleanRemote && !cleanRemote.includes('Log file not found');
+
     if (bufferResult && bufferResult.entries.length > 0) {
-      if (remoteLogsText && remoteLogsText.trim()) {
-        // If remote logs has distinct content, merge
+      if (hasValidRemote) {
+        // Merge in-memory request logs and remote worker engine logs seamlessly
+        const mergedText = `${bufferResult.logs}\n\n--- Cataloger Worker Engine Logs ---\n${cleanRemote}`;
         return {
-          logs: bufferResult.logs,
+          logs: mergedText,
           entries: bufferResult.entries,
         };
       }
@@ -321,11 +515,11 @@ export class CatalogerClientService {
       };
     }
 
-    if (remoteLogsText) {
-      return { logs: remoteLogsText };
+    if (hasValidRemote) {
+      return { logs: cleanRemote };
     }
 
-    return { logs: 'No active cataloger logs found.' };
+    return { logs: bufferResult?.logs || 'No active cataloger logs found.' };
   }
 
   async clearLogs(): Promise<{ status: string; message: string }> {
@@ -355,3 +549,4 @@ export class CatalogerClientService {
     return { status: 'success', message: 'Logs cleared' };
   }
 }
+

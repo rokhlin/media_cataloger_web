@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger, Inject, Optional } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import axios from 'axios';
 import { AppConfigService } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FamilyTreePublicService } from '../family-tree/family-tree-public.service.js';
@@ -19,6 +20,10 @@ export class MediaService {
     @Inject(DatabaseService) private readonly db: DatabaseService,
     @Optional() @Inject(FamilyTreePublicService) private readonly familyTreePublicService?: FamilyTreePublicService,
   ) {}
+
+  private get catalogerBaseUrl(): string {
+    return this.config.catalogerApiUrl.replace(/\/+$/, '');
+  }
 
   scanInputFolders(): ScannedMediaFile[] {
     const results: ScannedMediaFile[] = [];
@@ -502,7 +507,7 @@ export class MediaService {
     }
   }
 
-  getMediaSidecar(target: string): any {
+  async getMediaSidecar(target: string): Promise<any> {
     const trimmed = target.trim();
     this.db.initDb();
 
@@ -554,10 +559,71 @@ export class MediaService {
       };
     }
 
+    // Fallback: Query remote cataloger daemon API
+    try {
+      const res = await axios.get(
+        `${this.catalogerBaseUrl}/api/media/sidecar?file=${encodeURIComponent(trimmed)}`,
+        { timeout: 4000 }
+      );
+      if (res.data && typeof res.data === 'object' && res.data.file_path) {
+        const sdata = res.data;
+        const outFolder = this.config.outputFolder;
+        if (!fs.existsSync(outFolder)) {
+          fs.mkdirSync(outFolder, { recursive: true });
+        }
+        const localSidecarPath = path.join(outFolder, `${path.basename(trimmed)}.json`);
+        try {
+          fs.writeFileSync(localSidecarPath, JSON.stringify(sdata, null, 2), 'utf-8');
+        } catch {
+          // ignore
+        }
+
+        const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
+        this.db.saveSyncRecord({
+          filePath: trimmed,
+          fileSize: sdata.file_size || 0,
+          mtime: sdata.mtime || 0,
+          status: 'PROCESSED',
+          sidecarPath: localSidecarPath,
+        });
+        this.db.saveMediaMetadata(trimmed, {
+          summary: ga.summary || sdata.summary,
+          summary_ru: ga.summary_ru || sdata.summary_ru,
+          description: ga.description || sdata.description,
+          description_ru: ga.description_ru || sdata.description_ru,
+          environment: ga.environment || sdata.environment,
+          lighting: ga.lighting || sdata.lighting,
+          lighting_ru: ga.lighting_ru || sdata.lighting_ru,
+          weather: ga.weather || sdata.weather,
+          weather_ru: ga.weather_ru || sdata.weather_ru,
+          time_of_day: ga.time_of_day || sdata.time_of_day,
+          time_of_day_ru: ga.time_of_day_ru || sdata.time_of_day_ru,
+          ocr_text: ga.ocr_text || sdata.ocr_text,
+          exif_analysis: ga.exif_analysis || sdata.exif_analysis,
+          exif_analysis_ru: ga.exif_analysis_ru || sdata.exif_analysis_ru,
+          transcription: ga.transcription || sdata.transcription,
+          transcription_ru: ga.transcription_ru || sdata.transcription_ru,
+          timeline_events: ga.timeline_events || sdata.timeline_events,
+          camera_make: sdata.exif?.camera_make || null,
+          camera_model: sdata.exif?.camera_model || null,
+          location_name: ga.location_name || null,
+          media_type: sdata.media_type || 'image',
+        });
+
+        if (Array.isArray(sdata.faces) && sdata.faces.length > 0) {
+          this.db.saveMediaFaces(trimmed, sdata.faces);
+        }
+
+        return sdata;
+      }
+    } catch {
+      // ignore
+    }
+
     throw new NotFoundException(`Sidecar metadata not found for '${trimmed}'`);
   }
 
-  getFacesForFile(file: string) {
+  async getFacesForFile(file: string): Promise<any[]> {
     if (!file || !file.trim()) {
       throw new BadRequestException('File parameter cannot be empty');
     }
@@ -612,6 +678,20 @@ export class MediaService {
       } catch {
         // ignore
       }
+    }
+
+    // Fallback: query remote cataloger faces API
+    try {
+      const res = await axios.get(
+        `${this.catalogerBaseUrl}/api/media/faces-for-file?file=${encodeURIComponent(trimmed)}`,
+        { timeout: 4000 }
+      );
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        this.db.saveMediaFaces(trimmed, res.data);
+        return res.data;
+      }
+    } catch {
+      // ignore
     }
 
     return [];

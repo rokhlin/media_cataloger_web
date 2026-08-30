@@ -158,11 +158,11 @@ describe('MediaService', () => {
     assert.strictEqual(clipItem.has_unassigned_faces, true);
 
     // Verify sidecar endpoint
-    const sidecarApiResult = mediaService.getMediaSidecar(clipPath);
+    const sidecarApiResult = await mediaService.getMediaSidecar(clipPath);
     assert.strictEqual(sidecarApiResult.description, 'A cheerful family gathering in a sunny park.');
 
     // Verify getFacesForFile
-    const facesResult = mediaService.getFacesForFile(clipPath);
+    const facesResult = await mediaService.getFacesForFile(clipPath);
     assert.strictEqual(facesResult.length, 2);
     assert.strictEqual(facesResult[0].name, 'Anna Smith');
   });
@@ -173,7 +173,7 @@ describe('MediaService', () => {
     const addRes = mediaService.addPersonToFile(beachPath, 'John Doe');
     assert.strictEqual(addRes.status, 'success');
 
-    const facesAfterAdd = mediaService.getFacesForFile(beachPath);
+    const facesAfterAdd = await mediaService.getFacesForFile(beachPath);
     assert.ok(facesAfterAdd.some((f) => f.name === 'John Doe'));
 
     // Remove face
@@ -182,7 +182,7 @@ describe('MediaService', () => {
     const removeRes = mediaService.removeFaceFromFile(beachPath, faceToRemove.face_id);
     assert.strictEqual(removeRes.status, 'success');
 
-    const facesAfterRemove = mediaService.getFacesForFile(beachPath);
+    const facesAfterRemove = await mediaService.getFacesForFile(beachPath);
     assert.strictEqual(facesAfterRemove.some((f) => f.name === 'John Doe'), false);
   });
 });

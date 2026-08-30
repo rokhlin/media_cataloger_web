@@ -13,6 +13,10 @@ export class FacesService {
     @Optional() @Inject(FamilyTreePublicService) private readonly familyTreePublicService?: FamilyTreePublicService,
   ) {}
 
+  get catalogerApiUrl(): string {
+    return this.config.catalogerApiUrl.replace(/\/+$/, '');
+  }
+
   getAllRegisteredFaces() {
     this.db.initDb();
     return this.db.getAllRegisteredFaces();

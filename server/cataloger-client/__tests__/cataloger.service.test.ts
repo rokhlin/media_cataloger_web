@@ -99,8 +99,15 @@ describe('CatalogerClientService', () => {
       getPipelineExecutionConfig: () => ({ output_folder: tmpDir }),
     } as any;
 
-    catalogerService = new CatalogerClientService(mockConfig, mockMediaService);
-    offlineService = new CatalogerClientService(offlineConfig, mockMediaService);
+    const mockDbService = {
+      initDb: () => {},
+      saveSyncRecord: () => {},
+      saveMediaMetadata: () => {},
+      saveMediaFaces: () => {},
+    } as any;
+
+    catalogerService = new CatalogerClientService(mockConfig, mockMediaService, mockDbService);
+    offlineService = new CatalogerClientService(offlineConfig, mockMediaService, mockDbService);
   });
 
   after(async () => {

@@ -110,29 +110,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch live system status
-  const checkStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
-        const data = await res.json();
-        setStatusInfo(data);
-        if (data.status === 'running' || data.status === 'paused') {
-          // Auto-poll logs when running or paused
-          fetchLogsInternal();
-        }
-      }
-    } catch (err) {
-      console.error('Error checking status:', err);
-    }
-  }, [fetchLogsInternal]);
-
-  const handleRefreshLogs = async () => {
-    setIsRefreshingLogs(true);
-    await fetchLogsInternal();
-    setIsRefreshingLogs(false);
-  };
-
   const handleClearLogs = useCallback(async () => {
     try {
       await fetch('/api/logs/clear', { method: 'POST' });
@@ -191,6 +168,35 @@ function App() {
       setFacesLoading(false);
     }
   }, []);
+
+  // Fetch live system status
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/status');
+      if (res.ok) {
+        const data = await res.json();
+        const prev = statusRef.current;
+        setStatusInfo(data);
+        if (data.status === 'running' || data.status === 'paused') {
+          // Auto-poll logs when running or paused
+          fetchLogsInternal();
+        } else if (prev === 'running' || prev === 'paused') {
+          // Process completed or stopped -> refresh media files, faces, and logs immediately
+          loadMediaFiles();
+          loadFaces();
+          fetchLogsInternal();
+        }
+      }
+    } catch (err) {
+      console.error('Error checking status:', err);
+    }
+  }, [fetchLogsInternal, loadMediaFiles, loadFaces]);
+
+  const handleRefreshLogs = async () => {
+    setIsRefreshingLogs(true);
+    await fetchLogsInternal();
+    setIsRefreshingLogs(false);
+  };
 
   // Rename face or person
   const handleRenameFace = async (faceId: string, newName: string) => {
@@ -542,6 +548,11 @@ function App() {
         appendConsoleMessage(`Triggered file analysis successfully: ${result.message || 'Started'}`, 'INFO', 'Pipeline');
         if (onSuccess) onSuccess();
         checkStatus();
+        fetchLogsInternal();
+        // Follow-up refreshes to ensure new metadata/faces are shown as soon as worker completes
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 2500);
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 6000);
+        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 12000);
       } else {
         const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
         appendConsoleMessage(
