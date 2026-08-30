@@ -26,7 +26,7 @@ export class CatalogerClientService {
     const execConfig = this.config.getPipelineExecutionConfig();
     this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)})`);
 
-    const scanned = this.mediaService.scanInputFolders();
+    const scanned = await this.mediaService.scanInputFolders();
     this.logBuffer?.debug('Pipeline', `Found ${scanned.length} media file(s) across input sources`, {
       inputFolders: execConfig.input_folders,
       totalFiles: scanned.length,

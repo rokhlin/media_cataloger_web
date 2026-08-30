@@ -19,7 +19,10 @@ export type { GalleryMediaFile, DetectedFaceRecord };
 interface InputSourcesGalleryProps {
   mediaFiles?: GalleryMediaFile[];
   isLoading?: boolean;
+  isBackgroundLoading?: boolean;
+  totalKnownFiles?: number | null;
   onRefresh?: () => void;
+  onFetchMore?: () => void;
   onStartSingleAnalysis?: (filePath: string) => void;
   onSwitchToControls?: () => void;
   persons?: PersonItem[];
@@ -27,12 +30,19 @@ interface InputSourcesGalleryProps {
   disabled?: boolean;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
+  currentLoadingFile?: string | null;
+  currentLoadingFilename?: string | null;
+  scannedFilesCount?: number;
+  activeInputFolders?: string[];
 }
 
 export default function InputSourcesGallery({
   mediaFiles = [],
   isLoading = false,
+  isBackgroundLoading = false,
+  totalKnownFiles,
   onRefresh,
+  onFetchMore,
   onStartSingleAnalysis,
   onSwitchToControls,
   persons = [],
@@ -40,6 +50,10 @@ export default function InputSourcesGallery({
   disabled = false,
   onReloadFaces,
   onViewInFamilyTree,
+  currentLoadingFile,
+  currentLoadingFilename,
+  scannedFilesCount = 0,
+  activeInputFolders = [],
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
 
@@ -502,13 +516,22 @@ export default function InputSourcesGallery({
   const visibleFiles = useMemo(() => {
     return filteredFiles.slice(0, visibleCount);
   }, [filteredFiles, visibleCount]);
-  const hasMore = visibleCount < filteredFiles.length;
+  const canFetchMoreFromBackend = Boolean(
+    onFetchMore && totalKnownFiles !== null && totalKnownFiles !== undefined && mediaFiles.length < totalKnownFiles
+  );
+  const hasMore = visibleCount < filteredFiles.length || canFetchMoreFromBackend;
 
   const loadMoreRows = useCallback(() => {
-    if (hasMore) {
+    if (visibleCount < filteredFiles.length) {
+      setLoadedRows((prev) => prev + batchRows);
+    } else if (onFetchMore) {
+      onFetchMore();
       setLoadedRows((prev) => prev + batchRows);
     }
-  }, [hasMore, batchRows]);
+  }, [visibleCount, filteredFiles.length, batchRows, onFetchMore]);
+
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(800);
 
   // IntersectionObserver on sentinel to load next rows when scrolled into view
   useEffect(() => {
@@ -523,7 +546,7 @@ export default function InputSourcesGallery({
       },
       {
         root: containerRef.current || null,
-        rootMargin: '150px',
+        rootMargin: '200px',
         threshold: 0.05,
       }
     );
@@ -534,13 +557,44 @@ export default function InputSourcesGallery({
 
   const handleContainerScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-      if (scrollHeight - scrollTop - clientHeight < 150 && hasMore) {
+      const target = e.currentTarget;
+      setScrollTop(target.scrollTop);
+      setContainerHeight(target.clientHeight || 800);
+      const { scrollTop: st, scrollHeight, clientHeight } = target;
+      if (scrollHeight - st - clientHeight < 400 && hasMore) {
         loadMoreRows();
       }
     },
     [hasMore, loadMoreRows]
   );
+
+  // Virtual windowing calculations for Grid view (card height ~260px)
+  const CARD_ROW_HEIGHT = 260;
+  const OVERSCAN_GRID_ROWS = 3;
+  const totalGalleryRows = Math.ceil(visibleFiles.length / effectiveCols);
+  const startGalleryRow = Math.max(0, Math.floor(scrollTop / CARD_ROW_HEIGHT) - OVERSCAN_GRID_ROWS);
+  const endGalleryRow = Math.min(totalGalleryRows, Math.ceil((scrollTop + containerHeight) / CARD_ROW_HEIGHT) + OVERSCAN_GRID_ROWS);
+  const startGalleryIndex = startGalleryRow * effectiveCols;
+  const endGalleryIndex = Math.min(visibleFiles.length, endGalleryRow * effectiveCols);
+  const virtualizedGalleryFiles = useMemo(() => {
+    return visibleFiles.slice(startGalleryIndex, endGalleryIndex);
+  }, [visibleFiles, startGalleryIndex, endGalleryIndex]);
+
+  const galleryTopPadding = startGalleryRow * CARD_ROW_HEIGHT;
+  const galleryBottomPadding = Math.max(0, (totalGalleryRows - endGalleryRow) * CARD_ROW_HEIGHT);
+
+  // Virtual windowing calculations for List view (row height ~48px)
+  const TABLE_ROW_HEIGHT = 48;
+  const OVERSCAN_LIST_ROWS = 6;
+  const totalListRows = visibleFiles.length;
+  const startListRow = Math.max(0, Math.floor(scrollTop / TABLE_ROW_HEIGHT) - OVERSCAN_LIST_ROWS);
+  const endListRow = Math.min(totalListRows, Math.ceil((scrollTop + containerHeight) / TABLE_ROW_HEIGHT) + OVERSCAN_LIST_ROWS);
+  const virtualizedListFiles = useMemo(() => {
+    return visibleFiles.slice(startListRow, endListRow);
+  }, [visibleFiles, startListRow, endListRow]);
+
+  const listTopPadding = startListRow * TABLE_ROW_HEIGHT;
+  const listBottomPadding = Math.max(0, (totalListRows - endListRow) * TABLE_ROW_HEIGHT);
 
   const totalCount = mediaFiles.length;
   const processedCount = mediaFiles.filter((f) => f.status === 'PROCESSED').length;
@@ -550,9 +604,9 @@ export default function InputSourcesGallery({
   // Effective language in Lightbox
   const activeDetailLang = lightboxLang === 'active' ? language : lightboxLang;
 
-  // Render single media card item
+  // Render single media card item with thumbnail miniature and async decoding
   const renderCardItem = (file: GalleryMediaFile) => {
-    const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+    const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=360`;
     const isProcessed = file.status === 'PROCESSED';
     const isPending = file.status === 'PENDING';
 
@@ -570,17 +624,39 @@ export default function InputSourcesGallery({
       >
         <div className="gallery-thumb-wrap">
           {file.is_image ? (
-            <img
-              src={fileUrl}
-              alt={file.filename}
-              className="gallery-thumb-img"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.style.display = 'none';
-              }}
-            />
+            <>
+              <img
+                src={thumbUrl}
+                alt={file.filename}
+                className="gallery-thumb-img"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div
+                className="gallery-thumb-fallback-placeholder"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: '100%',
+                  flexDirection: 'column',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span style={{ fontSize: '1.8rem' }}>📷</span>
+                <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
+                  {file.filename}
+                </span>
+              </div>
+            </>
           ) : (
             <div className="gallery-thumb-video-placeholder">
               <span style={{ fontSize: '2rem' }}>🎥</span>
@@ -711,7 +787,7 @@ export default function InputSourcesGallery({
     );
   };
 
-  // 1. Gallery Grid View
+  // 1. Gallery Grid View with Virtual Windowing
   const renderGalleryView = () => (
     <>
       <div
@@ -719,15 +795,17 @@ export default function InputSourcesGallery({
         ref={gridRef}
         style={{
           '--gallery-item-min-width': '140px',
+          paddingTop: galleryTopPadding > 0 ? `${galleryTopPadding}px` : undefined,
+          paddingBottom: galleryBottomPadding > 0 ? `${galleryBottomPadding}px` : undefined,
         } as React.CSSProperties}
       >
-        {visibleFiles.map((file) => renderCardItem(file))}
+        {virtualizedGalleryFiles.map((file) => renderCardItem(file))}
       </div>
       <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />
     </>
   );
 
-  // 2. Tabular List View
+  // 2. Tabular List View with Virtual Windowing
   const renderListView = () => (
     <div className="media-list-table-wrap">
       <table className="media-list-table">
@@ -755,8 +833,9 @@ export default function InputSourcesGallery({
           </tr>
         </thead>
         <tbody>
-          {visibleFiles.map((file) => {
-            const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+          {listTopPadding > 0 && <tr style={{ height: `${listTopPadding}px` }}><td colSpan={9} /></tr>}
+          {virtualizedListFiles.map((file) => {
+            const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=120`;
             const isProcessed = file.status === 'PROCESSED';
             const isPending = file.status === 'PENDING';
 
@@ -769,10 +848,11 @@ export default function InputSourcesGallery({
                 <td style={{ textAlign: 'center' }}>
                   {file.is_image ? (
                     <img
-                      src={fileUrl}
+                      src={thumbUrl}
                       alt={file.filename}
                       className="media-list-thumb"
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <span style={{ fontSize: '1.2rem' }}>🎥</span>
@@ -849,6 +929,7 @@ export default function InputSourcesGallery({
               </tr>
             );
           })}
+          {listBottomPadding > 0 && <tr style={{ height: `${listBottomPadding}px` }}><td colSpan={9} /></tr>}
         </tbody>
       </table>
       <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />
@@ -1079,13 +1160,14 @@ export default function InputSourcesGallery({
           {onRefresh && (
             <button
               className="btn btn-secondary"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               onClick={onRefresh}
               disabled={isLoading || disabled}
               type="button"
               title={t('btnRefreshGallery')}
             >
-              🔄 {t('btnRefreshGallery')}
+              <span >🔄</span>
+              <span>{t('btnRefreshGallery')}</span>
             </button>
           )}
 
@@ -1307,9 +1389,48 @@ export default function InputSourcesGallery({
         onScroll={handleContainerScroll}
       >
         {isLoading && mediaFiles.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: '2rem 0', fontSize: '0.9rem' }}>
-            {t('scanningSources')}
-          </p>
+          <div className="gallery-loading-overlay">
+            <div className="gallery-spinner-ring-wrap">
+              <div className="gallery-spinner-ring" />
+              <span className="gallery-spinner-inner-icon">📁</span>
+            </div>
+            <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.15rem', color: 'var(--text-primary)' }}>
+              {t('scanningSources')}
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '440px' }}>
+              {language === 'ru'
+                ? 'Индексирование и загрузка медиафайлов из настроенных папок источников...'
+                : 'Indexing and loading media files from configured input sources...'}
+            </p>
+
+            {/* Currently loaded file / input folder under spinner */}
+            {(currentLoadingFile || currentLoadingFilename || (activeInputFolders && activeInputFolders.length > 0)) && (
+              <div className="gallery-spinner-current-file-badge">
+                <span className="gallery-spinner-current-file-label">
+                  {currentLoadingFile || currentLoadingFilename
+                    ? (language === 'ru' ? 'Обработка:' : 'Processing:')
+                    : (language === 'ru' ? 'Папка источника:' : 'Input folder:')}
+                </span>
+                <span
+                  className="gallery-spinner-current-file-name"
+                  title={currentLoadingFile || activeInputFolders?.join(', ')}
+                >
+                  {currentLoadingFilename || (currentLoadingFile ? currentLoadingFile.split(/[/\\]/).pop() : `📁 ${activeInputFolders?.[0]}`)}
+                </span>
+              </div>
+            )}
+
+            {Boolean(scannedFilesCount && scannedFilesCount > 0) && (
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <span className="spinner-icon">⚡</span>
+                <span>
+                  {language === 'ru'
+                    ? `Найдено файлов: ${scannedFilesCount.toLocaleString()}`
+                    : `Discovered files: ${scannedFilesCount.toLocaleString()}`}
+                </span>
+              </div>
+            )}
+          </div>
         ) : filteredFiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-secondary)' }}>
             <p style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{t('noMediaFound')}</p>
@@ -1321,6 +1442,38 @@ export default function InputSourcesGallery({
           </div>
         ) : (
           <>
+            {(isLoading || isBackgroundLoading) && (
+              <div className="gallery-scanning-banner">
+                <div className="gallery-scanning-banner-left">
+                  <span className="spinner-icon" style={{ fontSize: '1.25rem' }}>🔄</span>
+                  <div>
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                      {isBackgroundLoading
+                        ? (language === 'ru' ? 'Фоновая загрузка медиаархива...' : 'Background loading media library...')
+                        : t('scanningSources')}
+                    </strong>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ru'
+                        ? `Загружено ${mediaFiles.length.toLocaleString()} из ${(totalKnownFiles || scannedFilesCount || mediaFiles.length).toLocaleString()} файлов. Галерея готова к работе!`
+                        : `Loaded ${mediaFiles.length.toLocaleString()} of ${(totalKnownFiles || scannedFilesCount || mediaFiles.length).toLocaleString()} files. Gallery is ready to browse!`}
+                    </span>
+                    {(currentLoadingFilename || currentLoadingFile) && (
+                      <span
+                        className="gallery-scanning-current-file-pill"
+                        title={currentLoadingFile || currentLoadingFilename || ''}
+                      >
+                        📄 {currentLoadingFilename || (currentLoadingFile ? currentLoadingFile.split(/[/\\]/).pop() : '')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
+                  {totalKnownFiles || scannedFilesCount > 0 ? `${(totalKnownFiles || scannedFilesCount).toLocaleString()} ` : `${totalCount} `}
+                  {t('badgeMediaFiles')}
+                </span>
+              </div>
+            )}
+
             {viewMode === 'gallery' && renderGalleryView()}
             {viewMode === 'list' && renderListView()}
             {viewMode === 'folder_tree' && renderFolderTreeView()}
@@ -1470,11 +1623,39 @@ export default function InputSourcesGallery({
                     className="media-lightbox-video"
                   />
                 ) : (
-                  <img
-                    src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                    alt={selectedMedia.filename}
-                    className="media-lightbox-image"
-                  />
+                  <>
+                    <img
+                      src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
+                      alt={selectedMedia.filename}
+                      className="media-lightbox-image"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: 'none',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        width: '100%',
+                        height: '100%',
+                        padding: '3rem',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {selectedMedia.filename}
+                      </p>
+                      <span style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
+                        {selectedMedia.file_path}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
 

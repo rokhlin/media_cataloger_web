@@ -11,6 +11,9 @@ interface HeaderProps {
   onSelectTab?: (tab: string) => void;
   showLogs?: boolean;
   onToggleLogs?: () => void;
+  isScanning?: boolean;
+  scannedFilesCount?: number;
+  currentLoadingFilename?: string | null;
 }
 
 export default function Header({
@@ -21,6 +24,9 @@ export default function Header({
   onSelectTab,
   showLogs = false,
   onToggleLogs,
+  isScanning = false,
+  scannedFilesCount = 0,
+  currentLoadingFilename = null,
 }: HeaderProps) {
   const { language, setLanguage, t } = useLanguage();
   const { themeId, themeMode, activeTheme, presets, customThemes, setThemeId, toggleThemeMode } = useTheme();
@@ -48,7 +54,14 @@ export default function Header({
   let statusText = t('statusIdle');
   let progressText = '';
 
-  if (status === 'running' || status === 'paused') {
+  if (isScanning) {
+    dotClass = 'status-dot running';
+    const countPart = scannedFilesCount > 0 ? ` (${scannedFilesCount.toLocaleString()})` : '';
+    const filePart = currentLoadingFilename ? ` • ${currentLoadingFilename}` : '';
+    statusText = language === 'ru'
+      ? `Сканирование папок источников${countPart}${filePart}`
+      : `Scanning input sources${countPart}${filePart}`;
+  } else if (status === 'running' || status === 'paused') {
     dotClass = status === 'paused' ? 'status-dot warning' : 'status-dot running';
     const taskName = current_task === 'sync' ? t('taskSync') : t('taskSingle');
     const prefix = status === 'paused' ? t('statusPaused') : t('statusRunning');
@@ -123,9 +136,9 @@ export default function Header({
       </div>
 
       <div className="header-actions">
-        <div className="status-badge" id="status-panel">
+        <div className="status-badge" id="status-panel" title={statusText}>
           <span className={dotClass} id="status-dot"></span>
-          <span id="status-text">{statusText}</span>
+          <span id="status-text" style={{ maxWidth: '420px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{statusText}</span>
           {progressText && <p>{progressText}</p>}
         </div>
 

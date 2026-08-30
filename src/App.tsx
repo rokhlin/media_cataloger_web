@@ -32,6 +32,13 @@ function App() {
   // Media files from input sources
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
   const [isMediaLoading, setIsMediaLoading] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{
+    is_scanning: boolean;
+    scanned_count: number;
+    current_file: string | null;
+    current_filename: string | null;
+    current_folder: string | null;
+  } | null>(null);
 
   // Tab navigation: 'main' (Sources / Gallery) or 'media_library' (Face Registry & Controls)
   const [activeTab, setActiveTab] = useState<'main' | 'media_library' | string>('main');
@@ -119,20 +126,94 @@ function App() {
     setLogsList([]);
   }, []);
 
-  // Load media files from input sources
-  const loadMediaFiles = useCallback(async () => {
+  // Poll live media scan status continuously so Header status always shows real-time progress
+  useEffect(() => {
+    let isMounted = true;
+    const fetchScanStatus = async () => {
+      try {
+        const res = await fetch('/api/media/scan-status');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setScanProgress(data);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    fetchScanStatus();
+    const interval = setInterval(fetchScanStatus, 500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
+  const [totalKnownFiles, setTotalKnownFiles] = useState<number | null>(null);
+  const chunkAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Load initial portion of media files (100 files) without re-rendering loops
+  const loadMediaFiles = useCallback(async (refresh = false) => {
+    if (chunkAbortControllerRef.current) {
+      chunkAbortControllerRef.current.abort();
+    }
+    const abortCtrl = new AbortController();
+    chunkAbortControllerRef.current = abortCtrl;
+
+    const CHUNK_SIZE = 100;
+    setIsMediaLoading(true);
+
     try {
-      const res = await fetch('/api/media/files');
+      const res = await fetch(
+        `/api/media/files?offset=0&limit=${CHUNK_SIZE}${refresh ? '&refresh=true' : ''}`,
+        { signal: abortCtrl.signal }
+      );
       if (res.ok) {
         const data = await res.json();
-        setMediaFiles(data.files || []);
+        const files = data.files || [];
+        setMediaFiles(files);
+        setTotalKnownFiles(data.total ?? data.total_files ?? files.length);
       }
-    } catch (err) {
-      console.error('Error loading media files:', err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Error loading media files:', err);
+      }
     } finally {
       setIsMediaLoading(false);
     }
   }, []);
+
+  // Fetch more files on scroll on demand
+  const fetchMoreMediaFiles = useCallback(async () => {
+    if (isBackgroundLoading) return;
+    const currentOffset = mediaFiles.length;
+    if (totalKnownFiles !== null && currentOffset >= totalKnownFiles) return;
+
+    setIsBackgroundLoading(true);
+    try {
+      const res = await fetch(`/api/media/files?offset=${currentOffset}&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        const nextFiles = data.files || [];
+        if (nextFiles.length > 0) {
+          setMediaFiles((prev) => {
+            const seen = new Set(prev.map((f) => f.file_path || f.filename));
+            const unique = nextFiles.filter((f: any) => !seen.has(f.file_path || f.filename));
+            return [...prev, ...unique];
+          });
+          if (data.total !== undefined) {
+            setTotalKnownFiles(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching more media files on scroll:', err);
+    } finally {
+      setIsBackgroundLoading(false);
+    }
+  }, [mediaFiles.length, totalKnownFiles, isBackgroundLoading]);
 
   // Load face registry, persons, unrecognized faces and groups
   const loadFaces = useCallback(async () => {
@@ -421,7 +502,7 @@ function App() {
       if (res.ok) {
         appendConsoleMessage(`[Settings] Dynamic paths updated successfully: ${data.message || 'Saved'}`);
         await loadSettings();
-        await loadMediaFiles();
+        await loadMediaFiles(true);
         return true;
       } else {
         alert(`Error: ${data.detail || 'Failed to update settings'}`);
@@ -664,6 +745,12 @@ function App() {
         onSelectTab={setActiveTab}
         showLogs={showLogs}
         onToggleLogs={() => setShowLogs((prev) => !prev)}
+        isScanning={isMediaLoading || Boolean(scanProgress?.is_scanning)}
+        scannedFilesCount={scanProgress?.scanned_count || 0}
+        currentLoadingFilename={
+          scanProgress?.current_filename ||
+          (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+        }
       />
 
       <main className="app-main-content">
@@ -672,7 +759,10 @@ function App() {
             <InputSourcesGallery
               mediaFiles={mediaFiles}
               isLoading={isMediaLoading}
+              isBackgroundLoading={isBackgroundLoading}
+              totalKnownFiles={totalKnownFiles}
               onRefresh={loadMediaFiles}
+              onFetchMore={fetchMoreMediaFiles}
               onStartSingleAnalysis={handleStartSingleAnalysis}
               onSwitchToControls={() => setActiveTab('media_library')}
               persons={persons}
@@ -680,6 +770,19 @@ function App() {
               disabled={isRunning || isPaused}
               onReloadFaces={loadFaces}
               onViewInFamilyTree={handleViewInFamilyTree}
+              currentLoadingFile={
+                scanProgress?.current_file ||
+                statusInfo.progress?.current_file ||
+                (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
+                  ? statusInfo.queue.in_flight_files[0]
+                  : null)
+              }
+              currentLoadingFilename={
+                scanProgress?.current_filename ||
+                (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+              }
+              scannedFilesCount={scanProgress?.scanned_count || 0}
+              activeInputFolders={settings?.input_folders || []}
             />
           </div>
         )}

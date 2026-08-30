@@ -11,6 +11,17 @@ export interface ScannedMediaFile {
   folder: string;
 }
 
+export interface ScanStatusInfo {
+  is_scanning: boolean;
+  scanned_count: number;
+  current_file: string | null;
+  current_filename: string | null;
+  current_folder: string | null;
+  started_at: number | null;
+  elapsed_ms: number;
+  total_known: number;
+}
+
 @Injectable()
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
@@ -23,8 +34,59 @@ export class MediaService {
 
   private cachedMediaList: any[] | null = null;
   private cacheTimestamp: number = 0;
-  private readonly CACHE_TTL_MS = 30000; // 30 seconds cache TTL
+  private readonly CACHE_TTL_MS = 300000; // 5 minutes cache TTL for large media libraries
   private sidecarCache: Map<string, { mtime: number; data: any }> = new Map();
+  private filePathMap: Map<string, string> = new Map();
+  private baseNamePathMap: Map<string, string> = new Map();
+
+  private scanStatus: ScanStatusInfo = {
+    is_scanning: false,
+    scanned_count: 0,
+    current_file: null,
+    current_filename: null,
+    current_folder: null,
+    started_at: null,
+    elapsed_ms: 0,
+    total_known: 0,
+  };
+
+  /**
+   * Get real-time folder scanning and indexing status
+   */
+  getScanStatus(): ScanStatusInfo {
+    const elapsed = this.scanStatus.started_at ? Date.now() - this.scanStatus.started_at : 0;
+    return {
+      ...this.scanStatus,
+      elapsed_ms: elapsed,
+      total_known: this.cachedMediaList ? this.cachedMediaList.length : this.scanStatus.scanned_count,
+    };
+  }
+
+  /**
+   * Register a resolved media file path in fast in-memory lookup indices.
+   */
+  registerIndexedFile(filePath: string, baseFolder?: string): void {
+    if (!filePath) return;
+    const norm = filePath.replace(/\\/g, '/');
+    const baseName = path.basename(filePath).toLowerCase();
+    this.filePathMap.set(filePath, filePath);
+    this.filePathMap.set(norm, filePath);
+    this.filePathMap.set(filePath.toLowerCase(), filePath);
+    this.filePathMap.set(norm.toLowerCase(), filePath);
+    this.baseNamePathMap.set(baseName, filePath);
+
+    if (baseFolder) {
+      try {
+        const rel = path.relative(baseFolder, filePath).replace(/\\/g, '/');
+        if (rel && !rel.startsWith('..')) {
+          this.filePathMap.set(rel, filePath);
+          this.filePathMap.set(rel.toLowerCase(), filePath);
+        }
+      } catch {
+        // ignore relative path errors
+      }
+    }
+  }
 
   /**
    * Invalidate in-memory scan cache
@@ -32,19 +94,39 @@ export class MediaService {
   invalidateCache(): void {
     this.cachedMediaList = null;
     this.cacheTimestamp = 0;
+    this.filePathMap.clear();
+    this.baseNamePathMap.clear();
+    this.scanStatus.is_scanning = false;
+    this.scanStatus.current_file = null;
+    this.scanStatus.current_filename = null;
   }
 
   private get catalogerBaseUrl(): string {
     return this.config.catalogerApiUrl.replace(/\/+$/, '');
   }
 
-  scanInputFolders(): ScannedMediaFile[] {
+  private inFlightScanPromise: Promise<any[]> | null = null;
+
+  async scanInputFolders(): Promise<ScannedMediaFile[]> {
     const results: ScannedMediaFile[] = [];
     const supported = new Set([...this.config.supportedPhotoExts, ...this.config.supportedVideoExts]);
 
-    const traverse = (dir: string, baseFolder: string) => {
+    this.scanStatus.is_scanning = true;
+    this.scanStatus.started_at = Date.now();
+    this.scanStatus.scanned_count = 0;
+
+    let opCounter = 0;
+    const yieldIfNecessary = async () => {
+      opCounter++;
+      if (opCounter % 25 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    };
+
+    const traverse = async (dir: string, baseFolder: string) => {
       try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        this.scanStatus.current_folder = dir;
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
           if (entry.isDirectory()) {
@@ -52,11 +134,17 @@ export class MediaService {
             if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '__pycache__') {
               continue;
             }
-            traverse(fullPath, baseFolder);
+            await yieldIfNecessary();
+            await traverse(fullPath, baseFolder);
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if (supported.has(ext)) {
               results.push({ filePath: fullPath, folder: baseFolder });
+              this.registerIndexedFile(fullPath, baseFolder);
+              this.scanStatus.scanned_count = results.length;
+              this.scanStatus.current_file = fullPath;
+              this.scanStatus.current_filename = entry.name;
+              await yieldIfNecessary();
             }
           }
         }
@@ -65,22 +153,28 @@ export class MediaService {
       }
     };
 
-    for (const folder of this.config.inputFolders) {
-      let scanTarget = folder;
-      if (!fs.existsSync(scanTarget)) {
-        // If in Docker container with Windows UNC / drive path, fallback to mounted container media_input
-        const cand1 = path.resolve(this.config.projectRoot, 'media_input');
-        const cand2 = '/app/media_input';
-        if (fs.existsSync(cand1) && fs.statSync(cand1).isDirectory()) {
-          scanTarget = cand1;
-        } else if (fs.existsSync(cand2) && fs.statSync(cand2).isDirectory()) {
-          scanTarget = cand2;
+    try {
+      for (const folder of this.config.inputFolders) {
+        let scanTarget = folder;
+        if (!fs.existsSync(scanTarget)) {
+          // If in Docker container with Windows UNC / drive path, fallback to mounted container media_input
+          const cand1 = path.resolve(this.config.projectRoot, 'media_input');
+          const cand2 = '/app/media_input';
+          if (fs.existsSync(cand1) && fs.statSync(cand1).isDirectory()) {
+            scanTarget = cand1;
+          } else if (fs.existsSync(cand2) && fs.statSync(cand2).isDirectory()) {
+            scanTarget = cand2;
+          }
+        }
+
+        if (fs.existsSync(scanTarget)) {
+          await traverse(scanTarget, folder);
         }
       }
-
-      if (fs.existsSync(scanTarget)) {
-        traverse(scanTarget, folder);
-      }
+    } finally {
+      this.scanStatus.is_scanning = false;
+      this.scanStatus.current_file = null;
+      this.scanStatus.current_filename = null;
     }
 
     return results;
@@ -89,17 +183,35 @@ export class MediaService {
   /**
    * Find candidate sidecar JSON file for a given media file path across output and input folders.
    */
-  findSidecarFile(filePath: string, baseFolder?: string, sidecarHint?: string | null): string | null {
+  findSidecarFile(filePath: string, baseFolder?: string, sidecarHint?: string | null, outputDirFiles?: Set<string>): string | null {
     const baseName = path.basename(filePath);
     const ext = path.extname(filePath);
     const stem = ext ? baseName.slice(0, -ext.length) : baseName;
 
-    const candidates: string[] = [];
-
     if (sidecarHint && String(sidecarHint).trim()) {
-      candidates.push(path.resolve(sidecarHint));
-      candidates.push(path.join(this.config.outputFolder, path.basename(sidecarHint)));
+      const hint = String(sidecarHint).trim();
+      if (fs.existsSync(hint)) return hint;
+      const hintInOutput = path.join(this.config.outputFolder, path.basename(hint));
+      if (fs.existsSync(hintInOutput)) return hintInOutput;
     }
+
+    // Fast in-memory check if pre-read output directory entries set is provided
+    if (outputDirFiles) {
+      const bLower = `${baseName}.json`.toLowerCase();
+      const sLower = `${stem}.json`.toLowerCase();
+      const infoLower = `${baseName}.info.json`.toLowerCase();
+      if (outputDirFiles.has(bLower)) {
+        return path.join(this.config.outputFolder, `${baseName}.json`);
+      }
+      if (outputDirFiles.has(sLower)) {
+        return path.join(this.config.outputFolder, `${stem}.json`);
+      }
+      if (outputDirFiles.has(infoLower)) {
+        return path.join(this.config.outputFolder, `${baseName}.info.json`);
+      }
+    }
+
+    const candidates: string[] = [];
 
     // Direct output folder candidates
     candidates.push(path.join(this.config.outputFolder, `${baseName}.json`));
@@ -155,6 +267,369 @@ export class MediaService {
     }
   }
 
+  private async buildMediaIndex(_isRefresh: boolean = false): Promise<any[]> {
+    this.scanStatus.is_scanning = true;
+    this.scanStatus.started_at = Date.now();
+
+    try {
+      const scanned = await this.scanInputFolders();
+      const syncRecords = this.db.getAllSyncRecords();
+      const faceCounts = this.db.getFacesCountBySourceFile();
+      const allFacesByFile = this.db.getAllFacesBySourceFile();
+      const dbMetadata = this.db.getAllMediaMetadata();
+
+      // Pre-read output folder files to avoid hundreds of thousands of network stats over NAS
+      const outputDirSidecars = new Set<string>();
+      try {
+        if (fs.existsSync(this.config.outputFolder)) {
+          for (const name of fs.readdirSync(this.config.outputFolder)) {
+            if (name.endsWith('.json')) {
+              outputDirSidecars.add(name.toLowerCase());
+            }
+          }
+        }
+      } catch {}
+
+      // Secondary index by basename
+      const baseFaceCounts: Record<string, number> = {};
+      for (const [srcFile, count] of Object.entries(faceCounts)) {
+        const bn = path.basename(srcFile).toLowerCase();
+        baseFaceCounts[bn] = (baseFaceCounts[bn] || 0) + count;
+      }
+
+      const baseFaces: Record<string, any[]> = {};
+      for (const [srcFile, fList] of Object.entries(allFacesByFile)) {
+        const bn = path.basename(srcFile).toLowerCase();
+        if (!baseFaces[bn]) baseFaces[bn] = [];
+        baseFaces[bn].push(...fList);
+      }
+
+      const items: any[] = [];
+      let itemIdx = 0;
+      for (const { filePath, folder } of scanned) {
+        itemIdx++;
+        this.scanStatus.scanned_count = itemIdx;
+        this.scanStatus.current_file = filePath;
+        this.scanStatus.current_filename = path.basename(filePath);
+
+        if (itemIdx % 5 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+
+        let size = 0;
+        let mtime = 0;
+        try {
+          const stat = await fs.promises.stat(filePath);
+          size = stat.size;
+          mtime = stat.mtimeMs / 1000;
+        } catch {
+          // file unreadable
+        }
+
+      const baseName = path.basename(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const isVideo = this.config.supportedVideoExts.has(ext);
+      const isImage = this.config.supportedPhotoExts.has(ext);
+
+      let syncRec = syncRecords[filePath];
+      if (!syncRec) {
+        for (const [k, v] of Object.entries(syncRecords)) {
+          if (path.basename(k).toLowerCase() === baseName.toLowerCase()) {
+            syncRec = v;
+            break;
+          }
+        }
+      }
+
+      let fileFacesRaw = allFacesByFile[filePath];
+      if (!fileFacesRaw || fileFacesRaw.length === 0) {
+        fileFacesRaw = baseFaces[baseName.toLowerCase()] || [];
+      }
+
+      const seenFids = new Set<string>();
+      const dedupFaces: any[] = [];
+      const faceNames: string[] = [];
+      let hasUnassigned = false;
+
+      for (const f of fileFacesRaw) {
+        const fid = f.face_id || f.id;
+        if (fid && seenFids.has(fid)) continue;
+        if (fid) seenFids.add(fid);
+        dedupFaces.push(f);
+        const fname = f.name || f.person_name;
+        if (fname && !faceNames.includes(fname)) {
+          faceNames.push(fname);
+        }
+        if (!f.is_reference || (fname && fname.startsWith('face_'))) {
+          hasUnassigned = true;
+        }
+      }
+
+      let status = syncRec ? syncRec.status : 'UNPROCESSED';
+      let sidecar = syncRec ? syncRec.sidecar_path : null;
+
+      let desc: string | null = null;
+      let descRu: string | null = null;
+      let summ: string | null = null;
+      let summRu: string | null = null;
+      let environment: string | null = null;
+      let lighting: string | null = null;
+      let lightingRu: string | null = null;
+      let weather: string | null = null;
+      let weatherRu: string | null = null;
+      let timeOfDay: string | null = null;
+      let timeOfDayRu: string | null = null;
+      let ocrText: string | null = null;
+      let exifAnalysis: string | null = null;
+      let exifAnalysisRu: string | null = null;
+      let transcription: string | null = null;
+      let transcriptionRu: string | null = null;
+      let timelineEvents: any = null;
+
+      const m = dbMetadata[filePath] || dbMetadata[baseName.toLowerCase()];
+      if (m) {
+        desc = m.description || null;
+        descRu = m.description_ru || null;
+        summ = m.summary || null;
+        summRu = m.summary_ru || null;
+        environment = m.environment || null;
+        lighting = m.lighting || null;
+        lightingRu = m.lighting_ru || null;
+        weather = m.weather || null;
+        weatherRu = m.weather_ru || null;
+        timeOfDay = m.time_of_day || null;
+        timeOfDayRu = m.time_of_day_ru || null;
+        ocrText = m.ocr_text || null;
+        exifAnalysis = m.exif_analysis || null;
+        exifAnalysisRu = m.exif_analysis_ru || null;
+        transcription = m.transcription || null;
+        transcriptionRu = m.transcription_ru || null;
+        if (m.timeline_events) {
+          try {
+            timelineEvents = typeof m.timeline_events === 'string' ? JSON.parse(m.timeline_events) : m.timeline_events;
+          } catch {
+            timelineEvents = m.timeline_events;
+          }
+        }
+      }
+
+      // Check and ingest sidecar JSON file from disk (using sidecar cache)
+      const resolvedSidecar = this.findSidecarFile(filePath, folder, sidecar, outputDirSidecars);
+      if (resolvedSidecar) {
+        sidecar = resolvedSidecar;
+        const sdata = this.readParsedSidecar(resolvedSidecar);
+        if (sdata) {
+          const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
+
+          if (!desc) desc = ga.description || sdata.description || null;
+          if (!descRu) descRu = ga.description_ru || sdata.description_ru || null;
+          if (!summ) summ = ga.summary || sdata.summary || null;
+          if (!summRu) summRu = ga.summary_ru || sdata.summary_ru || null;
+          if (!environment) environment = ga.environment || sdata.environment || null;
+          if (!lighting) lighting = ga.lighting || sdata.lighting || null;
+          if (!lightingRu) lightingRu = ga.lighting_ru || sdata.lighting_ru || null;
+          if (!weather) weather = ga.weather || sdata.weather || null;
+          if (!weatherRu) weatherRu = ga.weather_ru || sdata.weather_ru || null;
+          if (!timeOfDay) timeOfDay = ga.time_of_day || sdata.time_of_day || null;
+          if (!timeOfDayRu) timeOfDayRu = ga.time_of_day_ru || sdata.time_of_day_ru || null;
+          if (!ocrText) ocrText = ga.ocr_text || sdata.ocr_text || null;
+          if (!exifAnalysis) exifAnalysis = ga.exif_analysis || sdata.exif_analysis || null;
+          if (!exifAnalysisRu) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru || null;
+          if (!transcription) transcription = ga.transcription || sdata.transcription || null;
+          if (!transcriptionRu) transcriptionRu = ga.transcription_ru || sdata.transcription_ru || null;
+          if (!timelineEvents) timelineEvents = ga.timeline_events || sdata.timeline_events || null;
+
+          // If faces are missing from DB, extract them from sidecar JSON
+          const rawSidecarFaces = sdata.faces || sdata.detected_faces || ga.faces || ga.detected_faces || [];
+          if (Array.isArray(rawSidecarFaces) && rawSidecarFaces.length > 0) {
+            const sidecarFaceObjs = rawSidecarFaces.map((item: any, idx: number) => {
+              if (typeof item === 'string') {
+                return {
+                  face_id: `face_${baseName}_${idx}`,
+                  name: item,
+                  confidence: 1.0,
+                  is_reference: !item.startsWith('face_') ? 1 : 0,
+                  source_file: filePath,
+                };
+              }
+              return {
+                face_id: item.face_id || item.id || `face_${baseName}_${idx}`,
+                person_id: item.person_id || null,
+                name: item.name || item.person_name || `face_${idx}`,
+                confidence: typeof item.confidence === 'number' ? item.confidence : 0.95,
+                bbox: item.bbox || null,
+                image_path: item.image_path || item.crop_path || item.image || null,
+                time_start: item.time_start || null,
+                time_end: item.time_end || null,
+                is_reference: item.is_reference !== undefined ? (item.is_reference ? 1 : 0) : (item.name && !item.name.startsWith('face_') ? 1 : 0),
+                source_file: filePath,
+              };
+            });
+
+            for (const sf of sidecarFaceObjs) {
+              const fid = sf.face_id;
+              if (fid && !seenFids.has(fid)) {
+                seenFids.add(fid);
+                dedupFaces.push(sf);
+                if (sf.name && !faceNames.includes(sf.name)) {
+                  faceNames.push(sf.name);
+                }
+                if (!sf.is_reference || (sf.name && sf.name.startsWith('face_'))) {
+                  hasUnassigned = true;
+                }
+              }
+            }
+
+            // Auto-persist sidecar faces to SQLite
+            try {
+              this.db.saveMediaFaces(filePath, dedupFaces);
+            } catch {
+              // ignore persistence failures during list scan
+            }
+          }
+
+          if (sdata.face_names && Array.isArray(sdata.face_names)) {
+            for (const fn of sdata.face_names) {
+              if (fn && !faceNames.includes(fn)) {
+                faceNames.push(fn);
+              }
+            }
+          }
+
+          // If sidecar exists with analysis or metadata, mark status as PROCESSED
+          if (desc || descRu || summ || summRu || dedupFaces.length > 0 || status === 'UNPROCESSED') {
+            status = 'PROCESSED';
+          }
+
+          // Auto-persist sidecar metadata to SQLite
+          try {
+            this.db.saveSyncRecord({
+              filePath: filePath,
+              fileSize: size,
+              mtime: mtime,
+              status: status,
+              sidecarPath: sidecar,
+            });
+
+            this.db.saveMediaMetadata(filePath, {
+              media_type: isVideo ? 'video' : 'photo',
+              file_size: size,
+              mtime: mtime,
+              summary: summ,
+              summary_ru: summRu,
+              description: desc,
+              description_ru: descRu,
+              environment: environment,
+              lighting: lighting,
+              lighting_ru: lightingRu,
+              weather: weather,
+              weather_ru: weatherRu,
+              time_of_day: timeOfDay,
+              time_of_day_ru: timeOfDayRu,
+              ocr_text: ocrText,
+              exif_analysis: exifAnalysis,
+              exif_analysis_ru: exifAnalysisRu,
+              transcription: transcription,
+              transcription_ru: transcriptionRu,
+              timeline_events: timelineEvents,
+              camera_make: sdata.exif?.camera_make || null,
+              camera_model: sdata.camera_model || null,
+              location_name: sdata.location_name || null,
+            });
+          } catch {
+            // ignore persistence failures during scan
+          }
+        }
+      }
+
+      const fc = dedupFaces.length > 0 ? dedupFaces.length : (faceCounts[filePath] || baseFaceCounts[baseName.toLowerCase()] || 0);
+
+      const item: any = {
+        file_path: filePath,
+        filename: baseName,
+        folder: folder,
+        file_size: size,
+        mtime: mtime,
+        is_video: isVideo,
+        is_image: isImage,
+        status: status,
+        sidecar_path: sidecar,
+        description: desc,
+        description_ru: descRu,
+        summary: summ,
+        summary_ru: summRu,
+        environment: environment,
+        lighting: lighting,
+        lighting_ru: lightingRu,
+        weather: weather,
+        weather_ru: weatherRu,
+        time_of_day: timeOfDay,
+        time_of_day_ru: timeOfDayRu,
+        ocr_text: ocrText,
+        exif_analysis: exifAnalysis,
+        exif_analysis_ru: exifAnalysisRu,
+        transcription: transcription,
+        transcription_ru: transcriptionRu,
+        timeline_events: timelineEvents,
+        face_count: fc,
+        faces: dedupFaces,
+        face_names: faceNames,
+        has_unassigned_faces: hasUnassigned,
+        error_message: syncRec ? syncRec.error_message : null,
+      };
+
+      // Enrich with family context if face names are recognized
+      if (this.familyTreePublicService && faceNames.length > 0) {
+        try {
+          const photoKinship = this.familyTreePublicService.analyzePhotoKinship({
+            person_names: faceNames,
+            media_file_path: filePath,
+          });
+
+          if (photoKinship.identifiedPersons.length > 0) {
+            item.family_context = {
+              suggested_caption: photoKinship.suggestedCaption,
+              summary_description: photoKinship.summaryDescription,
+              identified_members: photoKinship.identifiedPersons.map((p) => ({
+                name: p.name,
+                tree_person_id: p.treePersonId,
+                kinship: p.kinshipToRoot?.primaryTerm || null,
+                category: p.kinshipToRoot?.category || null,
+              })),
+              relationships: photoKinship.relationships.map((r) => ({
+                person_a: r.personA,
+                person_b: r.personB,
+                kinship: r.kinshipAtoB,
+              })),
+              milestones: photoKinship.contextualMilestones,
+            };
+
+            // If no AI description exists, use the rich family kinship caption
+            if (!item.description && photoKinship.suggestedCaption) {
+              item.enriched_family_caption = photoKinship.suggestedCaption;
+            }
+          }
+        } catch {
+          // ignore family context enrichment failures
+        }
+      }
+
+      items.push(item);
+      if (items.length % 50 === 0) {
+        this.cachedMediaList = items;
+      }
+    }
+
+      this.cachedMediaList = items;
+      this.cacheTimestamp = Date.now();
+      return items;
+    } finally {
+      this.scanStatus.is_scanning = false;
+      this.scanStatus.current_file = null;
+      this.scanStatus.current_filename = null;
+    }
+  }
+
   async listMediaFiles(query?: {
     offset?: number | string;
     limit?: number | string;
@@ -173,334 +648,28 @@ export class MediaService {
 
     const isRefresh = query?.refresh === true || query?.refresh === 'true';
     const now = Date.now();
+    const targetOffset = Number(query?.offset) || 0;
+    const targetLimit = Number(query?.limit) || 100;
+    const targetCount = targetOffset + targetLimit;
 
-    // If cache is empty, expired, or refresh requested, re-scan and build full index
+    // If cache is empty, expired, or refresh requested, start scan
     if (!this.cachedMediaList || isRefresh || now - this.cacheTimestamp > this.CACHE_TTL_MS) {
-      const scanned = this.scanInputFolders();
-      const syncRecords = this.db.getAllSyncRecords();
-      const faceCounts = this.db.getFacesCountBySourceFile();
-      const allFacesByFile = this.db.getAllFacesBySourceFile();
-      const dbMetadata = this.db.getAllMediaMetadata();
-
-      // Secondary index by basename
-      const baseFaceCounts: Record<string, number> = {};
-      for (const [srcFile, count] of Object.entries(faceCounts)) {
-        const bn = path.basename(srcFile).toLowerCase();
-        baseFaceCounts[bn] = (baseFaceCounts[bn] || 0) + count;
+      if (!this.inFlightScanPromise || isRefresh) {
+        this.inFlightScanPromise = this.buildMediaIndex(isRefresh).finally(() => {
+          this.inFlightScanPromise = null;
+        });
       }
 
-      const baseFaces: Record<string, any[]> = {};
-      for (const [srcFile, fList] of Object.entries(allFacesByFile)) {
-        const bn = path.basename(srcFile).toLowerCase();
-        if (!baseFaces[bn]) baseFaces[bn] = [];
-        baseFaces[bn].push(...fList);
+      // Wait up to 3 seconds for initial chunk if in-flight list is still building
+      let waitIter = 0;
+      while (
+        this.scanStatus.is_scanning &&
+        (!this.cachedMediaList || this.cachedMediaList.length < targetCount) &&
+        waitIter < 30
+      ) {
+        waitIter++;
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-
-      const items: any[] = [];
-      for (const { filePath, folder } of scanned) {
-        let size = 0;
-        let mtime = 0;
-        try {
-          const stat = fs.statSync(filePath);
-          size = stat.size;
-          mtime = stat.mtimeMs / 1000;
-        } catch {
-          // file unreadable
-        }
-
-        const baseName = path.basename(filePath);
-        const ext = path.extname(filePath).toLowerCase();
-        const isVideo = this.config.supportedVideoExts.has(ext);
-        const isImage = this.config.supportedPhotoExts.has(ext);
-
-        let syncRec = syncRecords[filePath];
-        if (!syncRec) {
-          for (const [k, v] of Object.entries(syncRecords)) {
-            if (path.basename(k).toLowerCase() === baseName.toLowerCase()) {
-              syncRec = v;
-              break;
-            }
-          }
-        }
-
-        let fileFacesRaw = allFacesByFile[filePath];
-        if (!fileFacesRaw || fileFacesRaw.length === 0) {
-          fileFacesRaw = baseFaces[baseName.toLowerCase()] || [];
-        }
-
-        const seenFids = new Set<string>();
-        const dedupFaces: any[] = [];
-        const faceNames: string[] = [];
-        let hasUnassigned = false;
-
-        for (const f of fileFacesRaw) {
-          const fid = f.face_id || f.id;
-          if (fid && seenFids.has(fid)) continue;
-          if (fid) seenFids.add(fid);
-          dedupFaces.push(f);
-          const fname = f.name || f.person_name;
-          if (fname && !faceNames.includes(fname)) {
-            faceNames.push(fname);
-          }
-          if (!f.is_reference || (fname && fname.startsWith('face_'))) {
-            hasUnassigned = true;
-          }
-        }
-
-        let status = syncRec ? syncRec.status : 'UNPROCESSED';
-        let sidecar = syncRec ? syncRec.sidecar_path : null;
-
-        let desc: string | null = null;
-        let descRu: string | null = null;
-        let summ: string | null = null;
-        let summRu: string | null = null;
-        let environment: string | null = null;
-        let lighting: string | null = null;
-        let lightingRu: string | null = null;
-        let weather: string | null = null;
-        let weatherRu: string | null = null;
-        let timeOfDay: string | null = null;
-        let timeOfDayRu: string | null = null;
-        let ocrText: string | null = null;
-        let exifAnalysis: string | null = null;
-        let exifAnalysisRu: string | null = null;
-        let transcription: string | null = null;
-        let transcriptionRu: string | null = null;
-        let timelineEvents: any = null;
-
-        const m = dbMetadata[filePath] || dbMetadata[baseName.toLowerCase()];
-        if (m) {
-          desc = m.description || null;
-          descRu = m.description_ru || null;
-          summ = m.summary || null;
-          summRu = m.summary_ru || null;
-          environment = m.environment || null;
-          lighting = m.lighting || null;
-          lightingRu = m.lighting_ru || null;
-          weather = m.weather || null;
-          weatherRu = m.weather_ru || null;
-          timeOfDay = m.time_of_day || null;
-          timeOfDayRu = m.time_of_day_ru || null;
-          ocrText = m.ocr_text || null;
-          exifAnalysis = m.exif_analysis || null;
-          exifAnalysisRu = m.exif_analysis_ru || null;
-          transcription = m.transcription || null;
-          transcriptionRu = m.transcription_ru || null;
-          if (m.timeline_events) {
-            try {
-              timelineEvents = typeof m.timeline_events === 'string' ? JSON.parse(m.timeline_events) : m.timeline_events;
-            } catch {
-              timelineEvents = m.timeline_events;
-            }
-          }
-        }
-
-        // Check and ingest sidecar JSON file from disk (using sidecar cache)
-        const resolvedSidecar = this.findSidecarFile(filePath, folder, sidecar);
-        if (resolvedSidecar) {
-          sidecar = resolvedSidecar;
-          const sdata = this.readParsedSidecar(resolvedSidecar);
-          if (sdata) {
-            const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
-
-            if (!desc) desc = ga.description || sdata.description || null;
-            if (!descRu) descRu = ga.description_ru || sdata.description_ru || null;
-            if (!summ) summ = ga.summary || sdata.summary || null;
-            if (!summRu) summRu = ga.summary_ru || sdata.summary_ru || null;
-            if (!environment) environment = ga.environment || sdata.environment || null;
-            if (!lighting) lighting = ga.lighting || sdata.lighting || null;
-            if (!lightingRu) lightingRu = ga.lighting_ru || sdata.lighting_ru || null;
-            if (!weather) weather = ga.weather || sdata.weather || null;
-            if (!weatherRu) weatherRu = ga.weather_ru || sdata.weather_ru || null;
-            if (!timeOfDay) timeOfDay = ga.time_of_day || sdata.time_of_day || null;
-            if (!timeOfDayRu) timeOfDayRu = ga.time_of_day_ru || sdata.time_of_day_ru || null;
-            if (!ocrText) ocrText = ga.ocr_text || sdata.ocr_text || null;
-            if (!exifAnalysis) exifAnalysis = ga.exif_analysis || sdata.exif_analysis || null;
-            if (!exifAnalysisRu) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru || null;
-            if (!transcription) transcription = ga.transcription || sdata.transcription || null;
-            if (!transcriptionRu) transcriptionRu = ga.transcription_ru || sdata.transcription_ru || null;
-            if (!timelineEvents) timelineEvents = ga.timeline_events || sdata.timeline_events || null;
-
-            // If faces are missing from DB, extract them from sidecar JSON
-            const rawSidecarFaces = sdata.faces || sdata.detected_faces || ga.faces || ga.detected_faces || [];
-            if (Array.isArray(rawSidecarFaces) && rawSidecarFaces.length > 0) {
-              const sidecarFaceObjs = rawSidecarFaces.map((item: any, idx: number) => {
-                if (typeof item === 'string') {
-                  return {
-                    face_id: `face_${baseName}_${idx}`,
-                    name: item,
-                    confidence: 1.0,
-                    is_reference: !item.startsWith('face_') ? 1 : 0,
-                    source_file: filePath,
-                  };
-                }
-                return {
-                  face_id: item.face_id || item.id || `face_${baseName}_${idx}`,
-                  person_id: item.person_id || null,
-                  name: item.name || item.person_name || `face_${idx}`,
-                  confidence: typeof item.confidence === 'number' ? item.confidence : 0.95,
-                  bbox: item.bbox || null,
-                  image_path: item.image_path || item.crop_path || item.image || null,
-                  time_start: item.time_start || null,
-                  time_end: item.time_end || null,
-                  is_reference: item.is_reference !== undefined ? (item.is_reference ? 1 : 0) : (item.name && !item.name.startsWith('face_') ? 1 : 0),
-                  source_file: filePath,
-                };
-              });
-
-              for (const sf of sidecarFaceObjs) {
-                const fid = sf.face_id;
-                if (fid && !seenFids.has(fid)) {
-                  seenFids.add(fid);
-                  dedupFaces.push(sf);
-                  if (sf.name && !faceNames.includes(sf.name)) {
-                    faceNames.push(sf.name);
-                  }
-                  if (!sf.is_reference || (sf.name && sf.name.startsWith('face_'))) {
-                    hasUnassigned = true;
-                  }
-                }
-              }
-
-              // Auto-persist sidecar faces to SQLite
-              try {
-                this.db.saveMediaFaces(filePath, dedupFaces);
-              } catch {
-                // ignore persistence failures during list scan
-              }
-            }
-
-            if (sdata.face_names && Array.isArray(sdata.face_names)) {
-              for (const fn of sdata.face_names) {
-                if (fn && !faceNames.includes(fn)) {
-                  faceNames.push(fn);
-                }
-              }
-            }
-
-            // If sidecar exists with analysis or metadata, mark status as PROCESSED
-            if (desc || descRu || summ || summRu || dedupFaces.length > 0 || status === 'UNPROCESSED') {
-              status = 'PROCESSED';
-            }
-
-            // Auto-persist sidecar metadata to SQLite
-            try {
-              this.db.saveSyncRecord({
-                filePath: filePath,
-                fileSize: size,
-                mtime: mtime,
-                status: status,
-                sidecarPath: sidecar,
-              });
-
-              this.db.saveMediaMetadata(filePath, {
-                media_type: isVideo ? 'video' : 'photo',
-                file_size: size,
-                mtime: mtime,
-                summary: summ,
-                summary_ru: summRu,
-                description: desc,
-                description_ru: descRu,
-                environment: environment,
-                lighting: lighting,
-                lighting_ru: lightingRu,
-                weather: weather,
-                weather_ru: weatherRu,
-                time_of_day: timeOfDay,
-                time_of_day_ru: timeOfDayRu,
-                ocr_text: ocrText,
-                exif_analysis: exifAnalysis,
-                exif_analysis_ru: exifAnalysisRu,
-                transcription: transcription,
-                transcription_ru: transcriptionRu,
-                timeline_events: timelineEvents,
-                camera_make: sdata.camera_make || null,
-                camera_model: sdata.camera_model || null,
-                location_name: sdata.location_name || null,
-              });
-            } catch {
-              // ignore persistence failures during scan
-            }
-          }
-        }
-
-        const fc = dedupFaces.length > 0 ? dedupFaces.length : (faceCounts[filePath] || baseFaceCounts[baseName.toLowerCase()] || 0);
-
-        const item: any = {
-          file_path: filePath,
-          filename: baseName,
-          folder: folder,
-          file_size: size,
-          mtime: mtime,
-          is_video: isVideo,
-          is_image: isImage,
-          status: status,
-          sidecar_path: sidecar,
-          description: desc,
-          description_ru: descRu,
-          summary: summ,
-          summary_ru: summRu,
-          environment: environment,
-          lighting: lighting,
-          lighting_ru: lightingRu,
-          weather: weather,
-          weather_ru: weatherRu,
-          time_of_day: timeOfDay,
-          time_of_day_ru: timeOfDayRu,
-          ocr_text: ocrText,
-          exif_analysis: exifAnalysis,
-          exif_analysis_ru: exifAnalysisRu,
-          transcription: transcription,
-          transcription_ru: transcriptionRu,
-          timeline_events: timelineEvents,
-          face_count: fc,
-          faces: dedupFaces,
-          face_names: faceNames,
-          has_unassigned_faces: hasUnassigned,
-          error_message: syncRec ? syncRec.error_message : null,
-        };
-
-        // Enrich with family context if face names are recognized
-        if (this.familyTreePublicService && faceNames.length > 0) {
-          try {
-            const photoKinship = this.familyTreePublicService.analyzePhotoKinship({
-              person_names: faceNames,
-              media_file_path: filePath,
-            });
-
-            if (photoKinship.identifiedPersons.length > 0) {
-              item.family_context = {
-                suggested_caption: photoKinship.suggestedCaption,
-                summary_description: photoKinship.summaryDescription,
-                identified_members: photoKinship.identifiedPersons.map((p) => ({
-                  name: p.name,
-                  tree_person_id: p.treePersonId,
-                  kinship: p.kinshipToRoot?.primaryTerm || null,
-                  category: p.kinshipToRoot?.category || null,
-                })),
-                relationships: photoKinship.relationships.map((r) => ({
-                  person_a: r.personA,
-                  person_b: r.personB,
-                  kinship: r.kinshipAtoB,
-                })),
-                milestones: photoKinship.contextualMilestones,
-              };
-
-              // If no AI description exists, use the rich family kinship caption
-              if (!item.description && photoKinship.suggestedCaption) {
-                item.enriched_family_caption = photoKinship.suggestedCaption;
-              }
-            }
-          } catch {
-            // ignore family context enrichment failures
-          }
-        }
-
-        items.push(item);
-      }
-
-      this.cachedMediaList = items;
-      this.cacheTimestamp = now;
     }
 
     const allItems = this.cachedMediaList || [];
@@ -564,35 +733,36 @@ export class MediaService {
         filtered = filtered.filter(
           (f) =>
             (f.folder && f.folder.toLowerCase() === folderTarget) ||
-            (f.file_path && f.file_path.toLowerCase().includes(folderTarget))
+            (f.file_path && f.file_path.toLowerCase().startsWith(folderTarget))
         );
       }
 
       // Sorting
-      if (query.sort_by) {
-        const order = query.sort_order === 'asc' ? 1 : -1;
-        filtered = [...filtered].sort((a, b) => {
-          if (query.sort_by === 'name') {
-            return order * (a.filename || '').localeCompare(b.filename || '');
-          }
-          if (query.sort_by === 'date') {
-            return order * ((a.mtime || 0) - (b.mtime || 0));
-          }
-          if (query.sort_by === 'size') {
-            return order * ((a.file_size || 0) - (b.file_size || 0));
-          }
-          if (query.sort_by === 'status') {
-            return order * (a.status || '').localeCompare(b.status || '');
-          }
-          if (query.sort_by === 'faces') {
-            return order * ((a.face_count || 0) - (b.face_count || 0));
-          }
-          return 0;
-        });
-      }
+      const sortBy = query.sort_by || 'date';
+      const sortOrder = query.sort_order || 'desc';
+
+      filtered = [...filtered].sort((a, b) => {
+        let cmp = 0;
+        if (sortBy === 'name') {
+          cmp = (a.filename || '').localeCompare(b.filename || '');
+        } else if (sortBy === 'size') {
+          cmp = (a.file_size || 0) - (b.file_size || 0);
+        } else if (sortBy === 'faces') {
+          cmp = (a.face_count || 0) - (b.face_count || 0);
+        } else if (sortBy === 'status') {
+          cmp = (a.status || '').localeCompare(b.status || '');
+        } else {
+          // Default: date (mtime)
+          cmp = (a.mtime || 0) - (b.mtime || 0);
+        }
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
     }
 
     const totalFiltered = filtered.length;
+    const totalFilesCount = this.scanStatus.is_scanning
+      ? Math.max(totalFiltered, this.scanStatus.scanned_count)
+      : totalFiltered;
 
     // Pagination
     let limitNum: number | undefined;
@@ -613,12 +783,14 @@ export class MediaService {
 
     if (limitNum !== undefined) {
       pagedFiles = filtered.slice(offsetNum, offsetNum + limitNum);
-      hasMore = offsetNum + limitNum < totalFiltered;
+      hasMore = this.scanStatus.is_scanning
+        ? offsetNum + limitNum < totalFilesCount
+        : offsetNum + limitNum < totalFiltered;
     }
 
     return {
-      total_files: totalFiltered,
-      total: totalFiltered,
+      total_files: totalFilesCount,
+      total: totalFilesCount,
       files: pagedFiles,
       offset: offsetNum,
       limit: limitNum || totalFiltered,
@@ -630,31 +802,98 @@ export class MediaService {
 
 
   resolveMediaFilePath(target: string): string {
+    if (!target || !target.trim()) {
+      throw new NotFoundException('Empty media file path specified');
+    }
     const trimmed = target.trim();
-    const targetPath = path.resolve(trimmed);
 
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
-      return targetPath;
+    // 1. Direct file existence check
+    if (fs.existsSync(trimmed)) {
+      try {
+        if (fs.statSync(trimmed).isFile()) return trimmed;
+      } catch {}
     }
 
-    const baseName = path.basename(trimmed);
-    for (const folder of this.config.inputFolders) {
-      const cand1 = path.join(folder, trimmed);
-      if (fs.existsSync(cand1) && fs.statSync(cand1).isFile()) return cand1;
-      const cand2 = path.join(folder, baseName);
-      if (fs.existsSync(cand2) && fs.statSync(cand2).isFile()) return cand2;
+    const normFwd = trimmed.replace(/\\/g, '/');
+    if (fs.existsSync(normFwd)) {
+      try {
+        if (fs.statSync(normFwd).isFile()) return normFwd;
+      } catch {}
     }
 
-    const candOut1 = path.join(this.config.outputFolder, trimmed);
-    if (fs.existsSync(candOut1) && fs.statSync(candOut1).isFile()) return candOut1;
-    const candOut2 = path.join(this.config.outputFolder, baseName);
-    if (fs.existsSync(candOut2) && fs.statSync(candOut2).isFile()) return candOut2;
+    // 2. Fast in-memory map lookup
+    if (this.filePathMap.has(trimmed)) return this.filePathMap.get(trimmed)!;
+    if (this.filePathMap.has(normFwd)) return this.filePathMap.get(normFwd)!;
+    if (this.filePathMap.has(trimmed.toLowerCase())) return this.filePathMap.get(trimmed.toLowerCase())!;
+    if (this.filePathMap.has(normFwd.toLowerCase())) return this.filePathMap.get(normFwd.toLowerCase())!;
 
-    const scanned = this.scanInputFolders();
-    for (const s of scanned) {
-      if (path.basename(s.filePath).toLowerCase() === baseName.toLowerCase() || s.filePath.toLowerCase() === trimmed.toLowerCase()) {
-        return s.filePath;
+    // 3. Clean Windows drive letter & UNC share prefix
+    let subpath = normFwd.replace(/^[a-zA-Z]:\/?/, ''); // strip Z:/ or C:/
+    if (subpath.startsWith('//')) {
+      const parts = subpath.replace(/^\/+/, '').split('/');
+      subpath = parts.slice(2).join('/');
+    }
+    subpath = subpath.replace(/^\/+/, '');
+    const baseName = path.basename(subpath).toLowerCase();
+
+    if (subpath) {
+      if (this.filePathMap.has(subpath)) return this.filePathMap.get(subpath)!;
+      if (this.filePathMap.has(subpath.toLowerCase())) return this.filePathMap.get(subpath.toLowerCase())!;
+    }
+
+    // 4. Test candidate paths in input and output folders
+    const candidateFolders = [
+      ...this.config.inputFolders,
+      this.config.outputFolder,
+      '/app/media_input',
+      '/app/media_output',
+      path.resolve(this.config.projectRoot, 'media_input'),
+      path.resolve(this.config.projectRoot, 'media_output'),
+    ];
+
+    for (const folder of candidateFolders) {
+      if (!folder || !fs.existsSync(folder)) continue;
+
+      // Test subpath joined to folder
+      if (subpath) {
+        const p1 = path.join(folder, subpath);
+        if (fs.existsSync(p1)) {
+          try {
+            if (fs.statSync(p1).isFile()) {
+              this.registerIndexedFile(p1, folder);
+              return p1;
+            }
+          } catch {}
+        }
       }
+
+      // Test basename joined to folder
+      const p2 = path.join(folder, path.basename(trimmed));
+      if (fs.existsSync(p2)) {
+        try {
+          if (fs.statSync(p2).isFile()) {
+            this.registerIndexedFile(p2, folder);
+            return p2;
+          }
+        } catch {}
+      }
+    }
+
+    // 5. Test basename in fast in-memory map
+    if (this.baseNamePathMap.has(baseName)) {
+      const p = this.baseNamePathMap.get(baseName)!;
+      if (fs.existsSync(p)) return p;
+    }
+
+    // 6. Test SQLite database records
+    try {
+      const syncRec = this.db.getSyncRecord(trimmed) || this.db.getSyncRecord(normFwd) || this.db.getSyncRecord(baseName);
+      if (syncRec && syncRec.file_path && fs.existsSync(syncRec.file_path)) {
+        this.registerIndexedFile(syncRec.file_path);
+        return syncRec.file_path;
+      }
+    } catch {
+      // ignore db error
     }
 
     throw new NotFoundException(`Media file '${trimmed}' not found`);

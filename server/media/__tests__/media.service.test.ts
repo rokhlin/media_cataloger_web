@@ -60,8 +60,8 @@ describe('MediaService', () => {
     }
   });
 
-  it('should scan input folders filtering supported media extensions and ignoring excluded directories', () => {
-    const scanned = mediaService.scanInputFolders();
+  it('should scan input folders filtering supported media extensions and ignoring excluded directories', async () => {
+    const scanned = await mediaService.scanInputFolders();
     const filenames = scanned.map((s) => path.basename(s.filePath));
 
     assert.ok(filenames.includes('vacation.jpg'), 'Should include vacation.jpg');
@@ -219,6 +219,38 @@ describe('MediaService', () => {
     mediaService.invalidateCache();
     const freshList = await mediaService.listMediaFiles({ refresh: true });
     assert.strictEqual(freshList.total, 3);
+  });
+
+  it('should resolve media file paths for direct, relative, subfolder, and Windows/UNC paths', () => {
+    // Direct path
+    const direct = mediaService.resolveMediaFilePath(path.join(inputDir, 'vacation.jpg'));
+    assert.strictEqual(fs.existsSync(direct), true);
+
+    // Subpath
+    const subpath = mediaService.resolveMediaFilePath('2024/beach.png');
+    assert.strictEqual(fs.existsSync(subpath), true);
+
+    // Basename
+    const byBasename = mediaService.resolveMediaFilePath('beach.png');
+    assert.strictEqual(fs.existsSync(byBasename), true);
+
+    // Windows drive style subpath simulation
+    const winStyle = mediaService.resolveMediaFilePath('Z:\\2024\\beach.png');
+    assert.strictEqual(fs.existsSync(winStyle), true);
+
+    // UNC style subpath simulation
+    const uncStyle = mediaService.resolveMediaFilePath('\\\\NAS\\photos\\2024\\beach.png');
+    assert.strictEqual(fs.existsSync(uncStyle), true);
+
+    // File access verification
+    const access = mediaService.verifyFileAccess('vacation.jpg');
+    assert.strictEqual(access.accessible, true);
+    assert.ok(access.resolvedPath);
+
+    // Nonexistent file
+    assert.throws(() => {
+      mediaService.resolveMediaFilePath('non_existent_image_12345.jpg');
+    });
   });
 });
 
