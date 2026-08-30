@@ -1758,6 +1758,8 @@ select option:checked {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: 140px 240px;
 }
 
 .gallery-card-item:hover {

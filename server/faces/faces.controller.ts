@@ -57,8 +57,18 @@ export class FacesController {
   async getFaceImage(@Param('filename') filename: string, @Res() res: Response) {
     try {
       const resolved = this.facesService.getFaceImagePath(filename);
-      return res.sendFile(resolved);
+      if (fs.existsSync(resolved)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        const stream = fs.createReadStream(resolved);
+        stream.on('error', () => {
+          if (!res.headersSent) res.status(500).end();
+        });
+        return stream.pipe(res);
+      }
     } catch {
+      // Fallback
+    }
       // Proxy fallback from remote cataloger backend if face image is on the worker daemon
       const baseUrl = this.facesService.catalogerApiUrl;
       const cleanName = (filename || '').trim();
@@ -110,7 +120,6 @@ export class FacesController {
       }
 
       throw new NotFoundException(`Face image '${filename}' not found`);
-    }
   }
 
   @Post('rename')

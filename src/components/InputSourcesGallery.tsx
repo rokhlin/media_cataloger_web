@@ -518,6 +518,9 @@ export default function InputSourcesGallery({
     }
   }, [hasMore, batchRows]);
 
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(800);
+
   // IntersectionObserver on sentinel to load next rows when scrolled into view
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -531,7 +534,7 @@ export default function InputSourcesGallery({
       },
       {
         root: containerRef.current || null,
-        rootMargin: '150px',
+        rootMargin: '200px',
         threshold: 0.05,
       }
     );
@@ -542,13 +545,44 @@ export default function InputSourcesGallery({
 
   const handleContainerScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-      if (scrollHeight - scrollTop - clientHeight < 150 && hasMore) {
+      const target = e.currentTarget;
+      setScrollTop(target.scrollTop);
+      setContainerHeight(target.clientHeight || 800);
+      const { scrollTop: st, scrollHeight, clientHeight } = target;
+      if (scrollHeight - st - clientHeight < 400 && hasMore) {
         loadMoreRows();
       }
     },
     [hasMore, loadMoreRows]
   );
+
+  // Virtual windowing calculations for Grid view (card height ~260px)
+  const CARD_ROW_HEIGHT = 260;
+  const OVERSCAN_GRID_ROWS = 3;
+  const totalGalleryRows = Math.ceil(visibleFiles.length / effectiveCols);
+  const startGalleryRow = Math.max(0, Math.floor(scrollTop / CARD_ROW_HEIGHT) - OVERSCAN_GRID_ROWS);
+  const endGalleryRow = Math.min(totalGalleryRows, Math.ceil((scrollTop + containerHeight) / CARD_ROW_HEIGHT) + OVERSCAN_GRID_ROWS);
+  const startGalleryIndex = startGalleryRow * effectiveCols;
+  const endGalleryIndex = Math.min(visibleFiles.length, endGalleryRow * effectiveCols);
+  const virtualizedGalleryFiles = useMemo(() => {
+    return visibleFiles.slice(startGalleryIndex, endGalleryIndex);
+  }, [visibleFiles, startGalleryIndex, endGalleryIndex]);
+
+  const galleryTopPadding = startGalleryRow * CARD_ROW_HEIGHT;
+  const galleryBottomPadding = Math.max(0, (totalGalleryRows - endGalleryRow) * CARD_ROW_HEIGHT);
+
+  // Virtual windowing calculations for List view (row height ~48px)
+  const TABLE_ROW_HEIGHT = 48;
+  const OVERSCAN_LIST_ROWS = 6;
+  const totalListRows = visibleFiles.length;
+  const startListRow = Math.max(0, Math.floor(scrollTop / TABLE_ROW_HEIGHT) - OVERSCAN_LIST_ROWS);
+  const endListRow = Math.min(totalListRows, Math.ceil((scrollTop + containerHeight) / TABLE_ROW_HEIGHT) + OVERSCAN_LIST_ROWS);
+  const virtualizedListFiles = useMemo(() => {
+    return visibleFiles.slice(startListRow, endListRow);
+  }, [visibleFiles, startListRow, endListRow]);
+
+  const listTopPadding = startListRow * TABLE_ROW_HEIGHT;
+  const listBottomPadding = Math.max(0, (totalListRows - endListRow) * TABLE_ROW_HEIGHT);
 
   const totalCount = mediaFiles.length;
   const processedCount = mediaFiles.filter((f) => f.status === 'PROCESSED').length;
@@ -558,9 +592,9 @@ export default function InputSourcesGallery({
   // Effective language in Lightbox
   const activeDetailLang = lightboxLang === 'active' ? language : lightboxLang;
 
-  // Render single media card item
+  // Render single media card item with thumbnail miniature and async decoding
   const renderCardItem = (file: GalleryMediaFile) => {
-    const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+    const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=360`;
     const isProcessed = file.status === 'PROCESSED';
     const isPending = file.status === 'PENDING';
 
@@ -580,10 +614,11 @@ export default function InputSourcesGallery({
           {file.is_image ? (
             <>
               <img
-                src={fileUrl}
+                src={thumbUrl}
                 alt={file.filename}
                 className="gallery-thumb-img"
                 loading="lazy"
+                decoding="async"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
@@ -740,7 +775,7 @@ export default function InputSourcesGallery({
     );
   };
 
-  // 1. Gallery Grid View
+  // 1. Gallery Grid View with Virtual Windowing
   const renderGalleryView = () => (
     <>
       <div
@@ -748,15 +783,17 @@ export default function InputSourcesGallery({
         ref={gridRef}
         style={{
           '--gallery-item-min-width': '140px',
+          paddingTop: galleryTopPadding > 0 ? `${galleryTopPadding}px` : undefined,
+          paddingBottom: galleryBottomPadding > 0 ? `${galleryBottomPadding}px` : undefined,
         } as React.CSSProperties}
       >
-        {visibleFiles.map((file) => renderCardItem(file))}
+        {virtualizedGalleryFiles.map((file) => renderCardItem(file))}
       </div>
       <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />
     </>
   );
 
-  // 2. Tabular List View
+  // 2. Tabular List View with Virtual Windowing
   const renderListView = () => (
     <div className="media-list-table-wrap">
       <table className="media-list-table">
@@ -784,8 +821,9 @@ export default function InputSourcesGallery({
           </tr>
         </thead>
         <tbody>
-          {visibleFiles.map((file) => {
-            const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+          {listTopPadding > 0 && <tr style={{ height: `${listTopPadding}px` }}><td colSpan={9} /></tr>}
+          {virtualizedListFiles.map((file) => {
+            const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=120`;
             const isProcessed = file.status === 'PROCESSED';
             const isPending = file.status === 'PENDING';
 
@@ -798,10 +836,11 @@ export default function InputSourcesGallery({
                 <td style={{ textAlign: 'center' }}>
                   {file.is_image ? (
                     <img
-                      src={fileUrl}
+                      src={thumbUrl}
                       alt={file.filename}
                       className="media-list-thumb"
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <span style={{ fontSize: '1.2rem' }}>🎥</span>
@@ -878,6 +917,7 @@ export default function InputSourcesGallery({
               </tr>
             );
           })}
+          {listBottomPadding > 0 && <tr style={{ height: `${listBottomPadding}px` }}><td colSpan={9} /></tr>}
         </tbody>
       </table>
       <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />

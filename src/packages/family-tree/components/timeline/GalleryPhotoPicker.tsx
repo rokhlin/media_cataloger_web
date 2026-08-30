@@ -203,7 +203,7 @@ export const GalleryPhotoPicker = ({
             >
               {filteredMedia.map((m) => {
                 const isSelected = selectedPaths.has(m.file_path);
-                const thumbUrl = `/api/media/file?file=${encodeURIComponent(m.file_path)}`;
+                const thumbUrl = `/api/media/thumbnail?file=${encodeURIComponent(m.file_path)}&size=200`;
 
                 return (
                   <div
@@ -225,6 +225,7 @@ export const GalleryPhotoPicker = ({
                       alt={m.filename}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       loading="lazy"
+                      decoding="async"
                     />
 
                     {/* Selection Checkmark */}

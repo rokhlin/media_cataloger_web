@@ -171,7 +171,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
             {event.pinned_media.map((pin: EventMediaPinRecord) => {
-              const src = pin.thumbnail_url || `/api/media/file?file=${encodeURIComponent(pin.media_file_path)}`;
+              const src = pin.thumbnail_url || `/api/media/thumbnail?file=${encodeURIComponent(pin.media_file_path)}&size=160`;
               return (
                 <div
                   key={pin.id}
