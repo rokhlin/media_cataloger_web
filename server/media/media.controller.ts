@@ -16,6 +16,12 @@ export class MediaController {
     return this.mediaService.listMediaFiles(query);
   }
 
+  @Get('scan-status')
+  @ApiOperation({ summary: 'Get real-time folder scanning and indexing status with current file' })
+  async getScanStatus() {
+    return this.mediaService.getScanStatus();
+  }
+
 
   @Get('file')
   @ApiOperation({ summary: 'Stream/serve a raw media file directly' })

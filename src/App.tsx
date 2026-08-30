@@ -32,6 +32,13 @@ function App() {
   // Media files from input sources
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
   const [isMediaLoading, setIsMediaLoading] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{
+    is_scanning: boolean;
+    scanned_count: number;
+    current_file: string | null;
+    current_filename: string | null;
+    current_folder: string | null;
+  } | null>(null);
 
   // Tab navigation: 'main' (Sources / Gallery) or 'media_library' (Face Registry & Controls)
   const [activeTab, setActiveTab] = useState<'main' | 'media_library' | string>('main');
@@ -119,10 +126,37 @@ function App() {
     setLogsList([]);
   }, []);
 
+  // Poll live media scan status while loading
+  useEffect(() => {
+    if (!isMediaLoading) {
+      setScanProgress(null);
+      return;
+    }
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/media/scan-status');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setScanProgress(data);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 200);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isMediaLoading]);
+
   // Load media files from input sources
-  const loadMediaFiles = useCallback(async () => {
+  const loadMediaFiles = useCallback(async (refresh = false) => {
+    setIsMediaLoading(true);
     try {
-      const res = await fetch('/api/media/files');
+      const res = await fetch(`/api/media/files${refresh ? '?refresh=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
         setMediaFiles(data.files || []);
@@ -421,7 +455,7 @@ function App() {
       if (res.ok) {
         appendConsoleMessage(`[Settings] Dynamic paths updated successfully: ${data.message || 'Saved'}`);
         await loadSettings();
-        await loadMediaFiles();
+        await loadMediaFiles(true);
         return true;
       } else {
         alert(`Error: ${data.detail || 'Failed to update settings'}`);
@@ -664,6 +698,12 @@ function App() {
         onSelectTab={setActiveTab}
         showLogs={showLogs}
         onToggleLogs={() => setShowLogs((prev) => !prev)}
+        isScanning={isMediaLoading || Boolean(scanProgress?.is_scanning)}
+        scannedFilesCount={scanProgress?.scanned_count || 0}
+        currentLoadingFilename={
+          scanProgress?.current_filename ||
+          (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+        }
       />
 
       <main className="app-main-content">
@@ -680,6 +720,19 @@ function App() {
               disabled={isRunning || isPaused}
               onReloadFaces={loadFaces}
               onViewInFamilyTree={handleViewInFamilyTree}
+              currentLoadingFile={
+                scanProgress?.current_file ||
+                statusInfo.progress?.current_file ||
+                (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
+                  ? statusInfo.queue.in_flight_files[0]
+                  : null)
+              }
+              currentLoadingFilename={
+                scanProgress?.current_filename ||
+                (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+              }
+              scannedFilesCount={scanProgress?.scanned_count || 0}
+              activeInputFolders={settings?.input_folders || []}
             />
           </div>
         )}

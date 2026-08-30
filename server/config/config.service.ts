@@ -8,6 +8,41 @@ export interface NormalizePathOptions {
   fallbackType?: 'input' | 'output';
 }
 
+export function toContainerPath(p: string, fallbackType: 'input' | 'output' = 'input'): string {
+  const base = fallbackType === 'output' ? '/app/media_output' : '/app/media_input';
+  if (!p) return base;
+  let cleaned = p.trim().replace(/\\/g, '/');
+
+  // If Windows drive root like Z:\ or C:\ or Z:
+  if (/^[a-zA-Z]:\/?$/.test(cleaned)) {
+    return base;
+  }
+  cleaned = cleaned.replace(/^[a-zA-Z]:\/?/, '');
+
+  // Strip UNC host and share prefixes (e.g. //server/share or //server/share/Photo)
+  if (cleaned.startsWith('//') || (p.trim().startsWith('\\') || p.trim().startsWith('//'))) {
+    const parts = cleaned.replace(/^\/+/, '').split('/').filter(Boolean);
+    if (parts.length <= 3) {
+      return base;
+    }
+    cleaned = parts.slice(3).join('/');
+  }
+
+  // Strip leading slashes
+  cleaned = cleaned.replace(/^\/+/, '');
+
+  if (!cleaned) return base;
+  if (
+    cleaned.startsWith('app/media_input') ||
+    cleaned.startsWith('/app/media_input') ||
+    cleaned.startsWith('app/media_output') ||
+    cleaned.startsWith('/app/media_output')
+  ) {
+    return '/' + cleaned.replace(/^\/+/, '');
+  }
+  return path.posix.join(base, cleaned);
+}
+
 export function normalizeConfigPath(
   p: string,
   baseDir: string,
@@ -25,13 +60,13 @@ export function normalizeConfigPath(
   const isUnc = trimmed.startsWith('\\') || trimmed.startsWith('//');
   const isWinDrive = /^[a-zA-Z]:[/\\]/.test(trimmed);
 
-  // In non-dev builds (e.g. docker/production), UNC share mounts and Windows drive paths are not accessible; map them to container mount points
+  // In non-dev builds (e.g. docker/production), UNC share mounts and Windows drive paths are mapped to container mount points
   if (!isDev && (isUnc || isWinDrive)) {
     const lower = trimmed.toLowerCase();
-    if (fallbackType === 'output' || lower.includes('output') || lower.includes('cataloger') || lower.includes('sda1')) {
-      return '/app/media_output';
-    }
-    return '/app/media_input';
+    const effectiveType = (fallbackType === 'output' || lower.includes('output') || lower.includes('cataloger') || lower.includes('sda1'))
+      ? 'output'
+      : 'input';
+    return toContainerPath(trimmed, effectiveType);
   }
 
   // Check if Windows UNC path (e.g. \\server\share or //server/share)

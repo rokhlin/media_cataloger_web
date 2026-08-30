@@ -27,6 +27,10 @@ interface InputSourcesGalleryProps {
   disabled?: boolean;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
+  currentLoadingFile?: string | null;
+  currentLoadingFilename?: string | null;
+  scannedFilesCount?: number;
+  activeInputFolders?: string[];
 }
 
 export default function InputSourcesGallery({
@@ -40,6 +44,10 @@ export default function InputSourcesGallery({
   disabled = false,
   onReloadFaces,
   onViewInFamilyTree,
+  currentLoadingFile,
+  currentLoadingFilename,
+  scannedFilesCount = 0,
+  activeInputFolders = [],
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
 
@@ -570,17 +578,38 @@ export default function InputSourcesGallery({
       >
         <div className="gallery-thumb-wrap">
           {file.is_image ? (
-            <img
-              src={fileUrl}
-              alt={file.filename}
-              className="gallery-thumb-img"
-              loading="lazy"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.style.display = 'none';
-              }}
-            />
+            <>
+              <img
+                src={fileUrl}
+                alt={file.filename}
+                className="gallery-thumb-img"
+                loading="lazy"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div
+                className="gallery-thumb-fallback-placeholder"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: '100%',
+                  flexDirection: 'column',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span style={{ fontSize: '1.8rem' }}>📷</span>
+                <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
+                  {file.filename}
+                </span>
+              </div>
+            </>
           ) : (
             <div className="gallery-thumb-video-placeholder">
               <span style={{ fontSize: '2rem' }}>🎥</span>
@@ -1079,13 +1108,14 @@ export default function InputSourcesGallery({
           {onRefresh && (
             <button
               className="btn btn-secondary"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               onClick={onRefresh}
               disabled={isLoading || disabled}
               type="button"
               title={t('btnRefreshGallery')}
             >
-              🔄 {t('btnRefreshGallery')}
+              <span >🔄</span>
+              <span>{t('btnRefreshGallery')}</span>
             </button>
           )}
 
@@ -1307,9 +1337,48 @@ export default function InputSourcesGallery({
         onScroll={handleContainerScroll}
       >
         {isLoading && mediaFiles.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: '2rem 0', fontSize: '0.9rem' }}>
-            {t('scanningSources')}
-          </p>
+          <div className="gallery-loading-overlay">
+            <div className="gallery-spinner-ring-wrap">
+              <div className="gallery-spinner-ring" />
+              <span className="gallery-spinner-inner-icon">📁</span>
+            </div>
+            <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.15rem', color: 'var(--text-primary)' }}>
+              {t('scanningSources')}
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '440px' }}>
+              {language === 'ru'
+                ? 'Индексирование и загрузка медиафайлов из настроенных папок источников...'
+                : 'Indexing and loading media files from configured input sources...'}
+            </p>
+
+            {/* Currently loaded file / input folder under spinner */}
+            {(currentLoadingFile || currentLoadingFilename || (activeInputFolders && activeInputFolders.length > 0)) && (
+              <div className="gallery-spinner-current-file-badge">
+                <span className="gallery-spinner-current-file-label">
+                  {currentLoadingFile || currentLoadingFilename
+                    ? (language === 'ru' ? 'Обработка:' : 'Processing:')
+                    : (language === 'ru' ? 'Папка источника:' : 'Input folder:')}
+                </span>
+                <span
+                  className="gallery-spinner-current-file-name"
+                  title={currentLoadingFile || activeInputFolders?.join(', ')}
+                >
+                  {currentLoadingFilename || (currentLoadingFile ? currentLoadingFile.split(/[/\\]/).pop() : `📁 ${activeInputFolders?.[0]}`)}
+                </span>
+              </div>
+            )}
+
+            {Boolean(scannedFilesCount && scannedFilesCount > 0) && (
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <span className="spinner-icon">⚡</span>
+                <span>
+                  {language === 'ru'
+                    ? `Найдено файлов: ${scannedFilesCount.toLocaleString()}`
+                    : `Discovered files: ${scannedFilesCount.toLocaleString()}`}
+                </span>
+              </div>
+            )}
+          </div>
         ) : filteredFiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-secondary)' }}>
             <p style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{t('noMediaFound')}</p>
@@ -1321,6 +1390,36 @@ export default function InputSourcesGallery({
           </div>
         ) : (
           <>
+            {isLoading && (
+              <div className="gallery-scanning-banner">
+                <div className="gallery-scanning-banner-left">
+                  <span className="spinner-icon" style={{ fontSize: '1.25rem' }}>🔄</span>
+                  <div>
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                      {t('scanningSources')}
+                    </strong>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ru'
+                        ? 'Обновление списка медиафайлов из папок источников...'
+                        : 'Refreshing media file index from input sources...'}
+                    </span>
+                    {(currentLoadingFilename || currentLoadingFile) && (
+                      <span
+                        className="gallery-scanning-current-file-pill"
+                        title={currentLoadingFile || currentLoadingFilename || ''}
+                      >
+                        📄 {currentLoadingFilename || (currentLoadingFile ? currentLoadingFile.split(/[/\\]/).pop() : '')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
+                  {scannedFilesCount > 0 ? `${scannedFilesCount.toLocaleString()} ` : `${totalCount} `}
+                  {t('badgeMediaFiles')}
+                </span>
+              </div>
+            )}
+
             {viewMode === 'gallery' && renderGalleryView()}
             {viewMode === 'list' && renderListView()}
             {viewMode === 'folder_tree' && renderFolderTreeView()}
@@ -1470,11 +1569,39 @@ export default function InputSourcesGallery({
                     className="media-lightbox-video"
                   />
                 ) : (
-                  <img
-                    src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                    alt={selectedMedia.filename}
-                    className="media-lightbox-image"
-                  />
+                  <>
+                    <img
+                      src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
+                      alt={selectedMedia.filename}
+                      className="media-lightbox-image"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: 'none',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        width: '100%',
+                        height: '100%',
+                        padding: '3rem',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {selectedMedia.filename}
+                      </p>
+                      <span style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
+                        {selectedMedia.file_path}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
 
