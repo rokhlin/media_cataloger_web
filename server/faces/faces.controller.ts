@@ -12,6 +12,7 @@ import {
   ResetFaceDto,
   ResetFaceByFilenameDto,
   DeleteFaceDto,
+  DeleteFacesBatchDto,
 } from './dto/faces.dto.js';
 
 @ApiTags('faces')
@@ -149,8 +150,20 @@ export class FacesController {
   }
 
   @Post('delete')
-  @ApiOperation({ summary: 'Delete a face entry from the registry' })
+  @ApiOperation({ summary: 'Delete a face entry and its file asset' })
   async deleteFace(@Body() body: DeleteFaceDto) {
     return this.facesService.deleteFace(body.face_id);
+  }
+
+  @Post('delete-batch')
+  @ApiOperation({ summary: 'Delete multiple face entries and their file assets' })
+  async deleteFacesBatch(@Body() body: DeleteFacesBatchDto) {
+    return this.facesService.deleteFacesBatch(body.face_ids);
+  }
+
+  @Post('delete-group')
+  @ApiOperation({ summary: 'Alias for delete-batch to delete an entire face group' })
+  async deleteFaceGroup(@Body() body: DeleteFacesBatchDto) {
+    return this.facesService.deleteFacesBatch(body.face_ids);
   }
 }

@@ -153,6 +153,7 @@ export interface FaceRegistryTranslations {
   btnRename: string;
   btnReset: string;
   btnDelete: string;
+  btnDeleteGroup: string;
   btnViewSources: string;
   assignFaceModalTitle: string;
   assignGroupModalTitle: string;
@@ -187,6 +188,7 @@ export interface FaceRegistryTranslations {
   promptSelectPersonOrName: string;
   promptResetFaceConfirm: string;
   promptDeleteFaceConfirm: string;
+  promptDeleteGroupConfirm: string;
   promptEnterFileReset: string;
 }
 

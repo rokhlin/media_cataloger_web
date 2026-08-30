@@ -367,6 +367,34 @@ function App() {
     }
   };
 
+  // Delete batch / group of faces
+  const handleDeleteFacesBatch = async (faceIds: string[]) => {
+    try {
+      const res = await fetch('/api/faces/delete-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ face_ids: faceIds }),
+      });
+
+      if (res.ok) {
+        appendConsoleMessage(`[Face Registry] Deleted ${faceIds.length} face(s) and their file assets`);
+        await loadFaces();
+        await loadMediaFiles();
+        return true;
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.detail || err.message || 'Could not delete faces'}`);
+        await loadFaces();
+        return false;
+      }
+    } catch (err) {
+      console.error('Error deleting faces batch:', err);
+      alert('Network error. Could not delete faces.');
+      await loadFaces();
+      return false;
+    }
+  };
+
   // Load settings
   const loadSettings = useCallback(async () => {
     try {
@@ -671,6 +699,7 @@ function App() {
               onResetFace={handleResetFace}
               onResetFacesByFilename={handleResetFacesByFilename}
               onDeleteFace={handleDeleteFace}
+              onDeleteFacesBatch={handleDeleteFacesBatch}
               disabled={isRunning || isPaused}
               uiSettings={uiSettings}
               onViewInFamilyTree={handleViewInFamilyTree}

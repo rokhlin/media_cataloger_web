@@ -304,6 +304,7 @@ export const faceRegistryTranslationsEn: FaceRegistryTranslations = {
   btnRename: 'Rename',
   btnReset: 'Reset',
   btnDelete: 'Delete',
+  btnDeleteGroup: 'Delete Group',
   btnViewSources: 'View Source Photos',
   assignFaceModalTitle: 'Assign Face to Person',
   assignGroupModalTitle: 'Assign Face Group to Person',
@@ -337,7 +338,8 @@ export const faceRegistryTranslationsEn: FaceRegistryTranslations = {
   promptNoSourcePath: 'No source image path recorded for this face.',
   promptSelectPersonOrName: 'Please select a person or enter a name.',
   promptResetFaceConfirm: 'Reset assignment for this face? It will return to unassigned status.',
-  promptDeleteFaceConfirm: 'Delete this face from registry?',
+  promptDeleteFaceConfirm: 'Delete this face and its image file asset?',
+  promptDeleteGroupConfirm: 'Permanently delete all faces in this group and their cropped image assets?',
   promptEnterFileReset: 'Please enter a filename or file path to reset.',
 };
 
@@ -369,6 +371,7 @@ export const faceRegistryTranslationsRu: FaceRegistryTranslations = {
   btnRename: 'Переименовать',
   btnReset: 'Сбросить',
   btnDelete: 'Удалить',
+  btnDeleteGroup: 'Удалить группу',
   btnViewSources: 'Смотреть исходные фото',
   assignFaceModalTitle: 'Назначение лица персоне',
   assignGroupModalTitle: 'Назначение группы лиц персоне',
@@ -402,7 +405,8 @@ export const faceRegistryTranslationsRu: FaceRegistryTranslations = {
   promptNoSourcePath: 'Нет исходного пути к файлу для этого лица.',
   promptSelectPersonOrName: 'Пожалуйста, выберите персону или укажите имя.',
   promptResetFaceConfirm: 'Сбросить назначение лица? Оно вернется в статус неназначенного кандидата.',
-  promptDeleteFaceConfirm: 'Удалить лицо из реестра?',
+  promptDeleteFaceConfirm: 'Удалить это лицо и его файл миниатюры?',
+  promptDeleteGroupConfirm: 'Безвозвратно удалить все лица из этой группы и их файлы миниатюр?',
   promptEnterFileReset: 'Пожалуйста, введите имя или путь к файлу.',
 };
 

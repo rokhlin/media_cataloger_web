@@ -57,3 +57,10 @@ export class DeleteFaceDto {
   @IsNotEmpty()
   face_id: string;
 }
+
+export class DeleteFacesBatchDto {
+  @ApiProperty({ description: 'Array of Face IDs to permanently delete', example: ['FACE_01', 'FACE_02'] })
+  @IsArray()
+  @IsNotEmpty()
+  face_ids: string[];
+}

@@ -25,6 +25,7 @@ interface FaceRegistryProps {
   onResetFace: (faceId: string) => Promise<boolean>;
   onResetFacesByFilename: (filename: string) => Promise<boolean>;
   onDeleteFace: (faceId: string) => Promise<boolean>;
+  onDeleteFacesBatch?: (faceIds: string[]) => Promise<boolean>;
   disabled?: boolean;
   uiSettings?: UISettings;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
@@ -43,6 +44,7 @@ export default function FaceRegistry({
   onResetFace,
   onResetFacesByFilename,
   onDeleteFace,
+  onDeleteFacesBatch,
   disabled = false,
   uiSettings = { maxImagesPerRow: 10, maxRows: 1, maxWidth: 1600 },
   onViewInFamilyTree,
@@ -205,7 +207,35 @@ export default function FaceRegistry({
 
   const handleDelete = async (faceId: string) => {
     if (window.confirm(t('promptDeleteFaceConfirm'))) {
-      await onDeleteFace(faceId);
+      setIsSaving(true);
+      try {
+        await onDeleteFace(faceId);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const handleDeleteGroup = async (group: FaceRegistryGroup) => {
+    const faceIds = group.face_ids && group.face_ids.length > 0
+      ? group.face_ids
+      : (group.faces?.map((f) => f.face_id).filter(Boolean) || [group.group_id.replace(/^group_/, '')]);
+
+    if (!faceIds || faceIds.length === 0) return;
+
+    if (window.confirm(t('promptDeleteGroupConfirm'))) {
+      setIsSaving(true);
+      try {
+        if (onDeleteFacesBatch) {
+          await onDeleteFacesBatch(faceIds);
+        } else {
+          for (const fid of faceIds) {
+            await onDeleteFace(fid);
+          }
+        }
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -552,6 +582,24 @@ export default function FaceRegistry({
                         title={t('btnAssignGroup')}
                       >
                         {isSaving ? t('btnAssigning') : `✓ ${t('btnAssignGroup')} (${group.count})`}
+                      </button>
+
+                      <button
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          fontSize: '0.82rem',
+                          whiteSpace: 'nowrap',
+                          color: '#f87171',
+                          borderColor: 'rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                        }}
+                        onClick={() => handleDeleteGroup(group)}
+                        disabled={isSaving || disabled}
+                        type="button"
+                        title={t('btnDeleteGroup')}
+                      >
+                        🗑️ {t('btnDeleteGroup')} ({group.count})
                       </button>
                     </div>
                   </div>
@@ -958,6 +1006,24 @@ export default function FaceRegistry({
                           title={t('btnAssign')}
                         >
                           ✓ {t('btnAssign')}
+                        </button>
+
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.8rem',
+                            whiteSpace: 'nowrap',
+                            color: '#f87171',
+                            borderColor: 'rgba(239, 68, 68, 0.4)',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                          }}
+                          onClick={() => handleDelete(face.face_id)}
+                          disabled={isSaving || disabled}
+                          type="button"
+                          title={t('btnDelete')}
+                        >
+                          🗑️ {t('btnDelete')}
                         </button>
                       </div>
                     </div>
