@@ -425,18 +425,26 @@ export default function FaceRegistry({
                                     onClick={() => handleOpenSourceImage(f)}
                                     style={{ cursor: 'pointer' }}
                                     onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
+                                      const target = e.target as HTMLElement;
+                                      target.style.display = 'none';
+                                      const fb = target.parentElement?.querySelector('.fallback-face-thumb') as HTMLElement;
+                                      if (fb) fb.style.display = 'flex';
                                     }}
                                   />
-                                ) : (
-                                  <div
-                                    className="person-ref-thumb"
-                                    onClick={() => handleOpenSourceImage(f)}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', cursor: 'pointer' }}
-                                  >
-                                    {f.face_id}
-                                  </div>
-                                )}
+                                ) : null}
+                                <div
+                                  className="person-ref-thumb fallback-face-thumb"
+                                  onClick={() => handleOpenSourceImage(f)}
+                                  style={{
+                                    display: cropUrl ? 'none' : 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {f.face_id}
+                                </div>
                                 <button
                                   className="person-ref-del-btn"
                                   onClick={(e) => {
@@ -712,25 +720,27 @@ export default function FaceRegistry({
                                     onClick={() => handleOpenSourceImage(refFace)}
                                     style={{ cursor: 'pointer' }}
                                     onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
+                                      const target = e.target as HTMLElement;
+                                      target.style.display = 'none';
+                                      const fb = target.parentElement?.querySelector('.fallback-face-thumb') as HTMLElement;
+                                      if (fb) fb.style.display = 'flex';
                                     }}
                                   />
-                                ) : (
-                                  <div
-                                    className="person-ref-thumb"
-                                    onClick={() => handleOpenSourceImage(refFace)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: '0.75rem',
-                                      color: 'var(--text-muted)',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {refFace.face_id || 'Ref'}
-                                  </div>
-                                )}
+                                ) : null}
+                                <div
+                                  className="person-ref-thumb fallback-face-thumb"
+                                  onClick={() => handleOpenSourceImage(refFace)}
+                                  style={{
+                                    display: refUrl ? 'none' : 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {refFace.face_id || 'Ref'}
+                                </div>
                                 {/* Reset individual face assignment */}
                                 <button
                                   className="person-ref-reset-btn"
@@ -808,25 +818,27 @@ export default function FaceRegistry({
                         style={{ cursor: 'pointer' }}
                         title={t('clickToView')}
                         onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
+                          const target = e.target as HTMLElement;
+                          target.style.display = 'none';
+                          const fb = target.parentElement?.querySelector('.fallback-unrec-thumb') as HTMLElement;
+                          if (fb) fb.style.display = 'flex';
                         }}
                       />
-                    ) : (
-                      <div
-                        className="unrecognized-thumb"
-                        onClick={() => handleOpenSourceImage(face)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.5rem',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        👤
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="unrecognized-thumb fallback-unrec-thumb"
+                      onClick={() => handleOpenSourceImage(face)}
+                      style={{
+                        display: imgUrl ? 'none' : 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.5rem',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      👤
+                    </div>
 
                     <div className="unrecognized-info">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

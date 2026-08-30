@@ -17,6 +17,14 @@ export class FacesService {
     return this.config.catalogerApiUrl.replace(/\/+$/, '');
   }
 
+  get facesFolder(): string {
+    return this.config.facesFolder || (this.config.outputFolder ? path.join(this.config.outputFolder, 'facess') : '');
+  }
+
+  get outputFolder(): string {
+    return this.config.outputFolder || '';
+  }
+
   getAllRegisteredFaces() {
     this.db.initDb();
     return this.db.getAllRegisteredFaces();

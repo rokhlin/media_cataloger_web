@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Param, Query, Res, Inject, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import axios from 'axios';
 import { FacesService } from './faces.service.js';
 import {
@@ -57,17 +59,56 @@ export class FacesController {
       return res.sendFile(resolved);
     } catch {
       // Proxy fallback from remote cataloger backend if face image is on the worker daemon
-      try {
-        const baseUrl = this.facesService.catalogerApiUrl;
-        const remoteUrl = `${baseUrl}/api/faces/image/${encodeURIComponent(filename)}`;
-        const response = await axios.get(remoteUrl, { responseType: 'stream', timeout: 5000 });
-        if (response.headers['content-type']) {
-          res.setHeader('Content-Type', String(response.headers['content-type']));
+      const baseUrl = this.facesService.catalogerApiUrl;
+      const cleanName = (filename || '').trim();
+      const baseClean = path.basename(cleanName);
+      const candidates = Array.from(new Set([
+        cleanName,
+        baseClean,
+        `${cleanName}.jpg`,
+        `${baseClean}.jpg`,
+        `${cleanName}.jpeg`,
+        `${baseClean}.jpeg`,
+        `${cleanName}.png`,
+        `${baseClean}.png`,
+        `facess/${cleanName}.jpg`,
+        `facess/${baseClean}.jpg`,
+        `faces/${cleanName}.jpg`,
+        `faces/${baseClean}.jpg`,
+        `crops/${cleanName}.jpg`,
+        `crops/${baseClean}.jpg`,
+      ]));
+
+      for (const cand of candidates) {
+        try {
+          const remoteUrl = `${baseUrl}/api/faces/image/${encodeURIComponent(cand)}`;
+          const response = await axios.get(remoteUrl, { responseType: 'arraybuffer', timeout: 4000 });
+          if (response.data && response.data.byteLength > 0) {
+            const contentType = response.headers['content-type'] ? String(response.headers['content-type']) : 'image/jpeg';
+            res.setHeader('Content-Type', contentType);
+
+            // Cache locally so future loads are instantaneous
+            try {
+              const facesFolder = this.facesService.facesFolder;
+              if (facesFolder) {
+                if (!fs.existsSync(facesFolder)) {
+                  fs.mkdirSync(facesFolder, { recursive: true });
+                }
+                const localPath = path.join(facesFolder, `${baseClean}.jpg`);
+                fs.writeFileSync(localPath, Buffer.from(response.data));
+              }
+            } catch {
+              // ignore cache save errors
+            }
+
+            return res.send(Buffer.from(response.data));
+          }
+        } catch {
+          // try next candidate
         }
-        return response.data.pipe(res);
-      } catch {
-        throw new NotFoundException(`Face image '${filename}' not found`);
       }
+
+      throw new NotFoundException(`Face image '${filename}' not found`);
     }
   }
 
