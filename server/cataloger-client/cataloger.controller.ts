@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Query, Body, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { CatalogerClientService } from './cataloger.service.js';
+import { LogLevel } from '../logging/log-buffer.service.js';
 
 @ApiTags('pipeline')
 @Controller('api')
@@ -92,8 +93,11 @@ export class CatalogerController {
 
   @Get('logs')
   @ApiOperation({ summary: 'Get real-time execution logs from cataloging worker' })
-  async getLogs() {
-    return this.catalogerService.getLogs();
+  @ApiQuery({ name: 'level', required: false, enum: ['DEBUG', 'INFO', 'WARN', 'ERROR', 'ALL'], description: 'Filter logs by level' })
+  async getLogs(@Query('level') level?: string) {
+    const validLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'ALL'];
+    const selectedLevel = level && validLevels.includes(level.toUpperCase()) ? (level.toUpperCase() as LogLevel | 'ALL') : undefined;
+    return this.catalogerService.getLogs(selectedLevel);
   }
 
   @Post('logs/clear')

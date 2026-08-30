@@ -247,6 +247,17 @@ export interface LogsTranslations {
   autoScroll: string;
   noLogsAvailable: string;
   logsInitMessage: string;
+  filterAll: string;
+  filterInfo: string;
+  filterDebug: string;
+  filterWarn: string;
+  filterError: string;
+  searchLogsPlaceholder: string;
+  showErrorDetails: string;
+  hideErrorDetails: string;
+  stackTraceLabel: string;
+  noLogsMatchFilter: string;
+  totalEntriesLabel: string;
 }
 
 export interface ThemeTranslations {

@@ -61,25 +61,87 @@ export class FacesService {
   }
 
   getFaceImagePath(filename: string): string {
-    const safeName = path.basename(filename);
-    const candidates = [
-      path.join(this.config.facesFolder, safeName),
-      path.join(this.config.outputFolder, 'facess', safeName),
-      path.join(this.config.outputFolder, 'faces', safeName),
-      path.join(this.config.outputFolder, filename),
-      path.join(this.config.outputFolder, safeName),
-      path.join(this.config.projectRoot, 'media_output', 'facess', safeName),
-      path.join(this.config.projectRoot, 'media_output', 'faces', safeName),
-    ];
+    const trimmed = filename.trim();
+    if (!trimmed) {
+      throw new NotFoundException('Face image parameter is empty');
+    }
 
-    for (const c of candidates) {
-      if (fs.existsSync(c)) {
-        try {
-          if (fs.statSync(c).isFile()) {
-            return c;
+    // Direct existing path check
+    if (fs.existsSync(trimmed)) {
+      try {
+        if (fs.statSync(trimmed).isFile()) return trimmed;
+      } catch {
+        // ignore
+      }
+    }
+
+    this.db.initDb();
+    const safeName = path.basename(trimmed);
+    const targetNames = new Set<string>([safeName, trimmed]);
+
+    // Check if filename is a registered face_id in database
+    try {
+      const regFace = this.db.getDb().prepare(`
+        SELECT image_path FROM face_registry WHERE face_id = ? OR face_id = ?
+        UNION
+        SELECT image_path FROM media_faces WHERE face_id = ? OR face_id = ?
+        LIMIT 1
+      `).get(trimmed, safeName, trimmed, safeName) as any;
+
+      if (regFace?.image_path) {
+        targetNames.add(regFace.image_path);
+        targetNames.add(path.basename(regFace.image_path));
+      }
+    } catch {
+      // ignore
+    }
+
+    // Add extensions if name has no extension
+    const ext = path.extname(safeName);
+    if (!ext) {
+      const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
+      const baseTargets = Array.from(targetNames);
+      for (const t of baseTargets) {
+        for (const e of exts) {
+          targetNames.add(`${t}${e}`);
+        }
+      }
+    }
+
+    const searchDirs: string[] = [
+      this.config.facesFolder,
+      this.config.outputFolder ? path.join(this.config.outputFolder, 'faces') : '',
+      this.config.outputFolder ? path.join(this.config.outputFolder, 'facess') : '',
+      this.config.outputFolder ? path.join(this.config.outputFolder, 'crops') : '',
+      this.config.outputFolder || '',
+      this.config.projectRoot ? path.join(this.config.projectRoot, 'media_output', 'faces') : '',
+      this.config.projectRoot ? path.join(this.config.projectRoot, 'media_output', 'facess') : '',
+      this.config.projectRoot ? path.join(this.config.projectRoot, 'media_output', 'crops') : '',
+      this.config.projectRoot ? path.join(this.config.projectRoot, 'media_output') : '',
+    ].filter(Boolean);
+
+    if (Array.isArray(this.config.inputFolders)) {
+      for (const folder of this.config.inputFolders) {
+        if (folder) {
+          searchDirs.push(path.join(folder, 'faces'));
+          searchDirs.push(path.join(folder, 'facess'));
+          searchDirs.push(folder);
+        }
+      }
+    }
+
+    for (const dir of searchDirs) {
+      if (!dir) continue;
+      for (const tName of targetNames) {
+        const candidate = path.isAbsolute(tName) ? tName : path.join(dir, tName);
+        if (fs.existsSync(candidate)) {
+          try {
+            if (fs.statSync(candidate).isFile()) {
+              return candidate;
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
       }
     }

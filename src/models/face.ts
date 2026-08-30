@@ -40,9 +40,11 @@ export interface PersonItem {
   count?: number;
   face_count?: number;
   reference_count?: number;
+  reference_face_count?: number;
   thumbnail_url?: string;
   sample_url?: string;
   primary_image?: string | null;
+  sample_image?: string | null;
   sample_images?: string[];
   reference_faces?: FaceItem[];
   family_tree?: {
@@ -50,9 +52,10 @@ export interface PersonItem {
     tree_person_id?: string;
     kinship_to_root?: string;
     category?: string;
-    birth_year?: string;
+    birth_year?: string | number | null;
+    is_living?: boolean;
     recent_milestones?: Array<{
-      type: string;
+      type?: string;
       title: string;
       date?: string;
     }>;
@@ -67,6 +70,8 @@ export interface UnrecognizedGroupItem {
   source_files?: string[];
   representative_face?: FaceItem;
   primary_image?: string | null;
+  sample_image?: string | null;
+  sample_face_id?: string | null;
   sample_thumbnail_url?: string;
   avg_confidence?: number;
 }

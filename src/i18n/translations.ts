@@ -510,6 +510,17 @@ export const logsTranslationsEn: LogsTranslations = {
   autoScroll: 'Auto-scroll',
   noLogsAvailable: 'No logs recorded yet.',
   logsInitMessage: 'Logs console initialized... waiting for actions.',
+  filterAll: 'All',
+  filterInfo: 'Info',
+  filterDebug: 'Debug',
+  filterWarn: 'Warnings',
+  filterError: 'Errors',
+  searchLogsPlaceholder: 'Search logs (e.g. error, file, person)...',
+  showErrorDetails: 'Show Explanation & Trace',
+  hideErrorDetails: 'Hide Details',
+  stackTraceLabel: 'Stack Trace / Root Cause',
+  noLogsMatchFilter: 'No logs match the current filter or search criteria.',
+  totalEntriesLabel: 'entries',
 };
 
 export const logsTranslationsRu: LogsTranslations = {
@@ -522,6 +533,17 @@ export const logsTranslationsRu: LogsTranslations = {
   autoScroll: 'Автопрокрутка',
   noLogsAvailable: 'Журнал событий пока пуст.',
   logsInitMessage: 'Консоль логов инициализирована... ожидание действий.',
+  filterAll: 'Все',
+  filterInfo: 'Инфо',
+  filterDebug: 'Отладка',
+  filterWarn: 'Предупреждения',
+  filterError: 'Ошибки',
+  searchLogsPlaceholder: 'Поиск по логам (ошибка, файл, лицо)...',
+  showErrorDetails: 'Показать причину и стек',
+  hideErrorDetails: 'Скрыть детали',
+  stackTraceLabel: 'Стек вызовов / Первопричина',
+  noLogsMatchFilter: 'Нет записей, соответствующих выбранному фильстру или поиску.',
+  totalEntriesLabel: 'записей',
 };
 
 export const themeTranslationsEn: ThemeTranslations = {

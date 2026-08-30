@@ -209,11 +209,16 @@ export default function FaceRegistry({
     }
   };
 
-  // Get image URL helper
-  const getImageUrl = (imagePath?: string | null) => {
-    if (!imagePath) return null;
-    const filename = imagePath.split(/[/\\]/).pop();
-    return `/api/faces/image/${filename}`;
+  // Get image URL helper with faceId fallback
+  const getImageUrl = (imagePath?: string | null, fallbackFaceId?: string | null) => {
+    if (imagePath && String(imagePath).trim()) {
+      const filename = imagePath.split(/[/\\]/).pop();
+      return `/api/faces/image/${filename}`;
+    }
+    if (fallbackFaceId && String(fallbackFaceId).trim()) {
+      return `/api/faces/image/${fallbackFaceId.trim()}`;
+    }
+    return null;
   };
 
   // Known person names list for dropdown
@@ -346,7 +351,7 @@ export default function FaceRegistry({
               {filteredGroups.map((group) => {
                 const currentConfig = groupAssignmentMap[group.group_id] || { targetPerson: '', customName: '' };
                 const repFace = group.representative_face;
-                const repUrl = repFace?.image_path ? getImageUrl(repFace.image_path) : null;
+                const repUrl = getImageUrl(repFace?.image_path, repFace?.face_id || group.sample_face_id);
 
                 return (
                   <div className="face-group-card" key={group.group_id} id={`group-card-${group.group_id}`}>
@@ -409,7 +414,7 @@ export default function FaceRegistry({
                           style={{ '--gallery-cols': maxCols } as React.CSSProperties}
                         >
                           {visibleFaces.map((f, idx) => {
-                            const cropUrl = f.image_path ? getImageUrl(f.image_path) : null;
+                            const cropUrl = getImageUrl(f.image_path, f.face_id);
                             return (
                               <div className="person-ref-thumb-wrap" key={f.face_id || idx} title={`${t('clickToView')} • ${f.face_id} (${f.source_file || ''})`}>
                                 {cropUrl ? (
@@ -549,7 +554,7 @@ export default function FaceRegistry({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {filteredPersons.map((person) => {
                 const isEditing = editingPersonName === person.name;
-                const primaryImg = person.primary_image ? getImageUrl(person.primary_image) : null;
+                const primaryImg = getImageUrl(person.primary_image || person.sample_image, person.reference_faces?.[0]?.face_id);
                 const refCount = person.reference_faces?.length || person.reference_count || 1;
                 const primaryRef: FaceRegistryFace = person.reference_faces?.[0] || {
                   face_id: person.name,
@@ -696,7 +701,7 @@ export default function FaceRegistry({
                           style={{ '--gallery-cols': maxCols } as React.CSSProperties}
                         >
                           {visibleRefs.map((refFace, idx) => {
-                            const refUrl = refFace.image_path ? getImageUrl(refFace.image_path) : null;
+                            const refUrl = getImageUrl(refFace.image_path, refFace.face_id);
                             return (
                               <div className="person-ref-thumb-wrap" key={refFace.face_id || idx} title={`${t('clickToView')} • ${refFace.face_id} (${refFace.source_file || ''})`}>
                                 {refUrl ? (
@@ -788,7 +793,7 @@ export default function FaceRegistry({
           ) : (
             <div className="unrecognized-grid">
               {filteredUnrecognized.map((face) => {
-                const imgUrl = getImageUrl(face.image_path);
+                const imgUrl = getImageUrl(face.image_path, face.face_id);
                 const currentConfig = assignmentMap[face.face_id] || { targetPerson: '', customName: '' };
                 const confPercent = face.confidence ? (face.confidence * 100).toFixed(0) : null;
 
@@ -993,10 +998,10 @@ export default function FaceRegistry({
                 <div className="lightbox-section">
                   <h4 className="lightbox-section-title">👤 {t('faceIdentificationTitle')}</h4>
                   
-                  {sourceImageModal.face?.image_path && (
+                  {sourceImageModal.face && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.8rem' }}>
                       <img
-                        src={getImageUrl(sourceImageModal.face.image_path) || undefined}
+                        src={getImageUrl(sourceImageModal.face.image_path, sourceImageModal.face.face_id) || undefined}
                         alt={sourceImageModal.face.face_id}
                         className="lightbox-face-crop"
                         style={{ width: '60px', height: '60px', borderRadius: '8px' }}
@@ -1135,7 +1140,7 @@ export default function FaceRegistry({
             <div className="modal-body">
               <div className="expanded-photos-grid">
                 {expandedModal.items.map((item, idx) => {
-                  const cropUrl = item.image_path ? getImageUrl(item.image_path) : null;
+                  const cropUrl = getImageUrl(item.image_path, item.face_id);
                   const isPersonType = expandedModal.type === 'person';
 
                   return (

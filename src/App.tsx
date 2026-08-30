@@ -11,6 +11,7 @@ import PipelineLogs from './components/PipelineLogs';
 import SettingsModal, { type SettingsTab } from './components/SettingsModal';
 import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
+import { errorInterceptor } from './utils/errorInterceptor';
 import './App.css';
 
 function App() {
@@ -77,10 +78,12 @@ function App() {
     statusRef.current = statusInfo.status;
   }, [statusInfo.status]);
 
-  const appendConsoleMessage = useCallback((message: string) => {
-    const timeStr = new Date().toLocaleTimeString();
-    setLogsList((prev) => [...prev, `[${timeStr}] ${message}`]);
-  }, []);
+  const appendConsoleMessage = useCallback(
+    (message: string, level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' = 'INFO', context = 'App', details?: string) => {
+      errorInterceptor.emitLog(level, context, message, details);
+    },
+    []
+  );
 
   // Fetch logs
   const fetchLogsInternal = useCallback(async () => {
@@ -96,6 +99,15 @@ function App() {
     } catch (err) {
       console.error('Error fetching logs:', err);
     }
+  }, []);
+
+  // Initialize error interceptor on mount and subscribe to captured logs
+  useEffect(() => {
+    errorInterceptor.init();
+    const unsubscribe = errorInterceptor.subscribe((entry) => {
+      setLogsList((prev) => [...prev, entry.raw]);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Fetch live system status
@@ -434,95 +446,115 @@ function App() {
 
   // Start Sync
   const handleStartSync = async (force: boolean) => {
+    appendConsoleMessage(`Triggering catalog sync pipeline (force=${Boolean(force)})...`, 'INFO', 'Pipeline');
     try {
       const res = await fetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
         const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
-        appendConsoleMessage(`[API] Triggered sync successfully: ${result.message || 'Started'}${countMsg}`);
+        appendConsoleMessage(`Triggered sync successfully: ${result.message || 'Started'}${countMsg}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
         const errMsg = result.message || result.detail || result.error || 'Failed to start sync';
-        appendConsoleMessage(`[API Error] Failed to run sync: ${errMsg}`);
+        appendConsoleMessage(
+          `Failed to run sync: ${errMsg}`,
+          'ERROR',
+          'Pipeline',
+          `HTTP ${res.status} on POST /api/run\nDiagnosis: Cataloger backend execution failed.\nSuggestion: Verify cataloger background worker is running.`
+        );
         alert(`Could not start cataloging sync:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(
+        `Connection failed while starting sync: ${message}`,
+        'ERROR',
+        'Pipeline',
+        `Network error on POST /api/run. Ensure server is reachable.`,
+      );
       alert(`Network error connecting to server: ${message}`);
     }
   };
 
   // Pause Sync
   const handlePauseSync = async () => {
+    appendConsoleMessage('Requesting pipeline pause...', 'INFO', 'Pipeline');
     try {
       const res = await fetch('/api/pause', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Execution paused: ${result.message || 'Paused'}`);
+        appendConsoleMessage(`Execution paused: ${result.message || 'Paused'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to pause: ${result.message || result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to pause: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while pausing: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Resume Sync
   const handleResumeSync = async () => {
+    appendConsoleMessage('Requesting pipeline resume...', 'INFO', 'Pipeline');
     try {
       const res = await fetch('/api/resume', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Execution resumed: ${result.message || 'Resumed'}`);
+        appendConsoleMessage(`Execution resumed: ${result.message || 'Resumed'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to resume: ${result.message || result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to resume: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while resuming: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Stop Sync
   const handleStopSync = async () => {
+    appendConsoleMessage('Requesting pipeline stop...', 'WARN', 'Pipeline');
     try {
       const res = await fetch('/api/stop', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Stop requested: ${result.message || 'Stopping'}`);
+        appendConsoleMessage(`Stop requested: ${result.message || 'Stopping'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to stop: ${result.message || result.detail || 'Error'}`);
+        appendConsoleMessage(`Failed to stop: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Connection failed while stopping: ${message}`, 'ERROR', 'Pipeline');
     }
   };
 
   // Start Single Analysis
   const handleStartSingleAnalysis = async (file: string, onSuccess?: () => void) => {
+    appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
     try {
       const res = await fetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
         method: 'POST',
       });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Triggered file analysis successfully: ${result.message || 'Started'}`);
+        appendConsoleMessage(`Triggered file analysis successfully: ${result.message || 'Started'}`, 'INFO', 'Pipeline');
         if (onSuccess) onSuccess();
         checkStatus();
       } else {
         const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
-        appendConsoleMessage(`[API Error] Failed to start analysis: ${errMsg}`);
+        appendConsoleMessage(
+          `Failed to analyze file '${file}': ${errMsg}`,
+          'ERROR',
+          'Pipeline',
+          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check file permissions and supported formats.`
+        );
         alert(`Analysis Error:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      appendConsoleMessage(`Network error during single file analysis: ${message}`, 'ERROR', 'Pipeline');
       alert(`Network error connecting to server: ${message}`);
     }
   };

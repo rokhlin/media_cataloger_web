@@ -1377,7 +1377,11 @@ export default function InputSourcesGallery({
                   ) : (
                     <div className="lightbox-faces-list">
                       {facesForSelected.map((f) => {
-                        const cropUrl = f.image_path ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}` : null;
+                        const cropUrl = f.image_path
+                          ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
+                          : f.face_id
+                          ? `/api/faces/image/${f.face_id}`
+                          : null;
                         const isEditing = reassigningFaceId === f.face_id;
                         const isManual = f.face_id.startsWith('manual_');
 

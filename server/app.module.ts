@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppConfigModule } from './config/config.module.js';
+import { LoggingModule } from './logging/logging.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { MediaModule } from './media/media.module.js';
 import { FacesModule } from './faces/faces.module.js';
@@ -10,6 +11,7 @@ import { FamilyTreeModule } from './family-tree/family-tree.module.js';
 @Module({
   imports: [
     AppConfigModule,
+    LoggingModule,
     DatabaseModule,
     MediaModule,
     FacesModule,
