@@ -4,6 +4,7 @@ export interface SettingsData {
   default_output_folder?: string;
   is_custom_input?: boolean;
   is_custom_output?: boolean;
+  is_dev?: boolean;
   model_provider?: string;
   gemini_model?: string;
   local_model_name?: string;

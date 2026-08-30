@@ -70,14 +70,47 @@ export class CatalogerClientService {
     }
   }
 
+  async validateConnection(): Promise<{
+    connected: boolean;
+    cataloger_url: string;
+    message: string;
+    details?: any;
+    latency_ms?: number;
+  }> {
+    const startTime = Date.now();
+    try {
+      const res = await axios.get(`${this.baseUrl}/api/status`, { timeout: 4000 });
+      const latencyMs = Date.now() - startTime;
+      return {
+        connected: true,
+        cataloger_url: this.baseUrl,
+        message: `Successfully connected to media_cataloger service (${latencyMs}ms)`,
+        details: res.data,
+        latency_ms: latencyMs,
+      };
+    } catch (err: any) {
+      return {
+        connected: false,
+        cataloger_url: this.baseUrl,
+        message: `Unable to reach media_cataloger service at ${this.baseUrl}: ${err.message}`,
+      };
+    }
+  }
+
   async getStatus(): Promise<any> {
     try {
       const res = await axios.get(`${this.baseUrl}/api/status`, { timeout: 4000 });
-      return res.data;
+      return {
+        ...res.data,
+        connected: true,
+        cataloger_url: this.baseUrl,
+      };
     } catch (err: any) {
       // Return idle fallback if cataloger service is offline or starting
       return {
         status: 'idle',
+        connected: false,
+        cataloger_url: this.baseUrl,
         current_task: null,
         started_at: null,
         finished_at: null,

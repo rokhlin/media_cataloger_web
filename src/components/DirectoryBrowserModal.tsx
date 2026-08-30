@@ -263,7 +263,11 @@ export default function DirectoryBrowserModal({
             className="input-control"
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
-            placeholder="e.g. \\ZIMABOARD\shares\Photo or /shares/Photo"
+            placeholder={
+              import.meta.env.DEV
+                ? "e.g. \\\\ZIMABOARD\\shares\\Photo or C:\\Media"
+                : "e.g. /app/media_input or /app/media_output"
+            }
             style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}
           />
           <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.85rem' }} disabled={loading}>

@@ -41,6 +41,7 @@ describe('SettingsService', () => {
     assert.ok(settings.output_folder, 'output_folder should be defined');
     assert.ok(typeof settings.gemini_max_workers === 'number');
     assert.ok(typeof settings.preserve_structure === 'boolean');
+    assert.strictEqual(typeof settings.is_dev, 'boolean');
   });
 
   it('should update and persist settings including comma-separated input lists and provider parameters', () => {

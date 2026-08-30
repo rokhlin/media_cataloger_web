@@ -150,6 +150,20 @@ describe('CatalogerClientService', () => {
     assert.ok(logRes.logs.includes('Processed item_1'));
   });
 
+  it('should validate connection successfully when cataloger service is online', async () => {
+    const val = await catalogerService.validateConnection();
+    assert.strictEqual(val.connected, true);
+    assert.ok(val.cataloger_url);
+    assert.ok(val.message.includes('Successfully connected'));
+    assert.ok(typeof val.latency_ms === 'number');
+  });
+
+  it('should report failure gracefully when validating connection to offline cataloger service', async () => {
+    const val = await offlineService.validateConnection();
+    assert.strictEqual(val.connected, false);
+    assert.ok(val.message.includes('Unable to reach'));
+  });
+
   it('should clear local logs file if remote service is offline', async () => {
     fs.writeFileSync(logFile, 'Some old logs to clear');
     assert.ok(fs.readFileSync(logFile, 'utf-8').length > 0);

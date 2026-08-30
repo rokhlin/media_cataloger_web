@@ -85,6 +85,10 @@ export default function SettingsModal({
   // UI preferences local state
   const [localUiSettings, setLocalUiSettings] = useState<UISettings>(uiSettings);
 
+  // Connection validation state
+  const [validatingConnection, setValidatingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<{ connected?: boolean; message?: string } | null>(null);
+
   // Custom theme builder form state
   const [customName, setCustomName] = useState('My Custom Theme');
   const [customMode, setCustomMode] = useState<ThemeMode>('dark');
@@ -274,6 +278,42 @@ export default function SettingsModal({
       return;
     }
     onStartSingleAnalysis(trimmed);
+  };
+
+  const handleValidateConnection = async () => {
+    setValidatingConnection(true);
+    setConnectionResult(null);
+    try {
+      const startTime = Date.now();
+      let res = await fetch('/api/validate-connection');
+      if (res.status === 404) {
+        // Graceful fallback to /api/status for running instances
+        res = await fetch('/api/status');
+      }
+      if (res.ok) {
+        const data = await res.json();
+        const latencyMs = Date.now() - startTime;
+        const isConnected = data.connected !== undefined 
+          ? Boolean(data.connected) 
+          : (data.status !== undefined && data.status !== 'offline');
+        setConnectionResult({
+          connected: isConnected,
+          message: data.message || (isConnected ? `Connected to media_cataloger (${latencyMs}ms)` : 'Cataloger service offline or unreachable'),
+        });
+      } else {
+        setConnectionResult({
+          connected: false,
+          message: `Server returned HTTP ${res.status}`,
+        });
+      }
+    } catch (err: any) {
+      setConnectionResult({
+        connected: false,
+        message: `Network error: ${err.message}`,
+      });
+    } finally {
+      setValidatingConnection(false);
+    }
   };
 
   const allPresets = [...presets, ...customThemes];
@@ -541,6 +581,50 @@ export default function SettingsModal({
             {/* Tab 3: AI & Models */}
             {activeTab === 'models' && (
               <div className="settings-tab-pane">
+                {/* AI Engine Connection & Status */}
+                <div
+                  className="card"
+                  style={{
+                    marginBottom: '1.25rem',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    border: '1px solid var(--border-color)',
+                    padding: '0.85rem 1rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🔗</span>
+                      <strong>AI Engine Service Connection</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleValidateConnection}
+                      disabled={validatingConnection}
+                      style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}
+                    >
+                      {validatingConnection ? '⏳ Testing...' : '⚡ Test Connection'}
+                    </button>
+                  </div>
+                  <p className="description" style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem' }}>
+                    The Python <code>media_cataloger</code> engine executes AI pipelines, InsightFace embeddings, and vision processing.
+                  </p>
+                  {connectionResult && (
+                    <div
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: '6px',
+                        fontSize: '0.82rem',
+                        backgroundColor: connectionResult.connected ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        border: `1px solid ${connectionResult.connected ? '#22c55e' : '#ef4444'}`,
+                        color: connectionResult.connected ? '#4ade80' : '#f87171',
+                      }}
+                    >
+                      {connectionResult.connected ? '✅' : '❌'} {connectionResult.message}
+                    </div>
+                  )}
+                </div>
+
                 {/* Model Provider */}
                 <div className="form-group">
                   <label>{t('modelProvider')}</label>

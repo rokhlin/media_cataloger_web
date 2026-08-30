@@ -70,6 +70,19 @@ export class CatalogerController {
     return this.catalogerService.getStatus();
   }
 
+  @Get('validate-connection')
+  @ApiOperation({ summary: 'Validate HTTP connection to media_cataloger AI service' })
+  @ApiResponse({ status: 200, description: 'Connection status and latency details' })
+  async validateConnection() {
+    return this.catalogerService.validateConnection();
+  }
+
+  @Get('health')
+  @ApiOperation({ summary: 'Health check and connection validation for cataloger AI service' })
+  async getHealth() {
+    return this.catalogerService.validateConnection();
+  }
+
   @Get('logs')
   @ApiOperation({ summary: 'Get real-time execution logs from cataloging worker' })
   async getLogs() {

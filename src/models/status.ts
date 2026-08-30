@@ -30,4 +30,6 @@ export interface StatusInfo {
   error: string | null;
   progress: ProgressInfo | null;
   queue?: QueueInfo | null;
+  connected?: boolean;
+  cataloger_url?: string;
 }
