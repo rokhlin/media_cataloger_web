@@ -83,7 +83,32 @@ export interface GalleryTranslations {
   searchActiveStatus: string;
   loadMoreRows: string;
   allLoaded: string;
+  viewModeGallery: string;
+  viewModeList: string;
+  viewModeTree: string;
+  viewModeDate: string;
+  viewModePerson: string;
+  colFilename: string;
+  colFolder: string;
+  colType: string;
+  colSize: string;
+  colDate: string;
+  colStatus: string;
+  colFaces: string;
+  colActions: string;
+  sortBy: string;
+  sortOrder: string;
+  sortAsc: string;
+  sortDesc: string;
+  treeAllFolders: string;
+  treeNoFolders: string;
+  loadingNextChunk: string;
+  showingFilesCount: string;
+  loadNextChunkBtn: string;
+  folderFilterActive: string;
+  clearFolderFilter: string;
 }
+
 
 export interface LightboxTranslations {
   fileDetails: string;

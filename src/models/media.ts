@@ -88,3 +88,57 @@ export interface GalleryMediaFile extends MediaFileItem {
   }>;
   has_unassigned_faces?: boolean;
 }
+
+export type GalleryViewMode = 'gallery' | 'list' | 'folder_tree' | 'date_grouped' | 'person_grouped';
+
+export type MediaSortField = 'name' | 'date' | 'size' | 'status' | 'faces';
+export type MediaSortOrder = 'asc' | 'desc';
+
+export interface FolderTreeNode {
+  id: string;
+  name: string;
+  fullPath: string;
+  relativePath: string;
+  depth: number;
+  isFolder: boolean;
+  fileCount: number;
+  processedCount: number;
+  totalBytes: number;
+  children: FolderTreeNode[];
+  files: GalleryMediaFile[];
+}
+
+export interface DateGroupNode {
+  key: string;
+  label: string;
+  year: string;
+  month?: string;
+  count: number;
+  processedCount: number;
+  files: GalleryMediaFile[];
+}
+
+export interface PersonGroupNode {
+  personName: string;
+  avatarUrl?: string | null;
+  count: number;
+  isUnassigned: boolean;
+  files: GalleryMediaFile[];
+}
+
+export interface MediaCatalogResponse {
+  files: GalleryMediaFile[];
+  total: number;
+  total_files?: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+  has_more?: boolean;
+  stats?: {
+    total: number;
+    processed: number;
+    photos: number;
+    videos: number;
+  };
+}
+

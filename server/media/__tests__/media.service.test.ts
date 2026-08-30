@@ -141,8 +141,9 @@ describe('MediaService', () => {
     };
 
     fs.writeFileSync(clipSidecar, JSON.stringify(sidecarData, null, 2), 'utf-8');
+    mediaService.invalidateCache();
 
-    const result = await mediaService.listMediaFiles();
+    const result = await mediaService.listMediaFiles({ refresh: true });
     const clipItem = result.files.find((f: any) => f.filename === 'clip.mp4');
 
     assert.ok(clipItem, 'clip.mp4 should be found');
@@ -185,4 +186,39 @@ describe('MediaService', () => {
     const facesAfterRemove = await mediaService.getFacesForFile(beachPath);
     assert.strictEqual(facesAfterRemove.some((f) => f.name === 'John Doe'), false);
   });
+
+
+  it('should support pagination, sorting, and filtering on listMediaFiles', async () => {
+    // Test pagination with limit and offset
+    const page1 = await mediaService.listMediaFiles({ limit: 2, offset: 0 });
+    assert.strictEqual(page1.files.length, 2, 'Page 1 should return 2 items');
+    assert.strictEqual(page1.total, 3, 'Total items should be 3');
+    assert.strictEqual(page1.hasMore, true, 'hasMore should be true for page 1');
+    assert.ok(page1.stats, 'Stats should be returned');
+    assert.strictEqual(page1.stats.total, 3);
+
+    const page2 = await mediaService.listMediaFiles({ limit: 2, offset: 2 });
+    assert.strictEqual(page2.files.length, 1, 'Page 2 should return 1 item');
+    assert.strictEqual(page2.hasMore, false, 'hasMore should be false for page 2');
+
+    // Test sorting by name asc
+    const sortedByName = await mediaService.listMediaFiles({ sort_by: 'name', sort_order: 'asc' });
+    const names = sortedByName.files.map((f: any) => f.filename);
+    assert.deepStrictEqual(names, ['beach.png', 'clip.mp4', 'vacation.jpg']);
+
+    // Test filter by type
+    const imagesOnly = await mediaService.listMediaFiles({ type: 'images' });
+    assert.strictEqual(imagesOnly.files.length, 2);
+    assert.ok(imagesOnly.files.every((f: any) => f.is_image));
+
+    const videosOnly = await mediaService.listMediaFiles({ type: 'videos' });
+    assert.strictEqual(videosOnly.files.length, 1);
+    assert.strictEqual(videosOnly.files[0].filename, 'clip.mp4');
+
+    // Test cache invalidation
+    mediaService.invalidateCache();
+    const freshList = await mediaService.listMediaFiles({ refresh: true });
+    assert.strictEqual(freshList.total, 3);
+  });
 });
+

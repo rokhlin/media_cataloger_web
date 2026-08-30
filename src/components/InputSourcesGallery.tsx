@@ -4,10 +4,17 @@ import type {
   UISettings,
   GalleryMediaFile,
   DetectedFaceRecord,
+  GalleryViewMode,
+  MediaSortField,
+  MediaSortOrder,
+  FolderTreeNode,
 } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { mediaOrganizationService } from '../services/mediaOrganizationService';
+
 
 export type { GalleryMediaFile, DetectedFaceRecord };
+
 
 interface InputSourcesGalleryProps {
   mediaFiles?: GalleryMediaFile[];
@@ -41,11 +48,23 @@ export default function InputSourcesGallery({
   const [statusFilter, setStatusFilter] = useState<'all' | 'PROCESSED' | 'UNPROCESSED' | 'PENDING'>('all');
   const [faceFilter, setFaceFilter] = useState<'all' | 'with_faces' | 'no_faces' | 'unassigned'>('all');
   const [selectedPerson, setSelectedPerson] = useState<string>('all');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+
+  // View & Organization modes
+  const [viewMode, setViewMode] = useState<GalleryViewMode>('gallery');
+  const [sortBy, setSortBy] = useState<MediaSortField>('date');
+  const [sortOrder, setSortOrder] = useState<MediaSortOrder>('desc');
+
+  // Expanded/Collapsed node sets
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root', 'Root']));
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const [collapsedPersons, setCollapsedPersons] = useState<Set<string>>(new Set());
 
   // Configured max rows batch size (default: 10)
   const batchRows = Math.max(1, Number(uiSettings?.galleryMaxRows) || 10);
   const [loadedRows, setLoadedRows] = useState<number>(batchRows);
   const [columnCount, setColumnCount] = useState<number>(() => uiSettings?.maxImagesPerRow || 8);
+
 
   const gridRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -319,69 +338,43 @@ export default function InputSourcesGallery({
     }
   };
 
-  // Filtered files with minimum 5 symbols gap for search
+  // Filtered and sorted files
   const trimmedSearch = searchQuery.trim();
-  const isSearchActive = trimmedSearch.length >= 5;
-
   const filteredFiles = useMemo(() => {
-    return mediaFiles.filter((item) => {
-      // Search query filtering: triggers only when query length is >= 5 symbols
-      if (isSearchActive) {
-        const q = trimmedSearch.toLowerCase();
-        const matchDesc = Boolean(item.description && item.description.toLowerCase().includes(q));
-        const matchDescRu = Boolean(item.description_ru && item.description_ru.toLowerCase().includes(q));
-        const matchSummary = Boolean(item.summary && item.summary.toLowerCase().includes(q));
-        const matchSummaryRu = Boolean(item.summary_ru && item.summary_ru.toLowerCase().includes(q));
-        const matchName = Boolean(item.filename && item.filename.toLowerCase().includes(q));
-        const matchFolder = Boolean(item.folder && item.folder.toLowerCase().includes(q));
-        const matchFaces = Boolean(item.face_names && item.face_names.some((fn) => fn.toLowerCase().includes(q)));
 
-        if (!matchDesc && !matchDescRu && !matchSummary && !matchSummaryRu && !matchName && !matchFolder && !matchFaces) {
-          return false;
-        }
-      }
-
-      // Type filter
-      if (typeFilter === 'images' && !item.is_image) return false;
-      if (typeFilter === 'videos' && !item.is_video) return false;
-
-      // Status filter
-      if (statusFilter !== 'all') {
-        const itemStatus = item.status || 'UNPROCESSED';
-        if (statusFilter === 'PROCESSED' && itemStatus !== 'PROCESSED') return false;
-        if (statusFilter === 'UNPROCESSED' && itemStatus !== 'UNPROCESSED') return false;
-        if (statusFilter === 'PENDING' && itemStatus !== 'PENDING') return false;
-      }
-
-      // Face filter mode
-      if (faceFilter === 'with_faces') {
-        const hasFaces = (item.face_count && item.face_count > 0) || (item.faces && item.faces.length > 0);
-        if (!hasFaces) return false;
-      } else if (faceFilter === 'no_faces') {
-        const hasFaces = (item.face_count && item.face_count > 0) || (item.faces && item.faces.length > 0);
-        if (hasFaces) return false;
-      } else if (faceFilter === 'unassigned') {
-        if (!item.has_unassigned_faces) return false;
-      }
-
-      // Person specific filter
-      if (selectedPerson !== 'all') {
-        const hasPerson =
-          (item.face_names && item.face_names.includes(selectedPerson)) ||
-          (item.faces && item.faces.some((f) => f.name === selectedPerson || f.person_id === selectedPerson));
-        if (!hasPerson) return false;
-      }
-
-      return true;
+    const filtered = mediaOrganizationService.filterMediaFiles(mediaFiles, {
+      searchQuery,
+      typeFilter,
+      statusFilter,
+      faceFilter,
+      selectedPerson,
+      selectedFolder: selectedFolder || undefined,
     });
-  }, [mediaFiles, trimmedSearch, isSearchActive, typeFilter, statusFilter, faceFilter, selectedPerson]);
+    return mediaOrganizationService.sortMediaFiles(filtered, sortBy, sortOrder);
+  }, [mediaFiles, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder]);
+
+  // Hierarchical Folder Tree built over all scanned media files
+  const folderTree = useMemo(() => {
+    return mediaOrganizationService.buildFolderTree(mediaFiles);
+  }, [mediaFiles]);
+
+  // Date / Timeline groups
+  const dateGroups = useMemo(() => {
+    return mediaOrganizationService.groupByDate(filteredFiles, language === 'ru' ? 'ru' : 'en');
+  }, [filteredFiles, language]);
+
+  // Person groups
+  const personGroups = useMemo(() => {
+    return mediaOrganizationService.groupByPerson(filteredFiles, knownPersonOptions);
+  }, [filteredFiles, knownPersonOptions]);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
     typeFilter !== 'all' ||
     statusFilter !== 'all' ||
     faceFilter !== 'all' ||
-    selectedPerson !== 'all';
+    selectedPerson !== 'all' ||
+    selectedFolder !== null;
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -389,6 +382,56 @@ export default function InputSourcesGallery({
     setStatusFilter('all');
     setFaceFilter('all');
     setSelectedPerson('all');
+    setSelectedFolder(null);
+  };
+
+  // Toggle folder expansion in tree view
+  const toggleFolderExpand = (folderPath: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  };
+
+  // Toggle date group collapse
+  const toggleDateCollapse = (dateKey: string) => {
+    setCollapsedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) {
+        next.delete(dateKey);
+      } else {
+        next.add(dateKey);
+      }
+      return next;
+    });
+  };
+
+  // Toggle person group collapse
+  const togglePersonCollapse = (personName: string) => {
+    setCollapsedPersons((prev) => {
+      const next = new Set(prev);
+      if (next.has(personName)) {
+        next.delete(personName);
+      } else {
+        next.add(personName);
+      }
+      return next;
+    });
+  };
+
+  // Handle column header sort toggle
+  const handleSortToggle = (field: MediaSortField) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder(field === 'name' ? 'asc' : 'desc');
+    }
   };
 
   // Lightbox Navigation
@@ -421,10 +464,11 @@ export default function InputSourcesGallery({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedMedia, handlePrev, handleNext]);
 
-  // Reset loaded rows on filter/search change or batch size change
+  // Reset loaded rows on filter/search change, folder change, or batch size change
   useEffect(() => {
     setLoadedRows(batchRows);
-  }, [batchRows, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, mediaFiles.length]);
+  }, [batchRows, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder, mediaFiles.length]);
+
 
   // Dynamically detect column count
   const updateColumnCount = useCallback(() => {
@@ -506,6 +550,464 @@ export default function InputSourcesGallery({
   // Effective language in Lightbox
   const activeDetailLang = lightboxLang === 'active' ? language : lightboxLang;
 
+  // Render single media card item
+  const renderCardItem = (file: GalleryMediaFile) => {
+    const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+    const isProcessed = file.status === 'PROCESSED';
+    const isPending = file.status === 'PENDING';
+
+    const localizedDescription =
+      language === 'ru'
+        ? file.description_ru || file.description || file.summary_ru || file.summary
+        : file.description || file.description_ru || file.summary || file.summary_ru;
+
+    return (
+      <div
+        className="gallery-card-item"
+        key={file.file_path || file.filename}
+        onClick={() => setSelectedMedia(file)}
+        title={`${t('clickToView')}: ${file.filename}`}
+      >
+        <div className="gallery-thumb-wrap">
+          {file.is_image ? (
+            <img
+              src={fileUrl}
+              alt={file.filename}
+              className="gallery-thumb-img"
+              loading="lazy"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null;
+                target.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="gallery-thumb-video-placeholder">
+              <span style={{ fontSize: '2rem' }}>🎥</span>
+            </div>
+          )}
+
+          {/* Media Type & Status Badges */}
+          <div className="gallery-thumb-badges">
+            <span className="gallery-tag gallery-tag-type">
+              {file.is_video ? '🎥' : '📷'}
+            </span>
+            {Boolean(file.face_count && file.face_count > 0) && (
+              <span
+                className="gallery-tag gallery-tag-faces"
+                title={`${file.face_count} ${t('cardFaceCount')}`}
+              >
+                👤 {file.face_count}
+              </span>
+            )}
+            {Boolean(file.family_context?.suggested_caption || (file.family_context?.identified_members && file.family_context.identified_members.length > 0)) && (
+              <span
+                className="gallery-tag"
+                style={{ background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#ffffff', fontWeight: 600 }}
+                title={file.family_context?.suggested_caption || 'Family Kinship Context'}
+              >
+                🌳
+              </span>
+            )}
+            <span
+              className={`gallery-tag ${
+                isProcessed
+                  ? 'gallery-tag-processed'
+                  : isPending
+                  ? 'gallery-tag-pending'
+                  : 'gallery-tag-unprocessed'
+              }`}
+            >
+              {isProcessed ? '✓' : isPending ? '⏳' : '○'}
+            </span>
+          </div>
+        </div>
+
+        <div className="gallery-card-info">
+          <div className="gallery-card-title" title={file.filename}>
+            {file.filename}
+          </div>
+
+          {localizedDescription && (
+            <div
+              className="gallery-card-desc"
+              title={localizedDescription}
+            >
+              {localizedDescription}
+            </div>
+          )}
+
+          {file.face_names && file.face_names.length > 0 && (
+            <div className="gallery-card-faces-row" title={`Recognized: ${file.face_names.join(', ')}`}>
+              {file.face_names.slice(0, 2).map((name) => (
+                <span key={name} className="gallery-face-chip">
+                  👤 {name}
+                </span>
+              ))}
+              {file.face_names.length > 2 && (
+                <span className="gallery-face-chip-more">
+                  +{file.face_names.length - 2} {t('cardMoreFaces')}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="gallery-card-meta">
+            <span>{formatBytes(file.file_size)}</span>
+            {file.folder && (
+              <span className="gallery-card-folder" title={file.folder}>
+                📁 {file.folder.split(/[/\\]/).pop()}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render recursive Folder Tree node
+  const renderTreeNode = (node: FolderTreeNode) => {
+    const isExpanded = expandedFolders.has(node.fullPath) || expandedFolders.has(node.id);
+    const isSelected = selectedFolder === node.fullPath;
+    const hasChildren = node.children.length > 0;
+
+    return (
+      <div key={node.fullPath} className="folder-tree-item-wrap">
+        <div
+          className={`folder-tree-row ${isSelected ? 'active' : ''}`}
+          style={{ paddingLeft: `${node.depth * 14 + 6}px` }}
+          onClick={() => setSelectedFolder(isSelected ? null : node.fullPath)}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              className="folder-tree-toggle-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFolderExpand(node.fullPath);
+              }}
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? '▼' : '▶'}
+            </button>
+          ) : (
+            <span className="folder-tree-spacer" />
+          )}
+
+          <span className="folder-tree-icon">{isExpanded ? '📂' : '📁'}</span>
+          <span className="folder-tree-name" title={node.fullPath}>
+            {node.name}
+          </span>
+          <span className="folder-tree-badge" title={`${node.processedCount}/${node.fileCount} processed`}>
+            {node.fileCount}
+          </span>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="folder-tree-children">
+            {node.children.map((child) => renderTreeNode(child))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // 1. Gallery Grid View
+  const renderGalleryView = () => (
+    <>
+      <div
+        className="gallery-grid"
+        ref={gridRef}
+        style={{
+          '--gallery-item-min-width': '140px',
+        } as React.CSSProperties}
+      >
+        {visibleFiles.map((file) => renderCardItem(file))}
+      </div>
+      <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />
+    </>
+  );
+
+  // 2. Tabular List View
+  const renderListView = () => (
+    <div className="media-list-table-wrap">
+      <table className="media-list-table">
+        <thead>
+          <tr>
+            <th style={{ width: '44px' }}></th>
+            <th onClick={() => handleSortToggle('name')} className="sortable-th">
+              {t('colFilename')} {sortBy === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </th>
+            <th style={{ width: '130px' }}>{t('colFolder')}</th>
+            <th style={{ width: '80px' }}>{t('colType')}</th>
+            <th onClick={() => handleSortToggle('size')} className="sortable-th" style={{ width: '90px' }}>
+              {t('colSize')} {sortBy === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </th>
+            <th onClick={() => handleSortToggle('date')} className="sortable-th" style={{ width: '130px' }}>
+              {t('colDate')} {sortBy === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </th>
+            <th onClick={() => handleSortToggle('status')} className="sortable-th" style={{ width: '110px' }}>
+              {t('colStatus')} {sortBy === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </th>
+            <th onClick={() => handleSortToggle('faces')} className="sortable-th" style={{ width: '140px' }}>
+              {t('colFaces')} {sortBy === 'faces' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </th>
+            <th style={{ width: '70px', textAlign: 'center' }}>{t('colActions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleFiles.map((file) => {
+            const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
+            const isProcessed = file.status === 'PROCESSED';
+            const isPending = file.status === 'PENDING';
+
+            return (
+              <tr
+                key={file.file_path || file.filename}
+                className="media-list-row"
+                onClick={() => setSelectedMedia(file)}
+              >
+                <td style={{ textAlign: 'center' }}>
+                  {file.is_image ? (
+                    <img
+                      src={fileUrl}
+                      alt={file.filename}
+                      className="media-list-thumb"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span style={{ fontSize: '1.2rem' }}>🎥</span>
+                  )}
+                </td>
+                <td>
+                  <div className="media-list-title" title={file.file_path || file.filename}>
+                    {file.filename}
+                  </div>
+                  {Boolean(file.summary || file.summary_ru) && (
+                    <div className="media-list-subdesc">
+                      {language === 'ru' ? file.summary_ru || file.summary : file.summary || file.summary_ru}
+                    </div>
+                  )}
+                </td>
+                <td className="media-list-folder" title={file.folder}>
+                  📁 {file.folder ? file.folder.split(/[/\\]/).pop() : '-'}
+                </td>
+                <td>
+                  <span className="badge-pill" style={{ fontSize: '0.72rem', padding: '2px 6px' }}>
+                    {file.is_video ? '🎥 Video' : '📷 Photo'}
+                  </span>
+                </td>
+                <td style={{ color: 'var(--text-secondary)' }}>{formatBytes(file.file_size)}</td>
+                <td style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{formatDate(file.mtime)}</td>
+                <td>
+                  <span
+                    className={`badge-pill ${
+                      isProcessed
+                        ? 'badge-pill-success'
+                        : isPending
+                        ? 'badge-pill-accent'
+                        : 'badge-pill-secondary'
+                    }`}
+                    style={{ fontSize: '0.72rem', padding: '2px 6px' }}
+                  >
+                    {isProcessed ? '✓ Processed' : isPending ? '⏳ Pending' : '○ Unprocessed'}
+                  </span>
+                </td>
+                <td>
+                  {file.face_names && file.face_names.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                      {file.face_names.slice(0, 2).map((fn) => (
+                        <span key={fn} className="gallery-face-chip" style={{ fontSize: '0.7rem' }}>
+                          👤 {fn}
+                        </span>
+                      ))}
+                      {file.face_names.length > 2 && (
+                        <span className="gallery-face-chip-more" style={{ fontSize: '0.7rem' }}>
+                          +{file.face_names.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  ) : file.face_count && file.face_count > 0 ? (
+                    <span style={{ color: '#ec4899', fontSize: '0.78rem' }}>👤 {file.face_count}</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>—</span>
+                  )}
+                </td>
+                <td style={{ textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMedia(file);
+                    }}
+                    title={t('clickToView')}
+                  >
+                    👁️
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div ref={sentinelRef} style={{ height: '6px', width: '100%' }} />
+    </div>
+  );
+
+  // 3. Folder Tree View
+  const renderFolderTreeView = () => (
+    <div className="folder-tree-layout">
+      {/* Tree Explorer Sidebar */}
+      <div className="folder-tree-sidebar">
+        <div className="folder-tree-sidebar-header">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>🗂️ {t('treeAllFolders')}</span>
+            {selectedFolder && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+                onClick={() => setSelectedFolder(null)}
+                title={t('clearFolderFilter')}
+              >
+                ✕ {t('btnResetFilters')}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="folder-tree-sidebar-body">
+          {folderTree.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '0.5rem' }}>
+              {t('treeNoFolders')}
+            </p>
+          ) : (
+            folderTree.map((rootNode) => renderTreeNode(rootNode))
+          )}
+        </div>
+      </div>
+
+      {/* Folder Files Content */}
+      <div className="folder-tree-content">
+        {selectedFolder && (
+          <div className="folder-tree-active-bar">
+            <span>
+              📁 <strong>{selectedFolder}</strong> ({filteredFiles.length} {t('badgeMediaFiles')})
+            </span>
+            <button
+              type="button"
+              className="search-clear-inline-btn"
+              onClick={() => setSelectedFolder(null)}
+              title={t('clearFolderFilter')}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {filteredFiles.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+            <p>{t('noMediaFound')}</p>
+          </div>
+        ) : (
+          renderGalleryView()
+        )}
+      </div>
+    </div>
+  );
+
+  // 4. Date / Timeline Grouped View
+  const renderDateGroupedView = () => (
+    <div className="grouped-sections-wrap">
+      {dateGroups.map((group) => {
+        const isCollapsed = collapsedDates.has(group.key);
+        return (
+          <div key={group.key} className="grouped-card-section">
+            <div
+              className="grouped-section-header"
+              onClick={() => toggleDateCollapse(group.key)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="folder-tree-toggle-btn">{isCollapsed ? '▶' : '▼'}</span>
+                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>📅 {group.label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
+                  {group.count} {t('badgeMediaFiles')}
+                </span>
+                <span className="badge-pill badge-pill-success" style={{ fontSize: '0.75rem' }}>
+                  {group.processedCount} {t('badgeCataloged')}
+                </span>
+              </div>
+            </div>
+
+            {!isCollapsed && (
+              <div className="grouped-section-body">
+                <div
+                  className="gallery-grid"
+                  style={{
+                    '--gallery-item-min-width': '140px',
+                  } as React.CSSProperties}
+                >
+                  {group.files.map((file) => renderCardItem(file))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 5. Person Grouped View
+  const renderPersonGroupedView = () => (
+    <div className="grouped-sections-wrap">
+      {personGroups.map((group) => {
+        const isCollapsed = collapsedPersons.has(group.personName);
+        return (
+          <div key={group.personName} className="grouped-card-section">
+            <div
+              className="grouped-section-header"
+              onClick={() => togglePersonCollapse(group.personName)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span className="folder-tree-toggle-btn">{isCollapsed ? '▶' : '▼'}</span>
+                {group.avatarUrl ? (
+                  <img
+                    src={group.avatarUrl}
+                    alt={group.personName}
+                    style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span>👤</span>
+                )}
+                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                  {group.personName}
+                </span>
+              </div>
+              <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
+                {group.count} {t('badgeMediaFiles')}
+              </span>
+            </div>
+
+            {!isCollapsed && (
+              <div className="grouped-section-body">
+                <div
+                  className="gallery-grid"
+                  style={{
+                    '--gallery-item-min-width': '140px',
+                  } as React.CSSProperties}
+                >
+                  {group.files.map((file) => renderCardItem(file))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="card media-gallery-card">
       <div className="gallery-header-row">
@@ -529,7 +1031,51 @@ export default function InputSourcesGallery({
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* View Switcher Button Group */}
+          <div className="filter-button-group view-switcher-group">
+            <button
+              type="button"
+              className={`filter-btn ${viewMode === 'gallery' ? 'active' : ''}`}
+              onClick={() => setViewMode('gallery')}
+              title={t('viewModeGallery')}
+            >
+              🔲 {t('viewModeGallery')}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title={t('viewModeList')}
+            >
+              📋 {t('viewModeList')}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn ${viewMode === 'folder_tree' ? 'active' : ''}`}
+              onClick={() => setViewMode('folder_tree')}
+              title={t('viewModeTree')}
+            >
+              📁 {t('viewModeTree')}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn ${viewMode === 'date_grouped' ? 'active' : ''}`}
+              onClick={() => setViewMode('date_grouped')}
+              title={t('viewModeDate')}
+            >
+              📅 {t('viewModeDate')}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn ${viewMode === 'person_grouped' ? 'active' : ''}`}
+              onClick={() => setViewMode('person_grouped')}
+              title={t('viewModePerson')}
+            >
+              👥 {t('viewModePerson')}
+            </button>
+          </div>
+
           {onRefresh && (
             <button
               className="btn btn-secondary"
@@ -557,9 +1103,9 @@ export default function InputSourcesGallery({
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Filter, Sort and Search Bar */}
       <div className="gallery-filters-row">
-        <div className="search-box" style={{ flex: 1, minWidth: '260px', margin: 0, position: 'relative' }}>
+        <div className="search-box" style={{ flex: 1, minWidth: '240px', margin: 0, position: 'relative' }}>
           <span className="search-icon">🔍</span>
           <input
             type="text"
@@ -593,6 +1139,24 @@ export default function InputSourcesGallery({
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Active Folder Filter Tag */}
+          {selectedFolder && (
+            <span
+              className="badge-pill badge-pill-accent"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem' }}
+            >
+              📁 {selectedFolder.split(/[/\\]/).pop()}
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
+                onClick={() => setSelectedFolder(null)}
+                title={t('clearFolderFilter')}
+              >
+                ✕
+              </button>
+            </span>
+          )}
+
           {/* Type Filter */}
           <div className="filter-button-group">
             <button
@@ -687,7 +1251,7 @@ export default function InputSourcesGallery({
             className="input-control"
             value={selectedPerson}
             onChange={(e) => setSelectedPerson(e.target.value)}
-            style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', minWidth: '130px' }}
+            style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', minWidth: '120px' }}
           >
             <option value="all">{t('filterPersonAll')}</option>
             {distinctPeople.map(([name, count]) => (
@@ -696,6 +1260,32 @@ export default function InputSourcesGallery({
               </option>
             ))}
           </select>
+
+          {/* Sort Field & Order */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+            <select
+              className="input-control"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as MediaSortField)}
+              style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', minWidth: '100px' }}
+              title={t('sortBy')}
+            >
+              <option value="date">📅 {t('colDate')}</option>
+              <option value="name">🔤 {t('colFilename')}</option>
+              <option value="size">💾 {t('colSize')}</option>
+              <option value="status">📊 {t('colStatus')}</option>
+              <option value="faces">👤 {t('colFaces')}</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem' }}
+              onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+              title={`${t('sortOrder')}: ${sortOrder === 'asc' ? t('sortAsc') : t('sortDesc')}`}
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
 
           {hasActiveFilters && (
             <button
@@ -710,7 +1300,7 @@ export default function InputSourcesGallery({
         </div>
       </div>
 
-      {/* Media Grid */}
+      {/* Main Content Area based on View Mode */}
       <div
         className="gallery-grid-container"
         ref={containerRef}
@@ -724,137 +1314,18 @@ export default function InputSourcesGallery({
           <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-secondary)' }}>
             <p style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{t('noMediaFound')}</p>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {searchQuery || typeFilter !== 'all' || statusFilter !== 'all'
+              {searchQuery || typeFilter !== 'all' || statusFilter !== 'all' || selectedFolder
                 ? t('noMediaHintFiltered')
                 : t('noMediaHintEmpty')}
             </p>
           </div>
         ) : (
           <>
-            <div
-              className="gallery-grid"
-              ref={gridRef}
-              style={{
-                '--gallery-item-min-width': '140px',
-              } as React.CSSProperties}
-            >
-              {visibleFiles.map((file) => {
-                const fileUrl = `/api/media/file?path=${encodeURIComponent(file.file_path || file.filename)}`;
-                const isProcessed = file.status === 'PROCESSED';
-                const isPending = file.status === 'PENDING';
-
-                // Localized description & summary
-                const localizedDescription =
-                  language === 'ru'
-                    ? file.description_ru || file.description || file.summary_ru || file.summary
-                    : file.description || file.description_ru || file.summary || file.summary_ru;
-
-                return (
-                  <div
-                    className="gallery-card-item"
-                    key={file.file_path || file.filename}
-                    onClick={() => setSelectedMedia(file)}
-                    title={`${t('clickToView')}: ${file.filename}`}
-                  >
-                    <div className="gallery-thumb-wrap">
-                      {file.is_image ? (
-                        <img
-                          src={fileUrl}
-                          alt={file.filename}
-                          className="gallery-thumb-img"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="gallery-thumb-video-placeholder">
-                          <span style={{ fontSize: '2rem' }}>🎥</span>
-                        </div>
-                      )}
-
-                      {/* Media Type & Status Badges */}
-                      <div className="gallery-thumb-badges">
-                        <span className="gallery-tag gallery-tag-type">
-                          {file.is_video ? '🎥' : '📷'}
-                        </span>
-                        {Boolean(file.face_count && file.face_count > 0) && (
-                          <span
-                            className="gallery-tag gallery-tag-faces"
-                            title={`${file.face_count} ${t('cardFaceCount')}`}
-                          >
-                            👤 {file.face_count}
-                          </span>
-                        )}
-                        {Boolean(file.family_context?.suggested_caption || (file.family_context?.identified_members && file.family_context.identified_members.length > 0)) && (
-                          <span
-                            className="gallery-tag"
-                            style={{ background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#ffffff', fontWeight: 600 }}
-                            title={file.family_context?.suggested_caption || 'Family Kinship Context'}
-                          >
-                            🌳
-                          </span>
-                        )}
-                        <span
-                          className={`gallery-tag ${
-                            isProcessed
-                              ? 'gallery-tag-processed'
-                              : isPending
-                              ? 'gallery-tag-pending'
-                              : 'gallery-tag-unprocessed'
-                          }`}
-                        >
-                          {isProcessed ? '✓' : isPending ? '⏳' : '○'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="gallery-card-info">
-                      <div className="gallery-card-title" title={file.filename}>
-                        {file.filename}
-                      </div>
-
-                      {localizedDescription && (
-                        <div
-                          className="gallery-card-desc"
-                          title={localizedDescription}
-                        >
-                          {localizedDescription}
-                        </div>
-                      )}
-
-                      {file.face_names && file.face_names.length > 0 && (
-                        <div className="gallery-card-faces-row" title={`Recognized: ${file.face_names.join(', ')}`}>
-                          {file.face_names.slice(0, 2).map((name) => (
-                            <span key={name} className="gallery-face-chip">
-                              👤 {name}
-                            </span>
-                          ))}
-                          {file.face_names.length > 2 && (
-                            <span className="gallery-face-chip-more">
-                              +{file.face_names.length - 2} {t('cardMoreFaces')}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="gallery-card-meta">
-                        <span>{formatBytes(file.file_size)}</span>
-                        {file.folder && (
-                          <span className="gallery-card-folder" title={file.folder}>
-                            📁 {file.folder.split(/[/\\]/).pop()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Sentinel for infinite scroll triggering next rows */}
-            <div ref={sentinelRef} style={{ height: '4px', width: '100%' }} />
+            {viewMode === 'gallery' && renderGalleryView()}
+            {viewMode === 'list' && renderListView()}
+            {viewMode === 'folder_tree' && renderFolderTreeView()}
+            {viewMode === 'date_grouped' && renderDateGroupedView()}
+            {viewMode === 'person_grouped' && renderPersonGroupedView()}
 
             {/* Pagination & Infinite Row Status Footer */}
             {filteredFiles.length > 0 && (
@@ -872,7 +1343,7 @@ export default function InputSourcesGallery({
                 }}
               >
                 <span>
-                  {t('showingCount')}: <strong>{Math.min(visibleFiles.length, filteredFiles.length)}</strong> / {filteredFiles.length} {t('badgeMediaFiles')}
+                  {t('showingFilesCount')}: <strong>{Math.min(visibleFiles.length, filteredFiles.length)}</strong> / {filteredFiles.length} {t('badgeMediaFiles')}
                   {' '}({Math.min(loadedRows, Math.ceil(filteredFiles.length / effectiveCols))} / {Math.ceil(filteredFiles.length / effectiveCols)} rows)
                 </span>
 
@@ -882,9 +1353,9 @@ export default function InputSourcesGallery({
                     className="btn btn-secondary"
                     style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}
                     onClick={loadMoreRows}
-                    title={t('loadMoreRows')}
+                    title={t('loadNextChunkBtn')}
                   >
-                    ⬇️ {t('loadMoreRows')} (+{batchRows})
+                    ⬇️ {t('loadNextChunkBtn')} (+{batchRows})
                   </button>
                 ) : (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
@@ -898,6 +1369,7 @@ export default function InputSourcesGallery({
       </div>
 
       {/* Lightbox / Media Viewer Modal */}
+
       {selectedMedia && (
         <div className="modal-overlay active" onClick={() => setSelectedMedia(null)}>
           <div

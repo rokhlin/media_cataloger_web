@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Query, Res, BadRequestException, Inject } 
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { MediaService } from './media.service.js';
-import { AddPersonToFileDto, RemoveFaceFromFileDto } from './dto/media.dto.js';
+import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto } from './dto/media.dto.js';
 
 @ApiTags('media')
 @Controller('api/media')
@@ -10,11 +10,12 @@ export class MediaController {
   constructor(@Inject(MediaService) private readonly mediaService: MediaService) {}
 
   @Get('files')
-  @ApiOperation({ summary: 'List all media files discovered in input sources with metadata' })
-  @ApiResponse({ status: 200, description: 'Media file list with face detections and AI summaries' })
-  async listMediaFiles() {
-    return this.mediaService.listMediaFiles();
+  @ApiOperation({ summary: 'List all media files discovered in input sources with pagination, search, filter and sorting' })
+  @ApiResponse({ status: 200, description: 'Media file list with face detections, pagination and AI summaries' })
+  async listMediaFiles(@Query() query: ListMediaFilesQueryDto) {
+    return this.mediaService.listMediaFiles(query);
   }
+
 
   @Get('file')
   @ApiOperation({ summary: 'Stream/serve a raw media file directly' })
