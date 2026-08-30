@@ -135,4 +135,21 @@ describe('DatabaseService', () => {
     assert.strictEqual(facesByFile['/photos/family_dinner.jpg'].length, 1);
     assert.strictEqual(facesByFile['/photos/family_dinner.jpg'][0].face_id, 'face_alice_1');
   });
+
+  it('should deduplicate faces on saveMediaFaces and getFacesBySourceFile', () => {
+    const file = '/photos/single_person.jpg';
+    const rawFaces = [
+      { face_id: 'face_100', name: 'John Doe', confidence: 0.99 },
+      { face_id: 'face_100', name: 'John Doe', confidence: 0.99 }, // duplicate in list
+    ];
+
+    // Save multiple times as when user navigates or background scans run
+    dbService.saveMediaFaces(file, rawFaces);
+    dbService.saveMediaFaces(file, rawFaces);
+
+    const faces = dbService.getFacesBySourceFile(file);
+    assert.strictEqual(faces.length, 1, 'Should return exactly 1 face for the photo, no duplicates');
+    assert.strictEqual(faces[0].face_id, 'face_100');
+    assert.strictEqual(faces[0].name, 'John Doe');
+  });
 });

@@ -195,6 +195,20 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         this.db.exec('ALTER TABLE media_faces ADD COLUMN time_intervals TEXT;');
       }
 
+      // Deduplicate media_faces rows that share the same (source_file, face_id)
+      try {
+        this.db.exec(`
+          DELETE FROM media_faces
+          WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM media_faces
+            GROUP BY LOWER(COALESCE(source_file, '')), face_id
+          );
+        `);
+      } catch {
+        // ignore
+      }
+
       // Migrate face_registry columns if missing
       const frCols = new Set((this.db.pragma('table_info(face_registry)') as any[]).map((c: any) => c.name.toLowerCase()));
       if (!frCols.has('source_file')) {
@@ -242,6 +256,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_media_faces_media_id ON media_faces(media_id);
         CREATE INDEX IF NOT EXISTS idx_media_faces_face_id ON media_faces(face_id);
         CREATE INDEX IF NOT EXISTS idx_media_faces_source_file ON media_faces(source_file);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_faces_unique_src_face ON media_faces(source_file, face_id);
         CREATE INDEX IF NOT EXISTS idx_face_registry_person_id ON face_registry(person_id);
         CREATE INDEX IF NOT EXISTS idx_face_registry_face_id ON face_registry(face_id);
       `);
@@ -456,7 +471,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
                COALESCE(mf.is_reference, fr.is_reference, 0) as is_reference
         FROM media_faces mf
         LEFT JOIN media_items m ON mf.media_id = m.id
-        LEFT JOIN face_registry fr ON mf.face_id = fr.face_id
+        LEFT JOIN (
+          SELECT face_id, MIN(source_file) as source_file, MAX(is_reference) as is_reference
+          FROM face_registry
+          GROUP BY face_id
+        ) fr ON mf.face_id = fr.face_id
         ORDER BY mf.id ASC
       `).all() as any[];
 
@@ -466,7 +485,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           if (!result[src]) {
             result[src] = [];
           }
-          result[src].push(r);
+          if (!result[src].some((x: any) => x.face_id === r.face_id)) {
+            result[src].push(r);
+          }
         }
       }
     } catch {
@@ -510,7 +531,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
                COALESCE(mf.is_reference, fr.is_reference, 0) as is_reference
         FROM media_faces mf
         LEFT JOIN media_items m ON mf.media_id = m.id
-        LEFT JOIN face_registry fr ON mf.face_id = fr.face_id
+        LEFT JOIN (
+          SELECT face_id, MIN(source_file) as source_file, MAX(is_reference) as is_reference
+          FROM face_registry
+          GROUP BY face_id
+        ) fr ON mf.face_id = fr.face_id
         WHERE LOWER(COALESCE(mf.source_file, '')) = LOWER(?)
            OR LOWER(COALESCE(m.file_path, '')) = LOWER(?)
            OR LOWER(COALESCE(mf.source_file, '')) LIKE ?
@@ -519,7 +544,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       `).all(filePath, filePath, `%${baseName}`, `%${baseName}`) as any[];
 
       if (rows.length > 0) {
-        return rows;
+        const unique = new Map<string, any>();
+        for (const r of rows) {
+          if (r.face_id && !unique.has(r.face_id)) {
+            unique.set(r.face_id, r);
+          }
+        }
+        return Array.from(unique.values());
       }
     } catch {
       // ignore
@@ -534,7 +565,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         ORDER BY id ASC
       `).all(filePath, `%${baseName}`) as any[];
 
-      return rows;
+      const unique = new Map<string, any>();
+      for (const r of rows) {
+        if (r.face_id && !unique.has(r.face_id)) {
+          unique.set(r.face_id, r);
+        }
+      }
+      return Array.from(unique.values());
     } catch {
       return [];
     }
@@ -543,6 +580,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   saveMediaFaces(filePath: string, faces: any[]): void {
     if (!faces || faces.length === 0) return;
     const db = this.getDb();
+    const baseName = path.basename(filePath).toLowerCase();
 
     const insertPerson = db.prepare('INSERT OR IGNORE INTO persons (id, name) VALUES (?, ?)');
     const insertMf = db.prepare(`
@@ -555,10 +593,25 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         face_id, person_id, name, confidence, image_path, source_file, is_reference, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     `);
+    const delExisting = db.prepare(`
+      DELETE FROM media_faces
+      WHERE LOWER(COALESCE(source_file, '')) = LOWER(?)
+         OR LOWER(COALESCE(source_file, '')) LIKE ?
+    `);
+
+    // Deduplicate faces in memory first by face_id
+    const uniqueFacesMap = new Map<string, any>();
+    for (const f of faces) {
+      const faceId = f.face_id || f.id || `face_${Math.random().toString(36).substring(2, 10)}`;
+      if (!uniqueFacesMap.has(faceId)) {
+        uniqueFacesMap.set(faceId, { ...f, face_id: faceId });
+      }
+    }
 
     const transaction = db.transaction(() => {
-      for (const f of faces) {
-        const faceId = f.face_id || f.id || `face_${Math.random().toString(36).substring(2, 10)}`;
+      delExisting.run(filePath, `%${baseName}`);
+      for (const f of uniqueFacesMap.values()) {
+        const faceId = f.face_id;
         const name = f.name || f.person_name || `face_${faceId.replace(/^face_/, '')}`;
         const personId = f.person_id || (name && !name.startsWith('face_') ? `person_${name.toLowerCase().replace(/[^a-z0-9_]/g, '_')}` : null);
         const conf = typeof f.confidence === 'number' ? f.confidence : 0.95;
@@ -577,8 +630,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           conf,
           bbox,
           imgPath,
-          f.time_start || null,
-          f.time_end || null,
+          f.time_start ?? null,
+          f.time_end ?? null,
           f.time_intervals ? (typeof f.time_intervals === 'string' ? f.time_intervals : JSON.stringify(f.time_intervals)) : null,
           isRef,
           filePath

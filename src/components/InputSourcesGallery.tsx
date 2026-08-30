@@ -280,7 +280,10 @@ export default function InputSourcesGallery({
         );
         if (res.ok && isMounted) {
           const data = await res.json();
-          setFacesForSelected(data);
+          const uniqueFaces = Array.isArray(data)
+            ? Array.from(new Map(data.map((f: DetectedFaceRecord) => [f.face_id, f])).values())
+            : [];
+          setFacesForSelected(uniqueFaces);
         }
       } catch (err) {
         console.error('Failed to load faces for file:', err);

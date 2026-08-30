@@ -317,7 +317,7 @@ export class MediaService {
 
             // Auto-persist sidecar faces to SQLite
             try {
-              this.db.saveMediaFaces(filePath, sidecarFaceObjs);
+              this.db.saveMediaFaces(filePath, dedupFaces);
             } catch {
               // ignore persistence failures during list scan
             }
@@ -642,29 +642,41 @@ export class MediaService {
         const sdata = JSON.parse(raw);
         const rawFaces = sdata.faces || sdata.detected_faces || sdata.gemini_analysis?.faces || [];
         if (Array.isArray(rawFaces) && rawFaces.length > 0) {
-          const sidecarFaces = rawFaces.map((item: any, idx: number) => {
+          const dedupMap = new Map<string, any>();
+          for (let idx = 0; idx < rawFaces.length; idx++) {
+            const item = rawFaces[idx];
             if (typeof item === 'string') {
-              return {
-                face_id: `face_${path.basename(trimmed)}_${idx}`,
-                name: item,
-                confidence: 1.0,
-                is_reference: !item.startsWith('face_') ? 1 : 0,
-                source_file: trimmed,
-              };
+              const fid = `face_${path.basename(trimmed)}_${idx}`;
+              if (!dedupMap.has(fid)) {
+                dedupMap.set(fid, {
+                  face_id: fid,
+                  name: item,
+                  confidence: 1.0,
+                  is_reference: !item.startsWith('face_') ? 1 : 0,
+                  source_file: trimmed,
+                });
+              }
+            } else if (item && typeof item === 'object') {
+              const fid = item.face_id || item.id || `face_${path.basename(trimmed)}_${idx}`;
+              if (!dedupMap.has(fid)) {
+                const name = item.name || item.person_name || `face_${idx}`;
+                dedupMap.set(fid, {
+                  face_id: fid,
+                  person_id: item.person_id || null,
+                  name: name,
+                  confidence: typeof item.confidence === 'number' ? item.confidence : 0.95,
+                  bbox: item.bbox || null,
+                  image_path: item.image_path || item.crop_path || item.image || null,
+                  time_start: item.time_start || null,
+                  time_end: item.time_end || null,
+                  is_reference: item.is_reference !== undefined ? (item.is_reference ? 1 : 0) : (name && !name.startsWith('face_') ? 1 : 0),
+                  source_file: trimmed,
+                });
+              }
             }
-            return {
-              face_id: item.face_id || item.id || `face_${path.basename(trimmed)}_${idx}`,
-              person_id: item.person_id || null,
-              name: item.name || item.person_name || `face_${idx}`,
-              confidence: typeof item.confidence === 'number' ? item.confidence : 0.95,
-              bbox: item.bbox || null,
-              image_path: item.image_path || item.crop_path || item.image || null,
-              time_start: item.time_start || null,
-              time_end: item.time_end || null,
-              is_reference: item.is_reference !== undefined ? (item.is_reference ? 1 : 0) : (item.name && !item.name.startsWith('face_') ? 1 : 0),
-              source_file: trimmed,
-            };
-          });
+          }
+
+          const sidecarFaces = Array.from(dedupMap.values());
 
           // Ingest into database
           try {
