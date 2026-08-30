@@ -328,6 +328,22 @@ export class MediaService {
     throw new NotFoundException(`Media file '${trimmed}' not found`);
   }
 
+  /**
+   * Verify read access to a given media file target path or filename.
+   */
+  verifyFileAccess(target: string): { accessible: boolean; resolvedPath?: string; error?: string } {
+    try {
+      const resolved = this.resolveMediaFilePath(target);
+      fs.accessSync(resolved, fs.constants.R_OK);
+      return { accessible: true, resolvedPath: resolved };
+    } catch (err: any) {
+      return {
+        accessible: false,
+        error: err.message || `File '${target}' is not accessible or not found`,
+      };
+    }
+  }
+
   getMediaSidecar(target: string): any {
     const trimmed = target.trim();
     const baseName = path.basename(trimmed);

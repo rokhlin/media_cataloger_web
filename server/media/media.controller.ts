@@ -33,6 +33,33 @@ export class MediaController {
     return res.sendFile(resolved);
   }
 
+  @Get('file-content')
+  @ApiOperation({ summary: 'Stream raw binary media content (API for backend engine processing)' })
+  @ApiQuery({ name: 'path', required: false, description: 'Full path or relative path to media file' })
+  @ApiQuery({ name: 'file', required: false, description: 'Filename or subpath to media file' })
+  async getMediaFileContent(
+    @Query('path') queryPath: string,
+    @Query('file') queryFile: string,
+    @Res() res: Response,
+  ) {
+    const target = queryPath || queryFile;
+    if (!target || !target.trim()) {
+      throw new BadRequestException('Missing file or path parameter');
+    }
+    const resolved = this.mediaService.resolveMediaFilePath(target);
+    return res.sendFile(resolved);
+  }
+
+  @Get('validate-file')
+  @ApiOperation({ summary: 'Check if a media file is accessible by the host server' })
+  @ApiQuery({ name: 'file', required: true })
+  async validateFileAccess(@Query('file') file: string) {
+    if (!file || !file.trim()) {
+      throw new BadRequestException('Missing file parameter');
+    }
+    return this.mediaService.verifyFileAccess(file.trim());
+  }
+
   @Get('sidecar')
   @ApiOperation({ summary: 'Get full sidecar JSON metadata for a media file' })
   @ApiQuery({ name: 'path', required: false })

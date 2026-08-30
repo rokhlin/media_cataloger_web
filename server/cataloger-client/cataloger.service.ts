@@ -1,42 +1,126 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppConfigService } from '../config/config.service.js';
+import { MediaService } from '../media/media.service.js';
 
 @Injectable()
 export class CatalogerClientService {
   private readonly logger = new Logger(CatalogerClientService.name);
 
-  constructor(@Inject(AppConfigService) private readonly config: AppConfigService) {}
+  constructor(
+    @Inject(AppConfigService) private readonly config: AppConfigService,
+    @Inject(MediaService) private readonly mediaService: MediaService,
+  ) {}
 
   private get baseUrl(): string {
     return this.config.catalogerApiUrl.replace(/\/+$/, '');
   }
 
-  async triggerRun(force: boolean = false): Promise<any> {
+  async triggerRun(force: boolean = false, customPayload?: any): Promise<any> {
+    const execConfig = this.config.getPipelineExecutionConfig();
+    const scanned = this.mediaService.scanInputFolders();
+
+    const files = scanned.map(s => {
+      let size = 0;
+      let mtime = 0;
+      try {
+        const stat = fs.statSync(s.filePath);
+        size = stat.size;
+        mtime = stat.mtimeMs / 1000;
+      } catch {
+        // file stat error
+      }
+      return {
+        file_path: s.filePath,
+        folder: s.folder,
+        filename: path.basename(s.filePath),
+        file_size: size,
+        mtime: mtime,
+        stream_url: `${execConfig.ui_base_url}/api/media/file?path=${encodeURIComponent(s.filePath)}`,
+      };
+    });
+
+    const payload = {
+      force: Boolean(force),
+      total_files: files.length,
+      files: files,
+      output_folder: execConfig.output_folder,
+      settings: execConfig,
+      ...(customPayload || {}),
+    };
+
     try {
-      const res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, {}, { timeout: 10000 });
-      return res.data;
+      this.logger.log(`Triggering BE run: ${files.length} file(s) across input sources -> ${execConfig.output_folder}`);
+      const res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
+        timeout: 15000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return {
+        ...res.data,
+        provided_files_count: files.length,
+      };
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message;
-      this.logger.error(`Failed to trigger run on cataloger service: ${msg}`);
-      throw new Error(`Cataloger service error: ${msg}`);
+      const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+      const status = err.response?.status;
+      this.logger.error(`Failed to trigger run on cataloger BE service (HTTP ${status || 'ERR'}): ${detail}`);
+      throw new Error(`Cataloger service error (${status || 'Network'}): ${detail}`);
     }
   }
 
-  async triggerAnalyzeFile(file: string): Promise<any> {
+  async triggerAnalyzeFile(file: string, customPayload?: any): Promise<any> {
+    if (!file || !file.trim()) {
+      throw new BadRequestException('File parameter cannot be empty');
+    }
+
+    const trimmed = file.trim();
+    const accessCheck = this.mediaService.verifyFileAccess(trimmed);
+    if (!accessCheck.accessible || !accessCheck.resolvedPath) {
+      this.logger.warn(`Cannot analyze file: ${accessCheck.error}`);
+      throw new BadRequestException(`File access error: ${accessCheck.error}`);
+    }
+
+    const resolvedPath = accessCheck.resolvedPath;
+    let size = 0;
+    let mtime = 0;
     try {
+      const stat = fs.statSync(resolvedPath);
+      size = stat.size;
+      mtime = stat.mtimeMs / 1000;
+    } catch (err: any) {
+      throw new BadRequestException(`Unable to read file stat for '${resolvedPath}': ${err.message}`);
+    }
+
+    const execConfig = this.config.getPipelineExecutionConfig();
+    const payload = {
+      file: resolvedPath,
+      filename: path.basename(resolvedPath),
+      folder: path.dirname(resolvedPath),
+      file_size: size,
+      mtime: mtime,
+      output_folder: execConfig.output_folder,
+      settings: execConfig,
+      stream_url: `${execConfig.ui_base_url}/api/media/file?path=${encodeURIComponent(resolvedPath)}`,
+      ...(customPayload || {}),
+    };
+
+    try {
+      this.logger.log(`Triggering single file analysis on BE: ${resolvedPath}`);
       const res = await axios.post(
-        `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(file)}`,
-        {},
-        { timeout: 10000 }
+        `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
+        payload,
+        {
+          timeout: 15000,
+          headers: { 'Content-Type': 'application/json' },
+        }
       );
       return res.data;
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message;
-      this.logger.error(`Failed to trigger file analysis: ${msg}`);
-      throw new Error(`Cataloger service error: ${msg}`);
+      const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+      const status = err.response?.status;
+      this.logger.error(`Failed to trigger file analysis on BE (HTTP ${status || 'ERR'}): ${detail}`);
+      throw new Error(`Cataloger service error (${status || 'Network'}): ${detail}`);
     }
   }
 

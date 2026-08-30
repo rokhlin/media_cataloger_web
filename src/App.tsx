@@ -438,14 +438,18 @@ function App() {
       const res = await fetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
-        appendConsoleMessage(`[API] Triggered sync successfully: ${result.message || 'Started'}`);
+        const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
+        appendConsoleMessage(`[API] Triggered sync successfully: ${result.message || 'Started'}${countMsg}`);
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to run sync: ${result.detail || 'Error'}`);
+        const errMsg = result.message || result.detail || result.error || 'Failed to start sync';
+        appendConsoleMessage(`[API Error] Failed to run sync: ${errMsg}`);
+        alert(`Could not start cataloging sync:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      alert(`Network error connecting to server: ${message}`);
     }
   };
 
@@ -458,7 +462,7 @@ function App() {
         appendConsoleMessage(`[API] Execution paused: ${result.message || 'Paused'}`);
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to pause: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`[API Error] Failed to pause: ${result.message || result.detail || 'Error'}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -475,7 +479,7 @@ function App() {
         appendConsoleMessage(`[API] Execution resumed: ${result.message || 'Resumed'}`);
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to resume: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`[API Error] Failed to resume: ${result.message || result.detail || 'Error'}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -492,7 +496,7 @@ function App() {
         appendConsoleMessage(`[API] Stop requested: ${result.message || 'Stopping'}`);
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to stop: ${result.detail || 'Error'}`);
+        appendConsoleMessage(`[API Error] Failed to stop: ${result.message || result.detail || 'Error'}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -512,11 +516,14 @@ function App() {
         if (onSuccess) onSuccess();
         checkStatus();
       } else {
-        appendConsoleMessage(`[API Error] Failed to start analysis: ${result.detail || 'Error'}`);
+        const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
+        appendConsoleMessage(`[API Error] Failed to start analysis: ${errMsg}`);
+        alert(`Analysis Error:\n${errMsg}`);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       appendConsoleMessage(`[Network Error] Connection failed: ${message}`);
+      alert(`Network error connecting to server: ${message}`);
     }
   };
 
