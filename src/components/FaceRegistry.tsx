@@ -366,18 +366,25 @@ export default function FaceRegistry({
                             style={{ cursor: repFace?.source_file ? 'pointer' : 'default' }}
                             title={repFace?.source_file ? t('clickToView') : group.group_id}
                             onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
+                              const target = e.target as HTMLElement;
+                              target.style.display = 'none';
+                              const fb = target.parentElement?.querySelector('.fallback-group-avatar') as HTMLElement;
+                              if (fb) fb.style.display = 'flex';
                             }}
                           />
-                        ) : (
-                          <div
-                            className="face-group-avatar"
-                            onClick={() => handleOpenSourceImage(repFace || null)}
-                            style={{ cursor: repFace?.source_file ? 'pointer' : 'default' }}
-                          >
-                            👥
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="face-group-avatar fallback-group-avatar"
+                          onClick={() => handleOpenSourceImage(repFace || null)}
+                          style={{
+                            display: repUrl ? 'none' : 'flex',
+                            cursor: repFace?.source_file ? 'pointer' : 'default',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          👥
+                        </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <span className="face-group-name">{group.group_id}</span>
@@ -618,18 +625,25 @@ export default function FaceRegistry({
                                 style={{ cursor: primaryRef.source_file ? 'pointer' : 'default' }}
                                 title={primaryRef.source_file ? t('clickToView') : person.name}
                                 onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
+                                  const target = e.target as HTMLElement;
+                                  target.style.display = 'none';
+                                  const fb = target.parentElement?.querySelector('.fallback-person-avatar') as HTMLElement;
+                                  if (fb) fb.style.display = 'flex';
                                 }}
                               />
-                            ) : (
-                              <div
-                                className="person-avatar-circle"
-                                onClick={() => handleOpenSourceImage(primaryRef)}
-                                style={{ cursor: primaryRef.source_file ? 'pointer' : 'default' }}
-                              >
-                                {(person.name || '?')[0].toUpperCase()}
-                              </div>
-                            )}
+                            ) : null}
+                            <div
+                              className="person-avatar-circle fallback-person-avatar"
+                              onClick={() => handleOpenSourceImage(primaryRef)}
+                              style={{
+                                display: primaryImg ? 'none' : 'flex',
+                                cursor: primaryRef.source_file ? 'pointer' : 'default',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {(person.name || '?')[0].toUpperCase()}
+                            </div>
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 <span className="face-name-val" style={{ fontWeight: 600 }}>
@@ -1165,25 +1179,27 @@ export default function FaceRegistry({
                           onClick={() => handleOpenSourceImage(item)}
                           style={{ cursor: 'pointer' }}
                           onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
+                            const target = e.target as HTMLElement;
+                            target.style.display = 'none';
+                            const fb = target.parentElement?.querySelector('.fallback-expanded-img') as HTMLElement;
+                            if (fb) fb.style.display = 'flex';
                           }}
                         />
-                      ) : (
-                        <div
-                          className="expanded-photo-img"
-                          onClick={() => handleOpenSourceImage(item)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.75rem',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {item.face_id}
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="expanded-photo-img fallback-expanded-img"
+                        onClick={() => handleOpenSourceImage(item)}
+                        style={{
+                          display: cropUrl ? 'none' : 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {item.face_id}
+                      </div>
 
                       {isPersonType && (
                         <button

@@ -108,15 +108,15 @@ export class FacesService {
       // ignore
     }
 
-    // Add extensions if name has no extension
-    const ext = path.extname(safeName);
-    if (!ext) {
-      const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
-      const baseTargets = Array.from(targetNames);
-      for (const t of baseTargets) {
-        for (const e of exts) {
-          targetNames.add(`${t}${e}`);
-        }
+    // Add extensions and normalized names
+    const rawBase = safeName.replace(/\.(jpg|jpeg|png|webp|bmp)+$/gi, '');
+    targetNames.add(rawBase);
+    const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.jpg.jpg'];
+    const baseTargets = Array.from(targetNames);
+    for (const t of baseTargets) {
+      for (const e of exts) {
+        targetNames.add(`${t}${e}`);
+        targetNames.add(`${path.basename(t, path.extname(t))}${e}`);
       }
     }
 
