@@ -13,7 +13,7 @@ import type {
 } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
 import { mediaOrganizationService } from '../services/mediaOrganizationService';
-
+import { FlagsManager } from '../services/featureFlagsContext';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
 
@@ -682,6 +682,9 @@ export default function InputSourcesGallery({
         ? file.description_ru || file.description || file.summary_ru || file.summary
         : file.description || file.description_ru || file.summary || file.summary_ru;
 
+    const isVideoThumbActive = FlagsManager.IsActive('first-frame-thumbnail-generation');
+    const shouldLoadThumbnail = file.is_image || isVideoThumbActive;
+
     return (
       <div
         className="gallery-card-item"
@@ -690,42 +693,65 @@ export default function InputSourcesGallery({
         title={`${t('clickToView')}: ${file.filename}`}
       >
         <div className="gallery-thumb-wrap">
-          <img
-            src={thumbUrl}
-            alt={file.filename}
-            className="gallery-thumb-img"
-            loading="lazy"
-            decoding="async"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const fallback = target.nextElementSibling as HTMLElement;
-              if (fallback) fallback.style.display = 'flex';
-            }}
-          />
-          <div
-            className="gallery-thumb-fallback-placeholder"
-            style={{
-              display: 'none',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              height: '100%',
-              flexDirection: 'column',
-              background: file.is_video
-                ? 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)'
-                : 'rgba(255, 255, 255, 0.03)',
-              color: file.is_video ? '#c7d2fe' : 'var(--text-muted)',
-            }}
-          >
-            <span style={{ fontSize: '1.8rem' }}>{file.is_video ? '🎥' : '📷'}</span>
-            <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
-              {file.filename}
-            </span>
-          </div>
+          {shouldLoadThumbnail ? (
+            <>
+              <img
+                src={thumbUrl}
+                alt={file.filename}
+                className="gallery-thumb-img"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div
+                className="gallery-thumb-fallback-placeholder"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: '100%',
+                  flexDirection: 'column',
+                  background: file.is_video
+                    ? 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)'
+                    : 'rgba(255, 255, 255, 0.03)',
+                  color: file.is_video ? '#c7d2fe' : 'var(--text-muted)',
+                }}
+              >
+                <span style={{ fontSize: '1.8rem' }}>{file.is_video ? '🎥' : '📷'}</span>
+                <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
+                  {file.filename}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div
+              className="gallery-thumb-fallback-placeholder"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: '100%',
+                flexDirection: 'column',
+                background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
+                color: '#c7d2fe',
+              }}
+            >
+              <span style={{ fontSize: '2rem' }}>🎥</span>
+              <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
+                {file.filename}
+              </span>
+            </div>
+          )}
 
           {/* Video Play Overlay Indicator */}
-          {file.is_video && (
+          {file.is_video && isVideoThumbActive && (
             <div className="gallery-video-play-overlay">
               <div className="gallery-video-play-btn" title="Video file">
                 <span>▶</span>
@@ -906,6 +932,8 @@ export default function InputSourcesGallery({
           {listTopPadding > 0 && <tr style={{ height: `${listTopPadding}px` }}><td colSpan={9} /></tr>}
           {virtualizedListFiles.map((file) => {
             const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=120`;
+            const isVideoThumbActive = FlagsManager.IsActive('first-frame-thumbnail-generation');
+            const shouldLoadThumb = file.is_image || isVideoThumbActive;
             const isProcessed = file.status === 'PROCESSED';
             const isPending = file.status === 'PENDING';
 
@@ -917,39 +945,45 @@ export default function InputSourcesGallery({
               >
                 <td style={{ textAlign: 'center' }}>
                   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img
-                      src={thumbUrl}
-                      alt={file.filename}
-                      className="media-list-thumb"
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const fallback = target.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = 'inline-block';
-                      }}
-                    />
-                    <span style={{ display: 'none', fontSize: '1.2rem' }}>
-                      {file.is_video ? '🎥' : '📷'}
-                    </span>
-                    {file.is_video && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          bottom: '2px',
-                          right: '2px',
-                          background: 'rgba(0, 0, 0, 0.75)',
-                          color: '#ffffff',
-                          fontSize: '0.62rem',
-                          borderRadius: '3px',
-                          padding: '1px 3px',
-                          lineHeight: 1,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        ▶
-                      </span>
+                    {shouldLoadThumb ? (
+                      <>
+                        <img
+                          src={thumbUrl}
+                          alt={file.filename}
+                          className="media-list-thumb"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const fallback = target.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'inline-block';
+                          }}
+                        />
+                        <span style={{ display: 'none', fontSize: '1.2rem' }}>
+                          {file.is_video ? '🎥' : '📷'}
+                        </span>
+                        {file.is_video && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              right: '2px',
+                              background: 'rgba(0, 0, 0, 0.75)',
+                              color: '#ffffff',
+                              fontSize: '0.62rem',
+                              borderRadius: '3px',
+                              padding: '1px 3px',
+                              lineHeight: 1,
+                              pointerEvents: 'none',
+                            }}
+                          >
+                            ▶
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '1.2rem' }}>🎥</span>
                     )}
                   </div>
                 </td>

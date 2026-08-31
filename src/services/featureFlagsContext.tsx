@@ -1,15 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { FeatureFlag, FeatureFlagsContextValue } from '../models/featureFlags';
 
-const STORAGE_KEY = 'media_cataloger_feature_flags';
-const STYLE_ELEMENT_ID = 'feature-flags-dynamic-styles';
+export const STORAGE_KEY = 'media_cataloger_feature_flags';
+export const STYLE_ELEMENT_ID = 'feature-flags-dynamic-styles';
 
 // Normalize a class name string (strip leading dot, whitespace)
 export function normalizeClassName(cls: string): string {
   return cls.trim().replace(/^\.+/, '');
 }
 
+// Normalize a flag key (case-insensitive, treats '-' and '_' interchangeably)
+export function normalizeFlagKey(key: string): string {
+  return key.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
 export const DEFAULT_FEATURE_FLAG_PRESETS: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>[] = [
+  {
+    key: 'first_frame_thumbnail_generation',
+    classNames: ['gallery-video-play-overlay'],
+    isEnabled: true,
+    description: 'First-frame video thumbnail extraction and preview',
+  },
   {
     key: 'header_logs_button',
     classNames: ['btn-logs-toggle'],
@@ -48,47 +59,214 @@ export const DEFAULT_FEATURE_FLAG_PRESETS: Omit<FeatureFlag, 'createdAt' | 'upda
   },
 ];
 
-const FeatureFlagsContext = createContext<FeatureFlagsContextValue | null>(null);
+/**
+ * FlagsManager - Central singleton for querying and managing feature flags anywhere in the application.
+ * Usage:
+ *   const isEnabled: boolean = FlagsManager.IsActive('first-frame-thumbnail-generation');
+ *   const isEnabled: boolean = FlagsManager.IsActive('first_frame_thumbnail_generation');
+ */
+class FlagsManagerSingleton {
+  private flagsMap: Map<string, FeatureFlag> = new Map();
+  private listeners: Set<(flags: FeatureFlag[]) => void> = new Set();
+  private isInitialized = false;
 
-export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [flags, setFlags] = useState<FeatureFlag[]>(() => {
+  constructor() {
+    this.init();
+  }
+
+  public init(): void {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+    this.loadFromStorage();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY && e.newValue) {
+          this.loadFromStorage();
+          this.notify();
+        }
+      });
+    }
+  }
+
+  public loadFromStorage(): void {
     try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((item) => ({
-            ...item,
-            classNames: Array.isArray(item.classNames)
-              ? item.classNames.map(normalizeClassName).filter(Boolean)
-              : [],
-          }));
+          this.flagsMap.clear();
+          for (const item of parsed) {
+            if (item && item.key) {
+              const normKey = normalizeFlagKey(item.key);
+              this.flagsMap.set(normKey, {
+                ...item,
+                key: item.key,
+                classNames: Array.isArray(item.classNames)
+                  ? item.classNames.map(normalizeClassName).filter(Boolean)
+                  : [],
+                isEnabled: Boolean(item.isEnabled),
+              });
+            }
+          }
+          this.applyCssRules();
+          return;
         }
       }
     } catch (e) {
-      console.warn('[FeatureFlags] Failed to load feature flags from localStorage:', e);
+      console.warn('[FlagsManager] Failed to load from storage:', e);
     }
-    return DEFAULT_FEATURE_FLAG_PRESETS.map((p) => ({
-      ...p,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }));
-  });
 
-  // Persist flags to localStorage
-  const persistFlags = useCallback((updatedFlags: FeatureFlag[]) => {
+    // Default presets fallback
+    this.flagsMap.clear();
+    for (const p of DEFAULT_FEATURE_FLAG_PRESETS) {
+      const normKey = normalizeFlagKey(p.key);
+      this.flagsMap.set(normKey, {
+        ...p,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+    this.applyCssRules();
+  }
+
+  public persist(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFlags));
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      const arr = Array.from(this.flagsMap.values());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+      this.applyCssRules();
+      this.notify();
     } catch (e) {
-      console.warn('[FeatureFlags] Failed to save feature flags to localStorage:', e);
+      console.warn('[FlagsManager] Failed to persist flags:', e);
     }
-  }, []);
+  }
 
-  // Compute disabled class names and inject dynamic CSS
-  useEffect(() => {
+  /**
+   * Main check function: returns boolean whether the flag key is active.
+   * Matches keys case-insensitively and treats dashes/underscores interchangeably.
+   * Example: FlagsManager.IsActive('first-frame-thumbnail-generation')
+   */
+  public IsActive(key: string, defaultValue = true): boolean {
+    if (!key) return defaultValue;
+    const norm = normalizeFlagKey(key);
+    const flag = this.flagsMap.get(norm);
+    if (flag !== undefined) {
+      return Boolean(flag.isEnabled);
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Alias for IsActive (camelCase)
+   */
+  public isActive(key: string, defaultValue = true): boolean {
+    return this.IsActive(key, defaultValue);
+  }
+
+  /**
+   * Check if a CSS class name is currently enabled across all feature flags.
+   */
+  public isClassEnabled(className: string): boolean {
+    const norm = normalizeClassName(className);
+    if (!norm) return true;
+    for (const flag of this.flagsMap.values()) {
+      if (!flag.isEnabled && flag.classNames.some((c) => normalizeClassName(c) === norm)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public getFlags(): FeatureFlag[] {
+    return Array.from(this.flagsMap.values());
+  }
+
+  public getFlag(key: string): FeatureFlag | undefined {
+    return this.flagsMap.get(normalizeFlagKey(key));
+  }
+
+  public setFlag(flag: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>): boolean {
+    const cleanKey = flag.key.trim();
+    if (!cleanKey) return false;
+
+    const normKey = normalizeFlagKey(cleanKey);
+    const normalizedClasses = Array.from(
+      new Set(flag.classNames.map(normalizeClassName).filter(Boolean))
+    );
+
+    const now = Date.now();
+    const existing = this.flagsMap.get(normKey);
+
+    const newFlag: FeatureFlag = {
+      key: cleanKey,
+      classNames: normalizedClasses,
+      isEnabled: flag.isEnabled ?? true,
+      description: flag.description?.trim() || '',
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    this.flagsMap.set(normKey, newFlag);
+    this.persist();
+    return true;
+  }
+
+  public toggleFlag(key: string): boolean {
+    const normKey = normalizeFlagKey(key);
+    const flag = this.flagsMap.get(normKey);
+    if (!flag) return false;
+
+    flag.isEnabled = !flag.isEnabled;
+    flag.updatedAt = Date.now();
+    this.persist();
+    return true;
+  }
+
+  public removeFlag(key: string): boolean {
+    const normKey = normalizeFlagKey(key);
+    const deleted = this.flagsMap.delete(normKey);
+    if (deleted) {
+      this.persist();
+    }
+    return deleted;
+  }
+
+  public resetToDefaults(): void {
+    this.flagsMap.clear();
+    const now = Date.now();
+    for (const p of DEFAULT_FEATURE_FLAG_PRESETS) {
+      const normKey = normalizeFlagKey(p.key);
+      this.flagsMap.set(normKey, {
+        ...p,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    this.persist();
+  }
+
+  public clearAll(): void {
+    this.flagsMap.clear();
+    this.persist();
+  }
+
+  public subscribe(listener: (flags: FeatureFlag[]) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify(): void {
+    const all = this.getFlags();
+    this.listeners.forEach((fn) => fn(all));
+  }
+
+  public applyCssRules(): void {
+    if (typeof document === 'undefined') return;
+
     const disabledClassesSet = new Set<string>();
-
-    for (const flag of flags) {
+    for (const flag of this.flagsMap.values()) {
       if (!flag.isEnabled) {
         for (const cls of flag.classNames) {
           const normalized = normalizeClassName(cls);
@@ -114,185 +292,66 @@ export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       );
       styleEl.textContent = `/* Feature flags disabled class rules */\n${rules.join('\n')}`;
     }
-  }, [flags]);
+  }
+}
 
-  // Sync across tabs via window storage event
+export const FlagsManager = new FlagsManagerSingleton();
+
+const FeatureFlagsContext = createContext<FeatureFlagsContextValue | null>(null);
+
+export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [flags, setFlags] = useState<FeatureFlag[]>(() => FlagsManager.getFlags());
+
+  // Subscribe to FlagsManager changes
   useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) {
-            setFlags(parsed);
-          }
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    return FlagsManager.subscribe((updatedFlags) => {
+      setFlags(updatedFlags);
+    });
   }, []);
 
-  // CRUD handlers
-  const addFlag = useCallback(
-    (flag: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>): boolean => {
-      const trimmedKey = flag.key.trim();
-      if (!trimmedKey) return false;
-
-      const normalizedClasses = Array.from(
-        new Set(flag.classNames.map(normalizeClassName).filter(Boolean))
-      );
-
-      const now = Date.now();
-      const newFlag: FeatureFlag = {
-        key: trimmedKey,
-        classNames: normalizedClasses,
-        isEnabled: flag.isEnabled ?? true,
-        description: flag.description?.trim() || '',
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      setFlags((prev) => {
-        // If key already exists, replace it, otherwise append
-        const exists = prev.some((f) => f.key.toLowerCase() === trimmedKey.toLowerCase());
-        const next = exists
-          ? prev.map((f) => (f.key.toLowerCase() === trimmedKey.toLowerCase() ? newFlag : f))
-          : [...prev, newFlag];
-        persistFlags(next);
-        return next;
-      });
-
-      return true;
-    },
-    [persistFlags]
-  );
+  const addFlag = useCallback((flag: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>) => {
+    return FlagsManager.setFlag(flag);
+  }, []);
 
   const updateFlag = useCallback(
-    (key: string, updates: Partial<Omit<FeatureFlag, 'key'>>): boolean => {
-      let found = false;
-      setFlags((prev) => {
-        const next = prev.map((f) => {
-          if (f.key === key) {
-            found = true;
-            const updatedClassNames = updates.classNames !== undefined
-              ? Array.from(new Set(updates.classNames.map(normalizeClassName).filter(Boolean)))
-              : f.classNames;
-
-            return {
-              ...f,
-              ...updates,
-              classNames: updatedClassNames,
-              updatedAt: Date.now(),
-            };
-          }
-          return f;
-        });
-
-        if (found) {
-          persistFlags(next);
-          return next;
-        }
-        return prev;
+    (key: string, updates: Partial<Omit<FeatureFlag, 'key'>>) => {
+      const existing = FlagsManager.getFlag(key);
+      if (!existing) return false;
+      return FlagsManager.setFlag({
+        ...existing,
+        ...updates,
       });
-      return found;
     },
-    [persistFlags]
+    []
   );
 
-  const toggleFlag = useCallback(
-    (key: string): boolean => {
-      let found = false;
-      setFlags((prev) => {
-        const next = prev.map((f) => {
-          if (f.key === key) {
-            found = true;
-            return {
-              ...f,
-              isEnabled: !f.isEnabled,
-              updatedAt: Date.now(),
-            };
-          }
-          return f;
-        });
-        if (found) {
-          persistFlags(next);
-          return next;
-        }
-        return prev;
-      });
-      return found;
-    },
-    [persistFlags]
-  );
+  const toggleFlag = useCallback((key: string) => {
+    return FlagsManager.toggleFlag(key);
+  }, []);
 
-  const removeFlag = useCallback(
-    (key: string): boolean => {
-      let removed = false;
-      setFlags((prev) => {
-        const next = prev.filter((f) => {
-          if (f.key === key) {
-            removed = true;
-            return false;
-          }
-          return true;
-        });
-        if (removed) {
-          persistFlags(next);
-          return next;
-        }
-        return prev;
-      });
-      return removed;
-    },
-    [persistFlags]
-  );
+  const removeFlag = useCallback((key: string) => {
+    return FlagsManager.removeFlag(key);
+  }, []);
 
   const resetToDefaults = useCallback(() => {
-    const now = Date.now();
-    const defaults = DEFAULT_FEATURE_FLAG_PRESETS.map((p) => ({
-      ...p,
-      createdAt: now,
-      updatedAt: now,
-    }));
-    setFlags(defaults);
-    persistFlags(defaults);
-  }, [persistFlags]);
+    FlagsManager.resetToDefaults();
+  }, []);
 
   const clearAllFlags = useCallback(() => {
-    setFlags([]);
-    persistFlags([]);
-  }, [persistFlags]);
+    FlagsManager.clearAll();
+  }, []);
 
-  const isFeatureEnabled = useCallback(
-    (key: string): boolean => {
-      const found = flags.find((f) => f.key.toLowerCase() === key.toLowerCase());
-      return found ? found.isEnabled : true;
-    },
-    [flags]
-  );
+  const isFeatureEnabled = useCallback((key: string) => {
+    return FlagsManager.IsActive(key);
+  }, []);
 
-  const isClassEnabled = useCallback(
-    (className: string): boolean => {
-      const normalized = normalizeClassName(className);
-      if (!normalized) return true;
-      // If ANY created flag targeting this class is disabled, it is disabled
-      const isExplicitlyDisabled = flags.some(
-        (f) => !f.isEnabled && f.classNames.some((c) => normalizeClassName(c) === normalized)
-      );
-      return !isExplicitlyDisabled;
-    },
-    [flags]
-  );
+  const isClassEnabled = useCallback((className: string) => {
+    return FlagsManager.isClassEnabled(className);
+  }, []);
 
-  const hasFlag = useCallback(
-    (key: string): boolean => {
-      return flags.some((f) => f.key.toLowerCase() === key.toLowerCase());
-    },
-    [flags]
-  );
+  const hasFlag = useCallback((key: string) => {
+    return FlagsManager.getFlag(key) !== undefined;
+  }, []);
 
   const disabledClassesCount = useMemo(() => {
     const set = new Set<string>();
