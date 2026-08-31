@@ -6,9 +6,11 @@ export interface HeaderTranslations {
   navMain: string;
   navMediaLibrary: string;
   navFamilyTree: string;
+  navAdmin: string;
   navMainTooltip: string;
   navMediaLibraryTooltip: string;
   navFamilyTreeTooltip: string;
+  navAdminTooltip: string;
   statusIdle: string;
   statusRunning: string;
   statusPaused: string;
@@ -333,6 +335,36 @@ export interface CommonTranslations {
   default: string;
 }
 
+export interface AdminPanelTranslations {
+  adminTitle: string;
+  adminSubtitle: string;
+  featureFlagsSectionTitle: string;
+  featureFlagsSectionSubtitle: string;
+  btnAddFlag: string;
+  btnResetFlags: string;
+  btnClearAllFlags: string;
+  btnExportFlags: string;
+  btnImportFlags: string;
+  flagKeyLabel: string;
+  flagClassesLabel: string;
+  flagDescLabel: string;
+  flagStatusLabel: string;
+  flagEnabled: string;
+  flagDisabled: string;
+  flagActions: string;
+  searchFlagsPlaceholder: string;
+  noFlagsFound: string;
+  noFlagsMatchSearch: string;
+  modalAddFlagTitle: string;
+  modalEditFlagTitle: string;
+  btnSaveFlag: string;
+  quickPresetsTitle: string;
+  testSandboxTitle: string;
+  testSandboxDesc: string;
+  systemHealthTitle: string;
+  systemStorageTitle: string;
+}
+
 export type TranslationDictionary = HeaderTranslations &
   ExecutionControlsTranslations &
   GalleryTranslations &
@@ -341,4 +373,5 @@ export type TranslationDictionary = HeaderTranslations &
   SettingsTranslations &
   ThemeTranslations &
   LogsTranslations &
-  CommonTranslations;
+  CommonTranslations &
+  AdminPanelTranslations;

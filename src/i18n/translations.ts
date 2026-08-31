@@ -10,6 +10,7 @@ import type {
   ThemeTranslations,
   LogsTranslations,
   CommonTranslations,
+  AdminPanelTranslations,
 } from '../models';
 
 export type {
@@ -24,6 +25,7 @@ export type {
   ThemeTranslations,
   LogsTranslations,
   CommonTranslations,
+  AdminPanelTranslations,
 };
 
 export const headerTranslationsEn: HeaderTranslations = {
@@ -32,9 +34,11 @@ export const headerTranslationsEn: HeaderTranslations = {
   navMain: 'Media Library',
   navMediaLibrary: 'Media Recognition',
   navFamilyTree: 'Family Tree',
+  navAdmin: 'Admin Panel',
   navMainTooltip: 'Media Library - Input Sources Gallery',
   navMediaLibraryTooltip: 'Media Recognition - Face Recognition & Pipeline Analysis',
   navFamilyTreeTooltip: 'Family Tree - Genealogical Graph & Life Chronology',
+  navAdminTooltip: 'Admin Panel - Feature Flags & System Management',
   statusIdle: 'System Idle / Ready',
   statusRunning: 'Running',
   statusPaused: 'Paused',
@@ -58,9 +62,11 @@ export const headerTranslationsRu: HeaderTranslations = {
   navMain: 'Медиатека',
   navMediaLibrary: 'Распознавание медиа',
   navFamilyTree: 'Семейное древо',
+  navAdmin: 'Панель администратора',
   navMainTooltip: 'Медиатека — Галерея исходных медиафайлов',
   navMediaLibraryTooltip: 'Распознавание медиа — Распознавание лиц и анализ пайплайна',
   navFamilyTreeTooltip: 'Семейное древо — Интерактивный граф и хроника жизни',
+  navAdminTooltip: 'Панель администратора — Управление флагами функций и системой',
   statusIdle: 'Система готова к работе',
   statusRunning: 'Выполняется',
   statusPaused: 'Приостановлено',
@@ -691,6 +697,66 @@ export const commonTranslationsRu: CommonTranslations = {
   default: 'По умолчанию',
 };
 
+export const adminPanelTranslationsEn: AdminPanelTranslations = {
+  adminTitle: 'Admin Panel',
+  adminSubtitle: 'System configuration, feature flag controls, and diagnostics',
+  featureFlagsSectionTitle: 'Feature Flag Controls (Class-based)',
+  featureFlagsSectionSubtitle: 'Toggle UI components dynamically by their CSS class names. Disabled class names are hidden from the layout.',
+  btnAddFlag: 'Add Feature Flag',
+  btnResetFlags: 'Reset to Presets',
+  btnClearAllFlags: 'Clear All Flags',
+  btnExportFlags: 'Export JSON',
+  btnImportFlags: 'Import JSON',
+  flagKeyLabel: 'Flag Key',
+  flagClassesLabel: 'CSS Class Names',
+  flagDescLabel: 'Description',
+  flagStatusLabel: 'Status',
+  flagEnabled: 'Enabled (Visible)',
+  flagDisabled: 'Disabled (Hidden)',
+  flagActions: 'Actions',
+  searchFlagsPlaceholder: 'Search flags by key, class, or description...',
+  noFlagsFound: 'No feature flags created yet.',
+  noFlagsMatchSearch: 'No feature flags match your search query.',
+  modalAddFlagTitle: 'Create Feature Flag',
+  modalEditFlagTitle: 'Edit Feature Flag',
+  btnSaveFlag: 'Save Flag',
+  quickPresetsTitle: 'Quick UI Presets',
+  testSandboxTitle: 'Live Class Toggle Sandbox',
+  testSandboxDesc: 'Test class-based visibility toggling in real time with test elements and inspector.',
+  systemHealthTitle: 'System Health & Overview',
+  systemStorageTitle: 'Local Storage & Cache State',
+};
+
+export const adminPanelTranslationsRu: AdminPanelTranslations = {
+  adminTitle: 'Панель администратора',
+  adminSubtitle: 'Настройки системы, управление флагами функций и диагностика',
+  featureFlagsSectionTitle: 'Управление флагами функций (по CSS-классам)',
+  featureFlagsSectionSubtitle: 'Динамическое переключение видимости компонентов по их CSS-классам. Отключённые классы скрываются из интерфейса.',
+  btnAddFlag: 'Добавить флаг функции',
+  btnResetFlags: 'Сбросить к пресетам',
+  btnClearAllFlags: 'Очистить все флаги',
+  btnExportFlags: 'Экспорт JSON',
+  btnImportFlags: 'Импорт JSON',
+  flagKeyLabel: 'Ключ флага',
+  flagClassesLabel: 'CSS-классы',
+  flagDescLabel: 'Описание',
+  flagStatusLabel: 'Статус',
+  flagEnabled: 'Включён (Отображается)',
+  flagDisabled: 'Отключён (Скрыт)',
+  flagActions: 'Действия',
+  searchFlagsPlaceholder: 'Поиск флагов по ключу, классу или описанию...',
+  noFlagsFound: 'Флаги функций пока не созданы.',
+  noFlagsMatchSearch: 'Флаги функций не найдены по вашему запросу.',
+  modalAddFlagTitle: 'Создание флага функции',
+  modalEditFlagTitle: 'Редактирование флага функции',
+  btnSaveFlag: 'Сохранить флаг',
+  quickPresetsTitle: 'Быстрые пресеты интерфейса',
+  testSandboxTitle: 'Интерактивная песочница классов',
+  testSandboxDesc: 'Проверьте переключение видимости в реальном времени с тестовыми элементами и инспектором.',
+  systemHealthTitle: 'Состояние системы и обзор',
+  systemStorageTitle: 'Состояние локального хранилища и кэша',
+};
+
 export const translations: Record<Language, TranslationDictionary> = {
   en: {
     ...headerTranslationsEn,
@@ -702,6 +768,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     ...themeTranslationsEn,
     ...logsTranslationsEn,
     ...commonTranslationsEn,
+    ...adminPanelTranslationsEn,
   },
   ru: {
     ...headerTranslationsRu,
@@ -713,5 +780,6 @@ export const translations: Record<Language, TranslationDictionary> = {
     ...themeTranslationsRu,
     ...logsTranslationsRu,
     ...commonTranslationsRu,
+    ...adminPanelTranslationsRu,
   },
 };

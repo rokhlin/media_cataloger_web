@@ -14,6 +14,7 @@ import type { StatusInfo, SettingsData, UISettings } from './models';
 import { errorInterceptor } from './utils/errorInterceptor';
 import { mediaCacheService } from './services/mediaCacheService';
 import HeaderNavTabs from './components/HeaderNavTabs';
+import AdminPanel from './components/AdminPanel';
 import './App.css';
 
 function App() {
@@ -862,6 +863,16 @@ function App() {
               style={{ width: '100%', height: 'calc(100vh - 120px)', minHeight: 650, position: 'relative' }}
             >
               <FamilyTreeTab />
+            </div>
+          )}
+
+          {activeTab === 'admin' && (
+            <div className="tab-pane active" id="pane-admin">
+              <AdminPanel
+                statusInfo={statusInfo}
+                mediaFilesCount={mediaFiles.length}
+                facesCount={faces.length}
+              />
             </div>
           )}
         </main>

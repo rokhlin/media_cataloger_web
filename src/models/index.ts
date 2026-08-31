@@ -5,3 +5,4 @@ export * from './settings';
 export * from './modals';
 export * from './i18n';
 export * from './theme';
+export * from './featureFlags';

@@ -9,8 +9,8 @@ export interface HeaderNavTabsProps {
 export interface NavTabItem {
   id: string;
   icon: string;
-  titleKey: 'navMain' | 'navMediaLibrary' | 'navFamilyTree';
-  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navFamilyTreeTooltip';
+  titleKey: 'navMain' | 'navMediaLibrary' | 'navFamilyTree' | 'navAdmin';
+  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navFamilyTreeTooltip' | 'navAdminTooltip';
 }
 
 const NAV_TABS: NavTabItem[] = [
@@ -31,6 +31,12 @@ const NAV_TABS: NavTabItem[] = [
     icon: '🌳',
     titleKey: 'navFamilyTree',
     tooltipKey: 'navFamilyTreeTooltip',
+  },
+  {
+    id: 'admin',
+    icon: '🛡️',
+    titleKey: 'navAdmin',
+    tooltipKey: 'navAdminTooltip',
   },
 ];
 

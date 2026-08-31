@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { LanguageProvider } from './i18n/LanguageContext';
 import { ThemeProvider } from './theme/ThemeContext';
+import { FeatureFlagsProvider } from './services/featureFlagsContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,7 +15,9 @@ createRoot(rootElement).render(
   <StrictMode>
     <LanguageProvider>
       <ThemeProvider>
-        <App />
+        <FeatureFlagsProvider>
+          <App />
+        </FeatureFlagsProvider>
       </ThemeProvider>
     </LanguageProvider>
   </StrictMode>
