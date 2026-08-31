@@ -22,8 +22,10 @@ export class ThumbnailService {
   ]);
 
   constructor(@Inject(AppConfigService) private readonly config: AppConfigService) {
-    this.cacheDir = path.resolve(this.config.projectRoot, 'data', 'cache', 'thumbnails');
+    const baseOutput = this.config.outputFolder || path.resolve(this.config.projectRoot || process.cwd(), 'media_output');
+    this.cacheDir = path.resolve(baseOutput, 'cache', 'thumbnails');
     this.ensureCacheDir();
+    this.migrateLegacyThumbnails();
   }
 
   private ensureCacheDir(): void {
@@ -33,6 +35,38 @@ export class ThumbnailService {
       }
     } catch (err: any) {
       this.logger.warn(`Failed to create thumbnail cache directory: ${err.message}`);
+    }
+  }
+
+  private migrateLegacyThumbnails(): void {
+    try {
+      const legacyCacheDir = path.resolve(this.config.projectRoot || process.cwd(), 'data', 'cache', 'thumbnails');
+      if (fs.existsSync(legacyCacheDir) && legacyCacheDir !== this.cacheDir) {
+        const files = fs.readdirSync(legacyCacheDir);
+        for (const file of files) {
+          const oldPath = path.join(legacyCacheDir, file);
+          const newPath = path.join(this.cacheDir, file);
+          if (!fs.existsSync(newPath)) {
+            try {
+              fs.renameSync(oldPath, newPath);
+            } catch {
+              fs.copyFileSync(oldPath, newPath);
+              fs.unlinkSync(oldPath);
+            }
+          }
+        }
+        try {
+          fs.rmdirSync(legacyCacheDir);
+          const legacyParent = path.dirname(legacyCacheDir);
+          if (fs.existsSync(legacyParent) && fs.readdirSync(legacyParent).length === 0) {
+            fs.rmdirSync(legacyParent);
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Legacy thumbnail migration check failed: ${err.message}`);
     }
   }
 

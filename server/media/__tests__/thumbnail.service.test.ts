@@ -30,6 +30,7 @@ describe('ThumbnailService', () => {
 
     const mockConfig = {
       projectRoot: tmpDir,
+      outputFolder: tmpDir,
     } as unknown as AppConfigService;
 
     thumbnailService = new ThumbnailService(mockConfig);
