@@ -743,13 +743,13 @@ export default function InputSourcesGallery({
                 👤 {file.face_count}
               </span>
             )}
-            {Boolean(file.family_context?.suggested_caption || (file.family_context?.identified_members && file.family_context.identified_members.length > 0)) && (
+            {file.family_context && (
               <span
-                className="gallery-tag"
+                className="gallery-tag gallery-tag-family"
                 style={{ background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#ffffff', fontWeight: 600 }}
                 title={file.family_context?.suggested_caption || 'Family Kinship Context'}
               >
-                🌳
+               🌳
               </span>
             )}
             <span
@@ -1171,11 +1171,9 @@ export default function InputSourcesGallery({
             <span className="badge-pill badge-pill-secondary">
               📷 {imageCount} {t('badgePhotos')}
             </span>
-            {videoCount > 0 && (
-              <span className="badge-pill badge-pill-secondary">
-                🎥 {videoCount} {t('badgeVideos')}
-              </span>
-            )}
+            <span className="badge-pill badge-pill-secondary">
+              🎥 {videoCount} {t('badgeVideos')}
+            </span>
           </div>
         </div>
 

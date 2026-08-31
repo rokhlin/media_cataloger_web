@@ -12,6 +12,7 @@ import SettingsModal, { type SettingsTab } from './components/SettingsModal';
 import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
 import { errorInterceptor } from './utils/errorInterceptor';
+import { mediaCacheService } from './services/mediaCacheService';
 import './App.css';
 
 function App() {
@@ -166,16 +167,26 @@ function App() {
     setIsMediaLoading(true);
 
     try {
-      const res = await fetch(
-        `/api/media/files?offset=0&limit=${CHUNK_SIZE}${refresh ? '&refresh=true' : ''}`,
-        { signal: abortCtrl.signal }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const files = data.files || [];
-        setMediaFiles(files);
-        setTotalKnownFiles(data.total ?? data.total_files ?? files.length);
+      await mediaCacheService.init();
+      // Initially, render whatever is instantly available in the local cache
+      const cached = mediaCacheService.getAll();
+      if (cached.length > 0) {
+        setMediaFiles(cached);
+        setTotalKnownFiles(mediaCacheService.total);
       }
+
+      // Then fetch from server
+      const res = await mediaCacheService.fetchChunk({
+        offset: 0,
+        limit: CHUNK_SIZE,
+        refresh
+      });
+      
+      setMediaFiles(mediaCacheService.getAll());
+      setTotalKnownFiles(res.total);
+
+      // Start prefetching next chunks in the background if needed
+      mediaCacheService.prefetchNextChunk(0, CHUNK_SIZE);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error('Error loading media files:', err);
@@ -193,21 +204,11 @@ function App() {
 
     setIsBackgroundLoading(true);
     try {
-      const res = await fetch(`/api/media/files?offset=${currentOffset}&limit=100`);
-      if (res.ok) {
-        const data = await res.json();
-        const nextFiles = data.files || [];
-        if (nextFiles.length > 0) {
-          setMediaFiles((prev) => {
-            const seen = new Set(prev.map((f) => f.file_path || f.filename));
-            const unique = nextFiles.filter((f: any) => !seen.has(f.file_path || f.filename));
-            return [...prev, ...unique];
-          });
-          if (data.total !== undefined) {
-            setTotalKnownFiles(data.total);
-          }
-        }
-      }
+      const res = await mediaCacheService.fetchChunk({ offset: currentOffset, limit: 100 });
+      setMediaFiles(mediaCacheService.getAll());
+      setTotalKnownFiles(res.total);
+
+      mediaCacheService.prefetchNextChunk(currentOffset, 100);
     } catch (err) {
       console.error('Error fetching more media files on scroll:', err);
     } finally {
