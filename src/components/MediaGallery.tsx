@@ -667,7 +667,8 @@ export default function InputSourcesGallery({
   const processedCount = mediaFiles.filter((f) => f.status === 'PROCESSED').length;
   const imageCount = mediaFiles.filter((f) => f.is_image).length;
   const videoCount = mediaFiles.filter((f) => f.is_video).length;
-
+  const showRefresh = FlagsManager.IsActive('app-show-media-file-refresh');
+  const showSwitchToControls = FlagsManager.IsActive('app-show-controls-switch');
   // Effective language in Lightbox
   const activeDetailLang = lightboxLang === 'active' ? language : lightboxLang;
 
@@ -1284,7 +1285,7 @@ export default function InputSourcesGallery({
             </button>
           </div>
 
-          {onRefresh && (
+          {(showRefresh && onRefresh) && (
             <button
               className="btn btn-secondary"
               style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
@@ -1298,7 +1299,7 @@ export default function InputSourcesGallery({
             </button>
           )}
 
-          {onSwitchToControls && (
+          {(showSwitchToControls && onSwitchToControls) && (
             <button
               className="btn btn-secondary"
               style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}

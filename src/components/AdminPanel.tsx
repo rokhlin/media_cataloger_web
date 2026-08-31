@@ -123,11 +123,6 @@ export default function AdminPanel({
       finalClasses.push(pendingNorm);
     }
 
-    if (finalClasses.length === 0) {
-      setFormError('At least one CSS class name is required.');
-      return;
-    }
-
     if (editingFlagKey) {
       // Editing existing
       const ok = updateFlag(editingFlagKey, {
@@ -202,10 +197,10 @@ export default function AdminPanel({
         if (Array.isArray(parsed)) {
           let count = 0;
           for (const item of parsed) {
-            if (item.key && Array.isArray(item.classNames)) {
+            if (item.key) {
               addFlag({
                 key: item.key,
-                classNames: item.classNames,
+                classNames: Array.isArray(item.classNames) ? item.classNames : [],
                 isEnabled: Boolean(item.isEnabled),
                 description: item.description || '',
               });
@@ -464,19 +459,25 @@ export default function AdminPanel({
                           <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
                             Classes:
                           </span>
-                          {flag.classNames.map((cls) => (
-                            <span
-                              key={cls}
-                              className={`class-tag ${isEnabled ? '' : 'disabled-class'}`}
-                              title={
-                                isEnabled
-                                  ? `Class .${cls} is currently visible`
-                                  : `Class .${cls} is hidden via display:none`
-                              }
-                            >
-                              .{cls}
+                          {flag.classNames.length > 0 ? (
+                            flag.classNames.map((cls) => (
+                              <span
+                                key={cls}
+                                className={`class-tag ${isEnabled ? '' : 'disabled-class'}`}
+                                title={
+                                  isEnabled
+                                    ? `Class .${cls} is currently visible`
+                                    : `Class .${cls} is hidden via display:none`
+                                }
+                              >
+                                .{cls}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              None (code/boolean flag)
                             </span>
-                          ))}
+                          )}
                         </div>
                       </div>
 
@@ -760,8 +761,13 @@ export default function AdminPanel({
                 {/* Class Names Tag Input */}
                 <div className="admin-form-group">
                   <label className="admin-form-label">
-                    <span>{t('flagClassesLabel')} *</span>
-                    <span className="admin-form-hint">Press Enter or comma to add class names</span>
+                    <span>
+                      {t('flagClassesLabel')}{' '}
+                      <span style={{ fontSize: '0.78rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>
+                        (Optional)
+                      </span>
+                    </span>
+                    <span className="admin-form-hint">Optional CSS classes to hide with display:none when disabled</span>
                   </label>
 
                   <div className="tag-input-container">
