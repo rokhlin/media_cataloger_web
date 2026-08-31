@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
 import ExecutionControls from './components/ExecutionControls';
-import InputSourcesGallery, { type GalleryMediaFile } from './components/InputSourcesGallery';
+import InputSourcesGallery, { type GalleryMediaFile } from './components/MediaGallery.js';
 import FaceRegistry, {
   type FaceRegistryFace,
   type FaceRegistryPerson,

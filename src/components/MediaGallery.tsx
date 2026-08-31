@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
 import type {
   PersonItem,
   UISettings,
   GalleryMediaFile,
   DetectedFaceRecord,
+  DateGroupNode,
+  PersonGroupNode,
   GalleryViewMode,
   MediaSortField,
   MediaSortOrder,
@@ -354,32 +356,97 @@ export default function InputSourcesGallery({
 
   // Filtered and sorted files
   const trimmedSearch = searchQuery.trim();
-  const filteredFiles = useMemo(() => {
+  
+  const [filteredFiles, setFilteredFiles] = useState<GalleryMediaFile[]>([]);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
+  const [dateGroups, setDateGroups] = useState<DateGroupNode[]>([]);
+  const [personGroups, setPersonGroups] = useState<PersonGroupNode[]>([]);
+  
+  const [, startTransition] = useTransition();
 
-    const filtered = mediaOrganizationService.filterMediaFiles(mediaFiles, {
-      searchQuery,
-      typeFilter,
-      statusFilter,
-      faceFilter,
-      selectedPerson,
-      selectedFolder: selectedFolder || undefined,
-    });
-    return mediaOrganizationService.sortMediaFiles(filtered, sortBy, sortOrder);
+  // Async process for filtering and sorting
+  useEffect(() => {
+    let isActive = true;
+    const processFilters = async () => {
+      try {
+        const filtered = await mediaOrganizationService.filterMediaFiles(mediaFiles, {
+          searchQuery,
+          typeFilter,
+          statusFilter,
+          faceFilter,
+          selectedPerson,
+          selectedFolder: selectedFolder || undefined,
+        });
+        const sorted = await mediaOrganizationService.sortMediaFiles(filtered, sortBy, sortOrder);
+        
+        if (isActive) {
+          startTransition(() => {
+            setFilteredFiles(sorted);
+          });
+        }
+      } catch (e) {
+        console.error("Filter error", e);
+      }
+    };
+    processFilters();
+    return () => { isActive = false; };
   }, [mediaFiles, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder]);
 
-  // Hierarchical Folder Tree built over all scanned media files
-  const folderTree = useMemo(() => {
-    return mediaOrganizationService.buildFolderTree(mediaFiles);
+  // Async process for folder tree (depends only on mediaFiles)
+  useEffect(() => {
+    let isActive = true;
+    const processTree = async () => {
+      try {
+        const tree = await mediaOrganizationService.buildFolderTree(mediaFiles);
+        if (isActive) {
+          startTransition(() => {
+            setFolderTree(tree);
+          });
+        }
+      } catch (e) {
+        console.error("Tree error", e);
+      }
+    };
+    processTree();
+    return () => { isActive = false; };
   }, [mediaFiles]);
 
-  // Date / Timeline groups
-  const dateGroups = useMemo(() => {
-    return mediaOrganizationService.groupByDate(filteredFiles, language === 'ru' ? 'ru' : 'en');
+  // Async process for date groups (depends on filteredFiles and language)
+  useEffect(() => {
+    let isActive = true;
+    const processDates = async () => {
+      try {
+        const dates = await mediaOrganizationService.groupByDate(filteredFiles, language === 'ru' ? 'ru' : 'en');
+        if (isActive) {
+          startTransition(() => {
+            setDateGroups(dates);
+          });
+        }
+      } catch (e) {
+        console.error("Dates error", e);
+      }
+    };
+    processDates();
+    return () => { isActive = false; };
   }, [filteredFiles, language]);
 
-  // Person groups
-  const personGroups = useMemo(() => {
-    return mediaOrganizationService.groupByPerson(filteredFiles, knownPersonOptions);
+  // Async process for person groups
+  useEffect(() => {
+    let isActive = true;
+    const processPersons = async () => {
+      try {
+        const personsResult = await mediaOrganizationService.groupByPerson(filteredFiles, knownPersonOptions);
+        if (isActive) {
+          startTransition(() => {
+            setPersonGroups(personsResult);
+          });
+        }
+      } catch (e) {
+        console.error("Persons error", e);
+      }
+    };
+    processPersons();
+    return () => { isActive = false; };
   }, [filteredFiles, knownPersonOptions]);
 
   const hasActiveFilters =
@@ -1030,7 +1097,7 @@ export default function InputSourcesGallery({
                     '--gallery-item-min-width': '140px',
                   } as React.CSSProperties}
                 >
-                  {group.files.map((file) => renderCardItem(file))}
+                  {group.files.map((file: GalleryMediaFile) => renderCardItem(file))}
                 </div>
               </div>
             )}
@@ -1079,7 +1146,7 @@ export default function InputSourcesGallery({
                     '--gallery-item-min-width': '140px',
                   } as React.CSSProperties}
                 >
-                  {group.files.map((file) => renderCardItem(file))}
+                  {group.files.map((file: GalleryMediaFile) => renderCardItem(file))}
                 </div>
               </div>
             )}

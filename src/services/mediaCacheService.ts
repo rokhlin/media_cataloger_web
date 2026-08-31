@@ -1,4 +1,5 @@
 import type { GalleryMediaFile, MediaCatalogResponse } from '../models/media';
+import { openDB, IDBPDatabase } from 'idb';
 
 export interface FetchChunkOptions {
   offset?: number;
@@ -14,6 +15,10 @@ export interface FetchChunkOptions {
   refresh?: boolean;
 }
 
+const DB_NAME = 'media-catalog-db';
+const DB_VERSION = 1;
+const STORE_NAME = 'media-files';
+
 /**
  * High-performance client-side cache & background chunk loader for media items
  */
@@ -23,15 +28,69 @@ export class MediaCacheService {
   private totalCount: number = 0;
   private isPrefetching: boolean = false;
   private pendingRequests: Map<string, Promise<MediaCatalogResponse>> = new Map();
+  private dbPromise: Promise<IDBPDatabase | null>;
+  private initialized: boolean = false;
+
+  constructor() {
+    this.dbPromise = this.initDB();
+  }
+
+  private async initDB(): Promise<IDBPDatabase | null> {
+    try {
+      return await openDB(DB_NAME, DB_VERSION, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to initialize IndexedDB, falling back to in-memory cache:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Initialize cache from IndexedDB
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    const db = await this.dbPromise;
+    if (db) {
+      try {
+        const allFiles = await db.getAll(STORE_NAME);
+        for (const fileRecord of allFiles) {
+          const file = fileRecord.data;
+          const key = file.file_path || file.filename;
+          if (!this.cache.has(key)) {
+            this.orderedKeys.push(key);
+          }
+          this.cache.set(key, file);
+        }
+        this.totalCount = this.cache.size;
+      } catch (error) {
+        console.warn('Failed to load from IndexedDB:', error);
+      }
+    }
+    this.initialized = true;
+  }
 
   /**
    * Clear all client-side cached files
    */
-  clear(): void {
+  async clear(): Promise<void> {
     this.cache.clear();
     this.orderedKeys = [];
     this.totalCount = 0;
     this.pendingRequests.clear();
+    const db = await this.dbPromise;
+    if (db) {
+      try {
+        await db.clear(STORE_NAME);
+      } catch (error) {
+        console.warn('Failed to clear IndexedDB:', error);
+      }
+    }
   }
 
   /**
@@ -65,28 +124,48 @@ export class MediaCacheService {
   /**
    * Optimistically update or insert a file in the client cache
    */
-  upsert(file: GalleryMediaFile): void {
+  async upsert(file: GalleryMediaFile): Promise<void> {
     const key = file.file_path || file.filename;
     if (!this.cache.has(key)) {
       this.orderedKeys.push(key);
     }
     this.cache.set(key, file);
+    const db = await this.dbPromise;
+    if (db) {
+      try {
+        await db.put(STORE_NAME, { id: key, data: file });
+      } catch (error) {
+        console.warn('Failed to upsert to IndexedDB:', error);
+      }
+    }
   }
 
   /**
    * Merge new chunk of files into client cache preserving order
    */
-  mergeChunk(files: GalleryMediaFile[], total?: number): GalleryMediaFile[] {
+  async mergeChunk(files: GalleryMediaFile[], total?: number): Promise<GalleryMediaFile[]> {
     if (typeof total === 'number') {
       this.totalCount = total;
     }
+    const db = await this.dbPromise;
+    const tx = db ? db.transaction(STORE_NAME, 'readwrite') : null;
+    const store = tx ? tx.objectStore(STORE_NAME) : null;
+
     for (const f of files) {
       const key = f.file_path || f.filename;
       if (!this.cache.has(key)) {
         this.orderedKeys.push(key);
       }
       this.cache.set(key, f);
+      if (store) {
+        store.put({ id: key, data: f }).catch(() => {});
+      }
     }
+    
+    if (tx) {
+      await tx.done.catch(e => console.warn('IndexedDB transaction failed:', e));
+    }
+    
     return this.getAll();
   }
 
@@ -136,11 +215,11 @@ export class MediaCacheService {
 
         if (options.refresh || options.offset === 0) {
           if (options.refresh) {
-            this.clear();
+            await this.clear();
           }
         }
 
-        this.mergeChunk(files, total);
+        await this.mergeChunk(files, total);
 
         return {
           files,
