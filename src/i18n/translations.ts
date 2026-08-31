@@ -125,7 +125,7 @@ export const executionControlsTranslationsRu: ExecutionControlsTranslations = {
 };
 
 export const galleryTranslationsEn: GalleryTranslations = {
-  galleryTitle: 'Input Sources Gallery',
+  galleryTitle: 'Media Gallery',
   searchPlaceholder: 'Search descriptions, folders, face names (min 5 chars)...',
   searchHint: 'Type at least 5 characters to filter media items',
   filterAllTypes: 'All Types',

@@ -732,9 +732,9 @@ export default function InputSourcesGallery({
 
           {/* Media Type & Status Badges */}
           <div className="gallery-thumb-badges">
-            <span className="gallery-tag gallery-tag-type">
+            {/* <span className="gallery-tag gallery-tag-type">
               {file.is_video ? '🎥' : '📷'}
-            </span>
+            </span> */}
             {Boolean(file.face_count && file.face_count > 0) && (
               <span
                 className="gallery-tag gallery-tag-faces"
@@ -749,7 +749,7 @@ export default function InputSourcesGallery({
                 style={{ background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#ffffff', fontWeight: 600 }}
                 title={file.family_context?.suggested_caption || 'Family Kinship Context'}
               >
-               🌳
+               {/* 🌳 */}
               </span>
             )}
             <span
@@ -761,7 +761,7 @@ export default function InputSourcesGallery({
                   : 'gallery-tag-unprocessed'
               }`}
             >
-              {isProcessed ? '✓' : isPending ? '⏳' : '○'}
+              {/* {isProcessed ? '✓' : isPending ? '⏳' : '○'} */}
             </span>
           </div>
         </div>
@@ -1160,7 +1160,7 @@ export default function InputSourcesGallery({
     <div className="card media-gallery-card">
       <div className="gallery-header-row">
         <div className="gallery-title-wrap">
-          <h2 style={{ margin: 0 }}>🖼️ {t('galleryTitle')}</h2>
+          <h2 style={{ margin: 0 }}>{t('galleryTitle')}</h2>
           <div className="gallery-stats-badges">
             <span className="badge-pill badge-pill-accent">
               {totalCount} {t('badgeMediaFiles')}

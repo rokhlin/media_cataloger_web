@@ -13,6 +13,7 @@ import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
 import { errorInterceptor } from './utils/errorInterceptor';
 import { mediaCacheService } from './services/mediaCacheService';
+import HeaderNavTabs from './components/HeaderNavTabs';
 import './App.css';
 
 function App() {
@@ -43,6 +44,28 @@ function App() {
 
   // Tab navigation: 'main' (Sources / Gallery) or 'media_library' (Face Registry & Controls)
   const [activeTab, setActiveTab] = useState<'main' | 'media_library' | string>('main');
+
+  // Navigation sidebar expanded state
+  const [isNavExpanded, setIsNavExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('media_cataloger_nav_expanded');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleNav = useCallback(() => {
+    setIsNavExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('media_cataloger_nav_expanded', String(next));
+      } catch (e) {
+        console.warn('Failed to save nav expanded state:', e);
+      }
+      return next;
+    });
+  }, []);
 
   // Logs visibility: hidden by default
   const [showLogs, setShowLogs] = useState(false);
@@ -742,8 +765,6 @@ function App() {
           setSettingsTab('appearance');
           setIsSettingsOpen(true);
         }}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
         showLogs={showLogs}
         onToggleLogs={() => setShowLogs((prev) => !prev)}
         isScanning={isMediaLoading || Boolean(scanProgress?.is_scanning)}
@@ -752,88 +773,99 @@ function App() {
           scanProgress?.current_filename ||
           (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
         }
+        isNavExpanded={isNavExpanded}
+        onToggleNavExpanded={handleToggleNav}
       />
 
-      <main className="app-main-content">
-        {activeTab === 'main' && (
-          <div className="tab-pane active" id="pane-main">
-            <InputSourcesGallery
-              mediaFiles={mediaFiles}
-              isLoading={isMediaLoading}
-              isBackgroundLoading={isBackgroundLoading}
-              totalKnownFiles={totalKnownFiles}
-              onRefresh={loadMediaFiles}
-              onFetchMore={fetchMoreMediaFiles}
-              onStartSingleAnalysis={handleStartSingleAnalysis}
-              onSwitchToControls={() => setActiveTab('media_library')}
-              persons={persons}
-              uiSettings={uiSettings}
-              disabled={isRunning || isPaused}
-              onReloadFaces={loadFaces}
-              onViewInFamilyTree={handleViewInFamilyTree}
-              currentLoadingFile={
-                scanProgress?.current_file ||
-                statusInfo.progress?.current_file ||
-                (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
-                  ? statusInfo.queue.in_flight_files[0]
-                  : null)
-              }
-              currentLoadingFilename={
-                scanProgress?.current_filename ||
-                (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
-              }
-              scannedFilesCount={scanProgress?.scanned_count || 0}
-              activeInputFolders={settings?.input_folders || []}
-            />
-          </div>
-        )}
+      <div className="app-body-layout">
+        {/* Dedicated Navigation items container on the left side */}
+        <HeaderNavTabs
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isExpanded={isNavExpanded}
+        />
 
-        {activeTab === 'media_library' && (
-          <div className="tab-pane active media-library-layout" id="pane-media-library">
-            <FaceRegistry
-              faces={faces}
-              persons={persons}
-              unrecognizedFaces={unrecognizedFaces}
-              unrecognizedGroups={unrecognizedGroups}
-              isLoading={facesLoading}
-              error={facesError}
-              onRenameFace={handleRenameFace}
-              onAssignFace={handleAssignFace}
-              onAssignGroup={handleAssignGroup}
-              onResetFace={handleResetFace}
-              onResetFacesByFilename={handleResetFacesByFilename}
-              onDeleteFace={handleDeleteFace}
-              onDeleteFacesBatch={handleDeleteFacesBatch}
-              disabled={isRunning || isPaused}
-              uiSettings={uiSettings}
-              onViewInFamilyTree={handleViewInFamilyTree}
-            />
+        <main className="app-main-content">
+          {activeTab === 'main' && (
+            <div className="tab-pane active" id="pane-main">
+              <InputSourcesGallery
+                mediaFiles={mediaFiles}
+                isLoading={isMediaLoading}
+                isBackgroundLoading={isBackgroundLoading}
+                totalKnownFiles={totalKnownFiles}
+                onRefresh={loadMediaFiles}
+                onFetchMore={fetchMoreMediaFiles}
+                onStartSingleAnalysis={handleStartSingleAnalysis}
+                onSwitchToControls={() => setActiveTab('media_library')}
+                persons={persons}
+                uiSettings={uiSettings}
+                disabled={isRunning || isPaused}
+                onReloadFaces={loadFaces}
+                onViewInFamilyTree={handleViewInFamilyTree}
+                currentLoadingFile={
+                  scanProgress?.current_file ||
+                  statusInfo.progress?.current_file ||
+                  (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
+                    ? statusInfo.queue.in_flight_files[0]
+                    : null)
+                }
+                currentLoadingFilename={
+                  scanProgress?.current_filename ||
+                  (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+                }
+                scannedFilesCount={scanProgress?.scanned_count || 0}
+                activeInputFolders={settings?.input_folders || []}
+              />
+            </div>
+          )}
 
-            <ExecutionControls
-              isRunning={isRunning}
-              isPaused={isPaused}
-              currentTask={statusInfo.current_task}
-              onStartSync={handleStartSync}
-              onPauseSync={handlePauseSync}
-              onResumeSync={handleResumeSync}
-              onStopSync={handleStopSync}
-              onStartSingleAnalysis={handleStartSingleAnalysis}
-              onPickSingleFile={handlePickFile}
-              pickerPending={pickerPending}
-            />
-          </div>
-        )}
+          {activeTab === 'media_library' && (
+            <div className="tab-pane active media-library-layout" id="pane-media-library">
+              <FaceRegistry
+                faces={faces}
+                persons={persons}
+                unrecognizedFaces={unrecognizedFaces}
+                unrecognizedGroups={unrecognizedGroups}
+                isLoading={facesLoading}
+                error={facesError}
+                onRenameFace={handleRenameFace}
+                onAssignFace={handleAssignFace}
+                onAssignGroup={handleAssignGroup}
+                onResetFace={handleResetFace}
+                onResetFacesByFilename={handleResetFacesByFilename}
+                onDeleteFace={handleDeleteFace}
+                onDeleteFacesBatch={handleDeleteFacesBatch}
+                disabled={isRunning || isPaused}
+                uiSettings={uiSettings}
+                onViewInFamilyTree={handleViewInFamilyTree}
+              />
 
-        {activeTab === 'family_tree' && (
-          <div
-            className="tab-pane active"
-            id="pane-family-tree"
-            style={{ width: '100%', height: 'calc(100vh - 120px)', minHeight: 650, position: 'relative' }}
-          >
-            <FamilyTreeTab />
-          </div>
-        )}
-      </main>
+              <ExecutionControls
+                isRunning={isRunning}
+                isPaused={isPaused}
+                currentTask={statusInfo.current_task}
+                onStartSync={handleStartSync}
+                onPauseSync={handlePauseSync}
+                onResumeSync={handleResumeSync}
+                onStopSync={handleStopSync}
+                onStartSingleAnalysis={handleStartSingleAnalysis}
+                onPickSingleFile={handlePickFile}
+                pickerPending={pickerPending}
+              />
+            </div>
+          )}
+
+          {activeTab === 'family_tree' && (
+            <div
+              className="tab-pane active"
+              id="pane-family-tree"
+              style={{ width: '100%', height: 'calc(100vh - 120px)', minHeight: 650, position: 'relative' }}
+            >
+              <FamilyTreeTab />
+            </div>
+          )}
+        </main>
+      </div>
 
       <PipelineLogs
         isOpen={showLogs}
