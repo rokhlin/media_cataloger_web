@@ -690,43 +690,46 @@ export default function InputSourcesGallery({
         title={`${t('clickToView')}: ${file.filename}`}
       >
         <div className="gallery-thumb-wrap">
-          {file.is_image ? (
-            <>
-              <img
-                src={thumbUrl}
-                alt={file.filename}
-                className="gallery-thumb-img"
-                loading="lazy"
-                decoding="async"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'flex';
-                }}
-              />
-              <div
-                className="gallery-thumb-fallback-placeholder"
-                style={{
-                  display: 'none',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '100%',
-                  height: '100%',
-                  flexDirection: 'column',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <span style={{ fontSize: '1.8rem' }}>📷</span>
-                <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
-                  {file.filename}
-                </span>
+          <img
+            src={thumbUrl}
+            alt={file.filename}
+            className="gallery-thumb-img"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const fallback = target.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = 'flex';
+            }}
+          />
+          <div
+            className="gallery-thumb-fallback-placeholder"
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              height: '100%',
+              flexDirection: 'column',
+              background: file.is_video
+                ? 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)'
+                : 'rgba(255, 255, 255, 0.03)',
+              color: file.is_video ? '#c7d2fe' : 'var(--text-muted)',
+            }}
+          >
+            <span style={{ fontSize: '1.8rem' }}>{file.is_video ? '🎥' : '📷'}</span>
+            <span style={{ fontSize: '0.68rem', marginTop: '4px', textAlign: 'center', padding: '0 4px' }}>
+              {file.filename}
+            </span>
+          </div>
+
+          {/* Video Play Overlay Indicator */}
+          {file.is_video && (
+            <div className="gallery-video-play-overlay">
+              <div className="gallery-video-play-btn" title="Video file">
+                <span>▶</span>
               </div>
-            </>
-          ) : (
-            <div className="gallery-thumb-video-placeholder">
-              <span style={{ fontSize: '2rem' }}>🎥</span>
             </div>
           )}
 
@@ -913,17 +916,42 @@ export default function InputSourcesGallery({
                 onClick={() => setSelectedMedia(file)}
               >
                 <td style={{ textAlign: 'center' }}>
-                  {file.is_image ? (
+                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                     <img
                       src={thumbUrl}
                       alt={file.filename}
                       className="media-list-thumb"
                       loading="lazy"
                       decoding="async"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'inline-block';
+                      }}
                     />
-                  ) : (
-                    <span style={{ fontSize: '1.2rem' }}>🎥</span>
-                  )}
+                    <span style={{ display: 'none', fontSize: '1.2rem' }}>
+                      {file.is_video ? '🎥' : '📷'}
+                    </span>
+                    {file.is_video && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: '2px',
+                          right: '2px',
+                          background: 'rgba(0, 0, 0, 0.75)',
+                          color: '#ffffff',
+                          fontSize: '0.62rem',
+                          borderRadius: '3px',
+                          padding: '1px 3px',
+                          lineHeight: 1,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        ▶
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <div className="media-list-title" title={file.file_path || file.filename}>
