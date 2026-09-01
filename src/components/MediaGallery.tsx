@@ -61,7 +61,7 @@ export default function InputSourcesGallery({
   activeInputFolders = [],
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
-  const { canEdit, canManageFaces, isAdmin } = useAuth();
+  const { canEdit, canManageFaces, isAdmin, authFetch } = useAuth();
   const { isUnlocked, addVaultItem, removeVaultItem } = useVault();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -191,7 +191,8 @@ export default function InputSourcesGallery({
 
     setIsTagging(true);
     try {
-      const res = await fetch('/api/media/add-person', {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/add-person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,8 +228,8 @@ export default function InputSourcesGallery({
         if (onRefresh) onRefresh();
         if (onReloadFaces) onReloadFaces();
       } else {
-        const err = await res.json();
-        alert(err.detail || 'Failed to tag person');
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || err.message || 'Failed to tag person');
       }
     } catch (err) {
       console.error('Failed to tag person:', err);
@@ -241,7 +242,8 @@ export default function InputSourcesGallery({
   const handleRemoveFace = async (faceId: string) => {
     if (!selectedMedia) return;
     try {
-      const res = await fetch('/api/media/remove-face', {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/remove-face', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -276,7 +278,8 @@ export default function InputSourcesGallery({
     const trimmed = targetName.trim();
     setIsReassigning(true);
     try {
-      const res = await fetch('/api/faces/assign', {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/faces/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -305,6 +308,9 @@ export default function InputSourcesGallery({
         setReassignCustomName('');
         if (onRefresh) onRefresh();
         if (onReloadFaces) onReloadFaces();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || err.message || 'Failed to reassign face');
       }
     } catch (err) {
       console.error('Failed to reassign face:', err);

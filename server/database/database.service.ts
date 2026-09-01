@@ -990,6 +990,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     for (const r of rows) {
       result[r.face_id] = r.name;
     }
+    try {
+      const mediaRows = db.prepare('SELECT face_id, name FROM media_faces').all() as any[];
+      for (const mr of mediaRows) {
+        if (!result[mr.face_id]) {
+          result[mr.face_id] = mr.name;
+        }
+      }
+    } catch {
+      // ignore
+    }
     return result;
   }
 
@@ -1011,15 +1021,33 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   assignFaceToPerson(faceId: string, personName: string): boolean {
     const db = this.getDb();
     const trimmed = personName.trim();
-    const personId = `person_${trimmed.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
+    
+    // Check if person already exists by name to reuse ID
+    let personId: string;
+    const existingPerson = db.prepare('SELECT id FROM persons WHERE LOWER(name) = LOWER(?)').get(trimmed) as any;
+    if (existingPerson && existingPerson.id) {
+      personId = existingPerson.id;
+    } else {
+      personId = `person_${trimmed.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
+    }
 
     const insertPerson = db.prepare('INSERT OR IGNORE INTO persons (id, name) VALUES (?, ?)');
     const updateRegistry = db.prepare('UPDATE face_registry SET name = ?, person_id = ?, is_reference = 1 WHERE face_id = ?');
     const updateMediaFaces = db.prepare('UPDATE media_faces SET name = ?, person_id = ?, is_reference = 1 WHERE face_id = ?');
+    const insertRegistry = db.prepare(`
+      INSERT OR IGNORE INTO face_registry (face_id, person_id, name, confidence, source_file, image_path, is_reference)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `);
 
     const transaction = db.transaction(() => {
       insertPerson.run(personId, trimmed);
-      updateRegistry.run(trimmed, personId, faceId);
+      const res = updateRegistry.run(trimmed, personId, faceId);
+      if (res.changes === 0) {
+        const mf = db.prepare('SELECT * FROM media_faces WHERE face_id = ? LIMIT 1').get(faceId) as any;
+        if (mf) {
+          insertRegistry.run(faceId, personId, trimmed, mf.confidence || 0.8, mf.source_file || null, mf.image_path || null);
+        }
+      }
       updateMediaFaces.run(trimmed, personId, faceId);
     });
 
@@ -1030,16 +1058,33 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   assignGroupToPerson(faceIds: string[], personName: string): boolean {
     const db = this.getDb();
     const trimmed = personName.trim();
-    const personId = `person_${trimmed.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
+    
+    let personId: string;
+    const existingPerson = db.prepare('SELECT id FROM persons WHERE LOWER(name) = LOWER(?)').get(trimmed) as any;
+    if (existingPerson && existingPerson.id) {
+      personId = existingPerson.id;
+    } else {
+      personId = `person_${trimmed.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
+    }
 
     const insertPerson = db.prepare('INSERT OR IGNORE INTO persons (id, name) VALUES (?, ?)');
     const updateRegistry = db.prepare('UPDATE face_registry SET name = ?, person_id = ?, is_reference = 1 WHERE face_id = ?');
     const updateMediaFaces = db.prepare('UPDATE media_faces SET name = ?, person_id = ?, is_reference = 1 WHERE face_id = ?');
+    const insertRegistry = db.prepare(`
+      INSERT OR IGNORE INTO face_registry (face_id, person_id, name, confidence, source_file, image_path, is_reference)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `);
 
     const transaction = db.transaction(() => {
       insertPerson.run(personId, trimmed);
       for (const fid of faceIds) {
-        updateRegistry.run(trimmed, personId, fid);
+        const res = updateRegistry.run(trimmed, personId, fid);
+        if (res.changes === 0) {
+          const mf = db.prepare('SELECT * FROM media_faces WHERE face_id = ? LIMIT 1').get(fid) as any;
+          if (mf) {
+            insertRegistry.run(fid, personId, trimmed, mf.confidence || 0.8, mf.source_file || null, mf.image_path || null);
+          }
+        }
         updateMediaFaces.run(trimmed, personId, fid);
       }
     });

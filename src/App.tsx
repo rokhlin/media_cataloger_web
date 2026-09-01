@@ -316,7 +316,7 @@ function AppMain() {
   // Rename face or person
   const handleRenameFace = async (faceId: string, newName: string) => {
     try {
-      const res = await fetch('/api/faces/rename', {
+      const res = await authFetch('/api/faces/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_id: faceId, name: newName }),
@@ -328,8 +328,9 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail || 'Could not rename face'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.detail || err.message || 'Could not rename face'}`);
         await loadFaces();
         return false;
       }
@@ -344,7 +345,7 @@ function AppMain() {
   // Assign unrecognized face to person
   const handleAssignFace = async (faceId: string, personName: string) => {
     try {
-      const res = await fetch('/api/faces/assign', {
+      const res = await authFetch('/api/faces/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_id: faceId, name: personName }),
@@ -356,8 +357,9 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail || 'Could not assign face'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.detail || err.message || 'Could not assign face'}`);
         await loadFaces();
         return false;
       }
@@ -372,7 +374,7 @@ function AppMain() {
   // Assign group of faces to person
   const handleAssignGroup = async (faceIds: string[], personName: string) => {
     try {
-      const res = await fetch('/api/faces/assign-group', {
+      const res = await authFetch('/api/faces/assign-group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_ids: faceIds, name: personName }),
@@ -384,8 +386,9 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail || 'Could not assign face group'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.detail || err.message || 'Could not assign face group'}`);
         await loadFaces();
         return false;
       }
@@ -400,7 +403,7 @@ function AppMain() {
   // Reset face assignment
   const handleResetFace = async (faceId: string) => {
     try {
-      const res = await fetch('/api/faces/reset', {
+      const res = await authFetch('/api/faces/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_id: faceId }),
@@ -412,8 +415,9 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail || 'Could not reset face'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.detail || err.message || 'Could not reset face'}`);
         await loadFaces();
         return false;
       }
@@ -428,13 +432,13 @@ function AppMain() {
   // Reset faces by filename
   const handleResetFacesByFilename = async (filename: string) => {
     try {
-      const res = await fetch('/api/faces/reset-by-filename', {
+      const res = await authFetch('/api/faces/reset-by-filename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         appendConsoleMessage(`[Face Registry] Reset ${data.reset_count || 0} faces for file "${filename}"`);
         await loadFaces();
@@ -442,7 +446,8 @@ function AppMain() {
         alert(`Successfully reset ${data.reset_count || 0} face assignment(s) for "${filename}".`);
         return true;
       } else {
-        alert(`Error: ${data.detail || 'Could not reset faces by filename'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        alert(`Error: ${data.detail || data.message || 'Could not reset faces by filename'}`);
         await loadFaces();
         return false;
       }
@@ -457,7 +462,7 @@ function AppMain() {
   // Delete face
   const handleDeleteFace = async (faceId: string) => {
     try {
-      const res = await fetch('/api/faces/delete', {
+      const res = await authFetch('/api/faces/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_id: faceId }),
@@ -469,8 +474,9 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail || 'Could not delete face'}`);
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error: ${err.detail || err.message || 'Could not delete face'}`);
         await loadFaces();
         return false;
       }
@@ -485,7 +491,7 @@ function AppMain() {
   // Delete batch / group of faces
   const handleDeleteFacesBatch = async (faceIds: string[]) => {
     try {
-      const res = await fetch('/api/faces/delete-batch', {
+      const res = await authFetch('/api/faces/delete-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ face_ids: faceIds }),
@@ -497,7 +503,8 @@ function AppMain() {
         await loadMediaFiles();
         return true;
       } else {
-        const err = await res.json();
+        if (res.status === 401) setIsLoginOpen(true);
+        const err = await res.json().catch(() => ({}));
         alert(`Error: ${err.detail || err.message || 'Could not delete faces'}`);
         await loadFaces();
         return false;
