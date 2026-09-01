@@ -41,3 +41,7 @@ data/config/*.env*
 *.db
 *.db-shm
 *.db-wal
+
+.agents/rules/jest-testing-for-js-ts
+.agents/rules/nest-js-development-best-practices
+.agents/rules/react-js-development

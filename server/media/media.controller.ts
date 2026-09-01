@@ -124,12 +124,16 @@ export class MediaController {
   }
 
   @Get('file')
-  @ApiOperation({ summary: 'Stream/serve a raw media file directly' })
+  @ApiOperation({ summary: 'Stream/serve a raw media file directly, or web-compatible preview' })
   @ApiQuery({ name: 'path', required: false, description: 'Full path or relative path to media file' })
   @ApiQuery({ name: 'file', required: false, description: 'Filename or subpath to media file' })
+  @ApiQuery({ name: 'preview', required: false, description: 'If true, generates/streams browser-compatible full-size WebP preview for formats like HEIC/HEIF/RAW' })
+  @ApiQuery({ name: 'download', required: false, description: 'If true, forces raw original file stream without conversion' })
   async getMediaFile(
     @Query('path') queryPath: string,
     @Query('file') queryFile: string,
+    @Query('preview') queryPreview: string,
+    @Query('download') queryDownload: string,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -137,6 +141,22 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
+    const ext = path.extname(resolved).toLowerCase();
+    const isHeic = ext === '.heic' || ext === '.heif';
+    const isExplicitDownload = queryDownload === 'true' || queryDownload === '1';
+    const isExplicitPreview = queryPreview === 'true' || queryPreview === '1';
+
+    // If requested for preview, or if the format is HEIC/HEIF (which browsers cannot render natively) and not explicit download:
+    if ((isExplicitPreview || isHeic) && !isExplicitDownload) {
+      try {
+        const thumb = await this.thumbnailService.getThumbnail(resolved, 1920);
+        streamFileSafely(thumb.filePath, res, 'image/webp', 'public, max-age=86400');
+        return;
+      } catch {
+        // fallback to raw stream if preview generation fails
+      }
+    }
+
     streamFileSafely(resolved, res);
   }
 

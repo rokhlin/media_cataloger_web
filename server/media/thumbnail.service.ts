@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { spawn } from 'child_process';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import { AppConfigService } from '../config/config.service.js';
 
 @Injectable()
@@ -73,6 +74,11 @@ export class ThumbnailService {
   private isVideoFile(filePath: string): boolean {
     const ext = path.extname(filePath).toLowerCase();
     return this.videoExtensions.has(ext);
+  }
+
+  private isHeicFile(filePath: string): boolean {
+    const ext = path.extname(filePath).toLowerCase();
+    return ext === '.heic' || ext === '.heif';
   }
 
   private async acquireSlot(): Promise<void> {
@@ -221,6 +227,35 @@ export class ThumbnailService {
   }
 
   /**
+   * Decode HEIC/HEIF file to JPEG buffer and convert to WebP via Sharp.
+   */
+  private async generateHeicThumbnail(
+    sourcePath: string,
+    targetSize: number,
+    tempPath: string,
+  ): Promise<void> {
+    const inputBuffer = await fs.promises.readFile(sourcePath);
+    const jpegBuffer = await (heicConvert as any)({
+      buffer: inputBuffer,
+      format: 'JPEG',
+      quality: 0.92,
+    });
+
+    await sharp(jpegBuffer, { failOn: 'none', animated: false })
+      .rotate()
+      .resize(targetSize, targetSize, {
+        fit: 'inside',
+        withoutEnlargement: true,
+        fastShrinkOnLoad: true,
+      })
+      .webp({
+        quality: 80,
+        effort: 4,
+      })
+      .toFile(tempPath);
+  }
+
+  /**
    * Get or generate a cached WebP thumbnail for a given source image or video file.
    * @param sourcePath Absolute path to the original media file
    * @param size Target bounding box dimension in pixels (default 300)
@@ -262,6 +297,7 @@ export class ThumbnailService {
     }
 
     const isVideo = this.isVideoFile(sourcePath);
+    const isHeic = this.isHeicFile(sourcePath);
 
     const generationPromise = (async () => {
       await this.acquireSlot();
@@ -269,19 +305,30 @@ export class ThumbnailService {
       try {
         if (isVideo) {
           await this.generateVideoThumbnail(sourcePath, targetSize, tempPath);
+        } else if (isHeic) {
+          await this.generateHeicThumbnail(sourcePath, targetSize, tempPath);
         } else {
-          await sharp(sourcePath, { failOn: 'none', animated: false })
-            .rotate() // Auto-orient using EXIF orientation tag
-            .resize(targetSize, targetSize, {
-              fit: 'inside',
-              withoutEnlargement: true,
-              fastShrinkOnLoad: true,
-            })
-            .webp({
-              quality: 80,
-              effort: 4,
-            })
-            .toFile(tempPath);
+          try {
+            await sharp(sourcePath, { failOn: 'none', animated: false })
+              .rotate() // Auto-orient using EXIF orientation tag
+              .resize(targetSize, targetSize, {
+                fit: 'inside',
+                withoutEnlargement: true,
+                fastShrinkOnLoad: true,
+              })
+              .webp({
+                quality: 80,
+                effort: 4,
+              })
+              .toFile(tempPath);
+          } catch (sharpErr) {
+            // If sharp fails to decode an image (e.g., misnamed HEIC or custom container), fallback to HEIC decoder
+            try {
+              await this.generateHeicThumbnail(sourcePath, targetSize, tempPath);
+            } catch {
+              throw sharpErr;
+            }
+          }
         }
 
         await fs.promises.rename(tempPath, thumbPath);

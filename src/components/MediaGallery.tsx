@@ -1753,7 +1753,11 @@ export default function InputSourcesGallery({
                 ) : (
                   <>
                     <img
-                      src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
+                      src={
+                        /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
+                          ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
+                          : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
+                      }
                       alt={selectedMedia.filename}
                       className="media-lightbox-image"
                       onError={(e) => {

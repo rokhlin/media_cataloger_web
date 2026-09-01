@@ -21,6 +21,8 @@ describe('MediaService', () => {
 
     // Create test files
     fs.writeFileSync(path.join(inputDir, 'vacation.jpg'), 'fake-image-data');
+    fs.writeFileSync(path.join(inputDir, 'photo.heic'), 'fake-heic-data');
+    fs.writeFileSync(path.join(inputDir, 'photo.heif'), 'fake-heif-data');
     fs.writeFileSync(path.join(inputDir, 'clip.mp4'), 'fake-video-data');
     fs.writeFileSync(path.join(inputDir, 'notes.txt'), 'text data'); // Should be ignored
 
@@ -39,7 +41,7 @@ describe('MediaService', () => {
       inputFolders: [inputDir],
       outputFolder: tmpDir,
       projectRoot: tmpDir,
-      supportedPhotoExts: new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic']),
+      supportedPhotoExts: new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']),
       supportedVideoExts: new Set(['.mp4', '.mov', '.avi', '.mkv']),
     } as unknown as AppConfigService;
 
@@ -65,6 +67,8 @@ describe('MediaService', () => {
     const filenames = scanned.map((s) => path.basename(s.filePath));
 
     assert.ok(filenames.includes('vacation.jpg'), 'Should include vacation.jpg');
+    assert.ok(filenames.includes('photo.heic'), 'Should include photo.heic');
+    assert.ok(filenames.includes('photo.heif'), 'Should include photo.heif');
     assert.ok(filenames.includes('clip.mp4'), 'Should include clip.mp4');
     assert.ok(filenames.includes('beach.png'), 'Should include beach.png from subfolder');
     assert.strictEqual(filenames.includes('notes.txt'), false, 'Should ignore notes.txt');
@@ -192,23 +196,27 @@ describe('MediaService', () => {
     // Test pagination with limit and offset
     const page1 = await mediaService.listMediaFiles({ limit: 2, offset: 0 });
     assert.strictEqual(page1.files.length, 2, 'Page 1 should return 2 items');
-    assert.strictEqual(page1.total, 3, 'Total items should be 3');
+    assert.strictEqual(page1.total, 5, 'Total items should be 5');
     assert.strictEqual(page1.hasMore, true, 'hasMore should be true for page 1');
     assert.ok(page1.stats, 'Stats should be returned');
-    assert.strictEqual(page1.stats.total, 3);
+    assert.strictEqual(page1.stats.total, 5);
 
     const page2 = await mediaService.listMediaFiles({ limit: 2, offset: 2 });
-    assert.strictEqual(page2.files.length, 1, 'Page 2 should return 1 item');
-    assert.strictEqual(page2.hasMore, false, 'hasMore should be false for page 2');
+    assert.strictEqual(page2.files.length, 2, 'Page 2 should return 2 items');
+    assert.strictEqual(page2.hasMore, true, 'hasMore should be true for page 2');
+
+    const page3 = await mediaService.listMediaFiles({ limit: 2, offset: 4 });
+    assert.strictEqual(page3.files.length, 1, 'Page 3 should return 1 item');
+    assert.strictEqual(page3.hasMore, false, 'hasMore should be false for page 3');
 
     // Test sorting by name asc
     const sortedByName = await mediaService.listMediaFiles({ sort_by: 'name', sort_order: 'asc' });
     const names = sortedByName.files.map((f: any) => f.filename);
-    assert.deepStrictEqual(names, ['beach.png', 'clip.mp4', 'vacation.jpg']);
+    assert.deepStrictEqual(names, ['beach.png', 'clip.mp4', 'photo.heic', 'photo.heif', 'vacation.jpg']);
 
     // Test filter by type
     const imagesOnly = await mediaService.listMediaFiles({ type: 'images' });
-    assert.strictEqual(imagesOnly.files.length, 2);
+    assert.strictEqual(imagesOnly.files.length, 4);
     assert.ok(imagesOnly.files.every((f: any) => f.is_image));
 
     const videosOnly = await mediaService.listMediaFiles({ type: 'videos' });
@@ -218,7 +226,7 @@ describe('MediaService', () => {
     // Test cache invalidation
     mediaService.invalidateCache();
     const freshList = await mediaService.listMediaFiles({ refresh: true });
-    assert.strictEqual(freshList.total, 3);
+    assert.strictEqual(freshList.total, 5);
   });
 
   it('should resolve media file paths for direct, relative, subfolder, and Windows/UNC paths', () => {

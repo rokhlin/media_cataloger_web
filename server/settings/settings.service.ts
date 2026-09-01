@@ -241,7 +241,7 @@ export class SettingsService {
   async selectFile(): Promise<{ file: string }> {
     if (os.platform() === 'win32') {
       try {
-        const psCommand = `powershell -NoProfile -Command "& { Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Title = 'Select Media File'; $f.Filter = 'Media files (*.jpg;*.jpeg;*.png;*.webp;*.heic;*.mp4;*.mov;*.avi;*.mkv)|*.jpg;*.jpeg;*.png;*.webp;*.heic;*.mp4;*.mov;*.avi;*.mkv|All files (*.*)|*.*'; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName } }"`;
+        const psCommand = `powershell -NoProfile -Command "& { Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Title = 'Select Media File'; $f.Filter = 'Media files (*.jpg;*.jpeg;*.png;*.webp;*.heic;*.heif;*.mp4;*.mov;*.avi;*.mkv)|*.jpg;*.jpeg;*.png;*.webp;*.heic;*.heif;*.mp4;*.mov;*.avi;*.mkv|All files (*.*)|*.*'; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName } }"`;
         const { stdout } = await execAsync(psCommand);
         const file = stdout.trim();
         return { file: file || '' };

@@ -303,7 +303,7 @@ export class AppConfigService {
   }
 
   get supportedPhotoExts(): Set<string> {
-    return new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.raw', '.arw', '.cr2', '.nef', '.dng', '.tiff', '.bmp']);
+    return new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.raw', '.arw', '.cr2', '.nef', '.dng', '.tiff', '.bmp']);
   }
 
   get supportedVideoExts(): Set<string> {

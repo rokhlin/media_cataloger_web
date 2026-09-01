@@ -40,6 +40,8 @@ describe('AppConfigService', () => {
     assert.ok(config.dbPath, 'dbPath should be defined');
     assert.ok(config.facesFolder, 'facesFolder should be defined');
     assert.ok(config.supportedPhotoExts.has('.jpg'), 'should support .jpg');
+    assert.ok(config.supportedPhotoExts.has('.heic'), 'should support .heic');
+    assert.ok(config.supportedPhotoExts.has('.heif'), 'should support .heif');
     assert.ok(config.supportedVideoExts.has('.mp4'), 'should support .mp4');
   });
 

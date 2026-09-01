@@ -70,4 +70,14 @@ describe('ThumbnailService', () => {
     const meta100 = await sharp(res100.filePath).metadata();
     assert.ok((meta100.width || 0) <= 100);
   });
+
+  it('should recognize .heic and .heif file extensions', () => {
+    const isHeic = (thumbnailService as any).isHeicFile('photo.heic');
+    const isHeif = (thumbnailService as any).isHeicFile('/path/to/image.HEIF');
+    const isJpg = (thumbnailService as any).isHeicFile('photo.jpg');
+
+    assert.strictEqual(isHeic, true);
+    assert.strictEqual(isHeif, true);
+    assert.strictEqual(isJpg, false);
+  });
 });
