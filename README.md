@@ -102,6 +102,5 @@ Compatible with **Docker Compose**, **ZimaOS**, **CasaOS**, and standalone Docke
 
 ## 📖 Additional Documentation
 
-- [AI Engine Security & API Integration Guide](AI_ENGINE_SECURITY_INTEGRATION.md)
 - [Project Roadmap & Feature Status](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
