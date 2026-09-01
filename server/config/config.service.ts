@@ -115,14 +115,14 @@ export function joinConfigPaths(base: string, ...segments: string[]): string {
 // Load .env and .env.local if present in current directory, config directory, or parent directory
 const possibleEnvFiles = [
   process.env.ENV_FILE ? path.resolve(process.env.ENV_FILE) : '',
-  path.resolve(process.cwd(), 'data', 'config', '.env.local'),
-  path.resolve(process.cwd(), 'data', 'config', '.env'),
   path.resolve(process.cwd(), '.env.local'),
   path.resolve(process.cwd(), '.env'),
-  path.resolve(process.cwd(), '..', 'data', 'config', '.env.local'),
-  path.resolve(process.cwd(), '..', 'data', 'config', '.env'),
+  path.resolve(process.cwd(), 'data', 'config', '.env.local'),
+  path.resolve(process.cwd(), 'data', 'config', '.env'),
   path.resolve(process.cwd(), '..', '.env.local'),
   path.resolve(process.cwd(), '..', '.env'),
+  path.resolve(process.cwd(), '..', 'data', 'config', '.env.local'),
+  path.resolve(process.cwd(), '..', 'data', 'config', '.env'),
 ].filter(Boolean);
 
 for (const envFile of possibleEnvFiles) {
@@ -151,19 +151,35 @@ export class AppConfigService {
   }
 
   get port(): number {
-    return parseInt(process.env.PORT || process.env.API_PORT || '8000', 10);
+    if (process.env.WEB_PORT) {
+      return parseInt(process.env.WEB_PORT, 10);
+    }
+    if (process.env.PORT) {
+      return parseInt(process.env.PORT, 10);
+    }
+    return 8000;
   }
 
   get catalogerApiUrl(): string {
-    return process.env.CATALOGER_API_URL || 'http://localhost:8001';
+    if (process.env.CATALOGER_API_URL) {
+      return process.env.CATALOGER_API_URL;
+    }
+    if (process.env.AI_ENGINE_URL) {
+      return process.env.AI_ENGINE_URL;
+    }
+    if (process.env.API_PORT && String(process.env.API_PORT) !== String(this.port)) {
+      const host = process.env.API_HOST === '0.0.0.0' ? 'localhost' : (process.env.API_HOST || 'localhost');
+      return `http://${host}:${process.env.API_PORT}`;
+    }
+    return 'http://localhost:8001';
   }
 
   get settingsFilePath(): string {
-    if (process.env.CONFIG_PATH && process.env.CONFIG_PATH.trim()) {
-      return path.resolve(process.env.CONFIG_PATH.trim(), 'settings.json');
-    }
     if (process.env.SETTINGS_PATH && process.env.SETTINGS_PATH.trim()) {
       return path.resolve(process.env.SETTINGS_PATH.trim());
+    }
+    if (process.env.CONFIG_PATH && process.env.CONFIG_PATH.trim()) {
+      return path.resolve(process.env.CONFIG_PATH.trim(), 'settings.json');
     }
     return path.resolve(this.projectRoot, 'data', 'config', 'settings.json');
   }

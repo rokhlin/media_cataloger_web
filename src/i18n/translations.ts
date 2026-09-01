@@ -873,6 +873,7 @@ export const authAndVaultTranslationsEn = {
 
   adminTabFlags: 'Feature Flags & System',
   adminTabUsers: 'User & Role Management (RBAC)',
+  adminTabVault: 'Secret Vault & Privacy',
   rbacUsersTitle: 'User & Access Control Management (RBAC)',
   rbacUsersSubtitle: 'Manage user accounts, assign roles, and configure granular permissions.',
   rbacAddUserButton: 'Create New User',
@@ -956,6 +957,7 @@ export const authAndVaultTranslationsRu = {
 
   adminTabFlags: 'Флаги функций и система',
   adminTabUsers: 'Управление пользователями (RBAC)',
+  adminTabVault: 'Секретный сейф и приватность',
   rbacUsersTitle: 'Управление пользователями и правами (RBAC)',
   rbacUsersSubtitle: 'Создание пользователей, назначение ролей и гранулярных прав доступа.',
   rbacAddUserButton: 'Создать пользователя',

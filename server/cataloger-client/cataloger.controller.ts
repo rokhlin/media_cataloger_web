@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Delete, Query, Body, HttpException, HttpStatus, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Query, Body, HttpException, HttpStatus, Inject, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { CatalogerClientService } from './cataloger.service.js';
 import { LogLevel } from '../logging/log-buffer.service.js';
+import { JwtAuthGuard } from '../auth/auth.guard.js';
+import { RolesGuard } from '../auth/roles.guard.js';
+import { Public, RequirePermissions } from '../auth/auth.decorators.js';
 
 @ApiTags('pipeline')
 @Controller('api')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CatalogerController {
   constructor(@Inject(CatalogerClientService) private readonly catalogerService: CatalogerClientService) {}
 
   @Post('run')
+  @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Trigger full cataloging sync' })
   @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-processing of already synced items' })
   async triggerRun(@Query('force') force?: string, @Body() customPayload?: any) {
@@ -24,6 +29,7 @@ export class CatalogerController {
   }
 
   @Post('analyze-file')
+  @RequirePermissions('admin_panel', 'edit_metadata')
   @ApiOperation({ summary: 'Analyze a single media file immediately' })
   @ApiQuery({ name: 'file', required: false, description: 'Filename or path to the media file' })
   async triggerAnalyzeFile(@Query('file') file?: string, @Body() body?: any) {
@@ -42,6 +48,7 @@ export class CatalogerController {
   }
 
   @Post('pause')
+  @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Pause current pipeline execution' })
   async pause() {
     try {
@@ -52,6 +59,7 @@ export class CatalogerController {
   }
 
   @Post('resume')
+  @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Resume paused execution' })
   async resume() {
     try {
@@ -62,6 +70,7 @@ export class CatalogerController {
   }
 
   @Post('stop')
+  @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Stop and cancel current execution' })
   async stop() {
     try {
@@ -71,6 +80,7 @@ export class CatalogerController {
     }
   }
 
+  @Public()
   @Get('status')
   @ApiOperation({ summary: 'Get current cataloging pipeline execution status and progress' })
   @ApiResponse({ status: 200, description: 'Current worker status and progress' })
@@ -78,6 +88,7 @@ export class CatalogerController {
     return this.catalogerService.getStatus();
   }
 
+  @Public()
   @Get('validate-connection')
   @ApiOperation({ summary: 'Validate HTTP connection to media_cataloger AI service' })
   @ApiResponse({ status: 200, description: 'Connection status and latency details' })
@@ -85,12 +96,14 @@ export class CatalogerController {
     return this.catalogerService.validateConnection();
   }
 
+  @Public()
   @Get('health')
   @ApiOperation({ summary: 'Health check and connection validation for cataloger AI service' })
   async getHealth() {
     return this.catalogerService.validateConnection();
   }
 
+  @Public()
   @Get('logs')
   @ApiOperation({ summary: 'Get real-time execution logs from cataloging worker' })
   @ApiQuery({ name: 'level', required: false, enum: ['DEBUG', 'INFO', 'WARN', 'ERROR', 'ALL'], description: 'Filter logs by level' })
@@ -102,6 +115,7 @@ export class CatalogerController {
 
   @Post('logs/clear')
   @Delete('logs')
+  @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Clear execution logs' })
   async clearLogs() {
     return this.catalogerService.clearLogs();

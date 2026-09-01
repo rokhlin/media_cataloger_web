@@ -1,10 +1,14 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Inject, Optional } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, PERMISSIONS_KEY, IS_PUBLIC_KEY } from './auth.decorators.js';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  private readonly reflector: Reflector;
+
+  constructor(@Optional() @Inject(Reflector) reflector?: Reflector) {
+    this.reflector = reflector || new Reflector();
+  }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
@@ -46,9 +50,9 @@ export class RolesGuard implements CanActivate {
 
     if (requiredPermissions && requiredPermissions.length > 0) {
       const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
-      const hasAllPermissions = requiredPermissions.every((perm) => userPerms.includes(perm));
-      if (!hasAllPermissions) {
-        throw new ForbiddenException(`Access denied: Missing required permission(s): ${requiredPermissions.join(', ')}`);
+      const hasPermission = requiredPermissions.some((perm) => userPerms.includes(perm));
+      if (!hasPermission) {
+        throw new ForbiddenException(`Access denied: Missing required permission(s): ${requiredPermissions.join(' or ')}`);
       }
     }
 

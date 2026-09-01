@@ -97,3 +97,11 @@ Multi-architecture images (`linux/amd64`, `linux/arm64`) are automatically publi
 - **Web UI & Server**: `ghcr.io/rokhlin/media_cataloger_web:latest`
 
 Compatible with **Docker Compose**, **ZimaOS**, **CasaOS**, and standalone Docker hosts.
+
+---
+
+## 📖 Additional Documentation
+
+- [AI Engine Security & API Integration Guide](AI_ENGINE_SECURITY_INTEGRATION.md)
+- [Project Roadmap & Feature Status](ROADMAP.md)
+- [Changelog](CHANGELOG.md)

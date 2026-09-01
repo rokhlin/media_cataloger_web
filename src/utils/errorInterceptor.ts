@@ -115,13 +115,17 @@ class ErrorInterceptorService {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
         const method = init?.method || (input instanceof Request ? input.method : 'GET');
 
-        // Do not intercept external telemetry or log fetching itself in an endless loop
-        const isLogFetch = typeof url === 'string' && url.includes('/api/logs');
+        // Do not intercept external telemetry or background polling routes in an endless loop
+        const isPollingOrLogFetch = typeof url === 'string' && (
+          url.includes('/api/logs') ||
+          url.includes('/api/media/scan-status') ||
+          url.includes('/api/status')
+        );
 
         try {
           const response = await self.originalFetch!.apply(this, args);
 
-          if (!response.ok && !isLogFetch) {
+          if (!response.ok && !isPollingOrLogFetch) {
             // Clone response to safely read error body without consuming caller's stream
             const cloned = response.clone();
             cloned.text().then((bodyText) => {
@@ -151,7 +155,7 @@ class ErrorInterceptorService {
 
           return response;
         } catch (networkErr: any) {
-          if (!isLogFetch) {
+          if (!isPollingOrLogFetch) {
             self.emitLog(
               'ERROR',
               'NetworkInterceptor',

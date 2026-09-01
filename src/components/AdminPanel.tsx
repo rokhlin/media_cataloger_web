@@ -2,20 +2,37 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useFeatureFlags, normalizeClassName, DEFAULT_FEATURE_FLAG_PRESETS } from '../services/featureFlagsContext';
 import UserManagementTab from './UserManagementTab';
+import AdminVaultTab from './AdminVaultTab';
 import type { FeatureFlag } from '../models/featureFlags';
 import type { StatusInfo } from '../models/status';
+import type { GalleryMediaFile } from './MediaGallery';
+import type { UISettings } from '../models';
 import './AdminPanel.css';
 
 interface AdminPanelProps {
   statusInfo?: StatusInfo;
   mediaFilesCount?: number;
   facesCount?: number;
+  mediaFiles?: GalleryMediaFile[];
+  onRefreshMedia?: () => void;
+  onStartSingleAnalysis?: (filePath: string) => void;
+  uiSettings?: UISettings;
+  onReloadFaces?: () => Promise<void>;
+  onViewInFamilyTree?: (personName: string, personId?: string) => void;
+  initialSubTab?: 'flags' | 'users' | 'vault';
 }
 
 export default function AdminPanel({
   statusInfo,
   mediaFilesCount = 0,
   facesCount = 0,
+  mediaFiles = [],
+  onRefreshMedia,
+  onStartSingleAnalysis,
+  uiSettings,
+  onReloadFaces,
+  onViewInFamilyTree,
+  initialSubTab = 'flags',
 }: AdminPanelProps) {
   const { t } = useLanguage();
   const {
@@ -30,7 +47,7 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users'>('flags');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault'>(initialSubTab);
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -270,7 +287,7 @@ export default function AdminPanel({
       </div>
 
       {/* Subtab Navigation Bar */}
-      <div className="admin-subtabs-bar" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '0.75rem' }}>
+      <div className="admin-subtabs-bar" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '0.75rem', flexWrap: 'wrap' }}>
         <button
           type="button"
           className={`btn ${activeAdminSubTab === 'flags' ? 'btn-primary' : 'btn-secondary'}`}
@@ -289,10 +306,28 @@ export default function AdminPanel({
         >
           👥 {t('adminTabUsers' as any) || 'User & Role Management (RBAC)'}
         </button>
+        <button
+          type="button"
+          className={`btn ${activeAdminSubTab === 'vault' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveAdminSubTab('vault')}
+          id="tab-btn-admin-vault"
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
+        >
+          🔒 {t('adminTabVault' as any) || 'Secret Vault & Privacy'}
+        </button>
       </div>
 
       {activeAdminSubTab === 'users' ? (
         <UserManagementTab />
+      ) : activeAdminSubTab === 'vault' ? (
+        <AdminVaultTab
+          mediaFiles={mediaFiles}
+          onRefreshMedia={onRefreshMedia}
+          onStartSingleAnalysis={onStartSingleAnalysis}
+          uiSettings={uiSettings}
+          onReloadFaces={onReloadFaces}
+          onViewInFamilyTree={onViewInFamilyTree}
+        />
       ) : (
         <>
           {/* 1. Feature Flags Management Dropdown / Accordion Section */}

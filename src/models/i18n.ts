@@ -448,6 +448,7 @@ export interface AuthAndVaultTranslations {
 
   adminTabFlags: string;
   adminTabUsers: string;
+  adminTabVault: string;
   rbacUsersTitle: string;
   rbacUsersSubtitle: string;
   rbacAddUserButton: string;

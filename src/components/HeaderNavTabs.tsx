@@ -1,6 +1,5 @@
 import { useLanguage } from '../i18n/LanguageContext';
 import { useAuth } from '../services/authContext';
-import { useVault } from '../services/vaultContext';
 
 export interface HeaderNavTabsProps {
   activeTab?: string;
@@ -11,9 +10,9 @@ export interface HeaderNavTabsProps {
 export interface NavTabItem {
   id: string;
   icon: string;
-  titleKey: 'navMain' | 'navMediaLibrary' | 'navFamilyTree' | 'navAdmin' | 'navVault';
-  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navFamilyTreeTooltip' | 'navAdminTooltip' | 'navVaultTooltip';
-  requiredPermission?: 'admin_panel' | 'manage_faces' | 'vault_access';
+  titleKey: 'navMain' | 'navMediaLibrary' | 'navFamilyTree' | 'navAdmin';
+  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navFamilyTreeTooltip' | 'navAdminTooltip';
+  requiredPermission?: 'admin_panel' | 'manage_faces';
 }
 
 const NAV_TABS: NavTabItem[] = [
@@ -37,13 +36,6 @@ const NAV_TABS: NavTabItem[] = [
     tooltipKey: 'navFamilyTreeTooltip',
   },
   {
-    id: 'vault',
-    icon: '🔒',
-    titleKey: 'navVault',
-    tooltipKey: 'navVaultTooltip',
-    requiredPermission: 'vault_access',
-  },
-  {
     id: 'admin',
     icon: '🛡️',
     titleKey: 'navAdmin',
@@ -59,7 +51,6 @@ export default function HeaderNavTabs({
 }: HeaderNavTabsProps) {
   const { t } = useLanguage();
   const { hasPermission, isAdmin } = useAuth();
-  const { isUnlocked } = useVault();
 
   return (
     <nav
@@ -73,7 +64,7 @@ export default function HeaderNavTabs({
           const tabTitle = t(tab.titleKey as any) || tab.id;
           const tabTooltip = t(tab.tooltipKey as any) || tabTitle;
           const isRestricted = tab.requiredPermission && !isAdmin && !hasPermission(tab.requiredPermission);
-          const icon = tab.id === 'vault' && isUnlocked ? '🔓' : tab.icon;
+          const icon = tab.icon;
 
           return (
             <button

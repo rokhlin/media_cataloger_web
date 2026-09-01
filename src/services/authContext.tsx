@@ -48,27 +48,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authFetch = useCallback(
     async (url: string, init: RequestInit = {}): Promise<Response> => {
       const headers = new Headers(init.headers || {});
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+      if (activeToken) {
+        headers.set('Authorization', `Bearer ${activeToken}`);
       }
-      return fetch(url, {
+      const response = await fetch(url, {
         ...init,
         headers,
       });
+      if (response.status === 401) {
+        setToken(null);
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          localStorage.removeItem(AUTH_USER_KEY);
+        } catch {}
+      }
+      return response;
     },
     [token]
   );
 
   // Refresh current user profile from backend
   const refreshProfile = useCallback(async () => {
-    if (!token) {
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+    if (!activeToken) {
       setIsLoading(false);
       return;
     }
     try {
       const res = await fetch('/api/auth/me', {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${activeToken}`,
         },
       });
       if (res.ok) {
@@ -81,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Failed to persist user profile:', e);
           }
         } else {
-          // Token is no longer valid
           setToken(null);
           setCurrentUser(null);
           try {
@@ -89,6 +99,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.removeItem(AUTH_USER_KEY);
           } catch {}
         }
+      } else {
+        // Token is invalid/expired
+        setToken(null);
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          localStorage.removeItem(AUTH_USER_KEY);
+        } catch {}
       }
     } catch (err) {
       console.warn('Failed to verify authentication status:', err);

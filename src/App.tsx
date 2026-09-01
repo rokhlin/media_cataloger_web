@@ -22,7 +22,7 @@ import VaultModal from './components/VaultModal';
 import './App.css';
 
 function AppMain() {
-  const { canAccessAdmin, canManageFaces } = useAuth();
+  const { canAccessAdmin, canManageFaces, authFetch } = useAuth();
   const { isUnlocked, isConfigured } = useVault();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isVaultOpen, setIsVaultOpen] = useState(false);
@@ -153,12 +153,12 @@ function AppMain() {
 
   const handleClearLogs = useCallback(async () => {
     try {
-      await fetch('/api/logs/clear', { method: 'POST' });
+      await authFetch('/api/logs/clear', { method: 'POST' });
     } catch (err) {
       console.error('Failed to clear logs on server:', err);
     }
     setLogsList([]);
-  }, []);
+  }, [authFetch]);
 
   // Poll live media scan status continuously so Header status always shows real-time progress
   useEffect(() => {
@@ -176,7 +176,7 @@ function AppMain() {
     };
 
     fetchScanStatus();
-    const interval = setInterval(fetchScanStatus, 500);
+    const interval = setInterval(fetchScanStatus, 1500);
 
     return () => {
       isMounted = false;
@@ -526,7 +526,7 @@ function AppMain() {
   // Save settings
   const handleSaveSettings = async (settingsPayload: SettingsData) => {
     try {
-      const res = await fetch('/api/settings', {
+      const res = await authFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsPayload),
@@ -539,7 +539,10 @@ function AppMain() {
         await loadMediaFiles(true);
         return true;
       } else {
-        alert(`Error: ${data.detail || 'Failed to update settings'}`);
+        if (res.status === 401) {
+          setIsLoginOpen(true);
+        }
+        alert(`Error: ${data.message || data.detail || 'Failed to update settings'}`);
         await loadSettings();
         return false;
       }
@@ -597,19 +600,22 @@ function AppMain() {
   const handleStartSync = async (force: boolean) => {
     appendConsoleMessage(`Triggering catalog sync pipeline (force=${Boolean(force)})...`, 'INFO', 'Pipeline');
     try {
-      const res = await fetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
+      const res = await authFetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
         const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
         appendConsoleMessage(`Triggered sync successfully: ${result.message || 'Started'}${countMsg}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
+        if (res.status === 401) {
+          setIsLoginOpen(true);
+        }
         const errMsg = result.message || result.detail || result.error || 'Failed to start sync';
         appendConsoleMessage(
           `Failed to run sync: ${errMsg}`,
           'ERROR',
           'Pipeline',
-          `HTTP ${res.status} on POST /api/run\nDiagnosis: Cataloger backend execution failed.\nSuggestion: Verify cataloger background worker is running.`
+          `HTTP ${res.status} on POST /api/run\nDiagnosis: Cataloger backend execution failed.\nSuggestion: Verify user permissions and that cataloger background worker is running.`
         );
         alert(`Could not start cataloging sync:\n${errMsg}`);
       }
@@ -629,12 +635,13 @@ function AppMain() {
   const handlePauseSync = async () => {
     appendConsoleMessage('Requesting pipeline pause...', 'INFO', 'Pipeline');
     try {
-      const res = await fetch('/api/pause', { method: 'POST' });
+      const res = await authFetch('/api/pause', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
         appendConsoleMessage(`Execution paused: ${result.message || 'Paused'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
+        if (res.status === 401) setIsLoginOpen(true);
         appendConsoleMessage(`Failed to pause: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
@@ -647,12 +654,13 @@ function AppMain() {
   const handleResumeSync = async () => {
     appendConsoleMessage('Requesting pipeline resume...', 'INFO', 'Pipeline');
     try {
-      const res = await fetch('/api/resume', { method: 'POST' });
+      const res = await authFetch('/api/resume', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
         appendConsoleMessage(`Execution resumed: ${result.message || 'Resumed'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
+        if (res.status === 401) setIsLoginOpen(true);
         appendConsoleMessage(`Failed to resume: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
@@ -665,12 +673,13 @@ function AppMain() {
   const handleStopSync = async () => {
     appendConsoleMessage('Requesting pipeline stop...', 'WARN', 'Pipeline');
     try {
-      const res = await fetch('/api/stop', { method: 'POST' });
+      const res = await authFetch('/api/stop', { method: 'POST' });
       const result = await res.json();
       if (res.ok) {
         appendConsoleMessage(`Stop requested: ${result.message || 'Stopping'}`, 'INFO', 'Pipeline');
         checkStatus();
       } else {
+        if (res.status === 401) setIsLoginOpen(true);
         appendConsoleMessage(`Failed to stop: ${result.message || result.detail || 'Error'}`, 'ERROR', 'Pipeline');
       }
     } catch (err: unknown) {
@@ -683,7 +692,7 @@ function AppMain() {
   const handleStartSingleAnalysis = async (file: string, onSuccess?: () => void) => {
     appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
     try {
-      const res = await fetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
+      const res = await authFetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
         method: 'POST',
       });
       const result = await res.json();
@@ -697,12 +706,15 @@ function AppMain() {
         setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 6000);
         setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 12000);
       } else {
+        if (res.status === 401) {
+          setIsLoginOpen(true);
+        }
         const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
         appendConsoleMessage(
           `Failed to analyze file '${file}': ${errMsg}`,
           'ERROR',
           'Pipeline',
-          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check file permissions and supported formats.`
+          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check file permissions, authentication, and supported formats.`
         );
         alert(`Analysis Error:\n${errMsg}`);
       }
@@ -974,6 +986,12 @@ function AppMain() {
                   statusInfo={statusInfo}
                   mediaFilesCount={mediaFiles.length}
                   facesCount={faces.length}
+                  mediaFiles={mediaFiles}
+                  onRefreshMedia={() => loadMediaFiles(true)}
+                  onStartSingleAnalysis={handleStartSingleAnalysis}
+                  uiSettings={uiSettings}
+                  onReloadFaces={loadFaces}
+                  onViewInFamilyTree={handleViewInFamilyTree}
                 />
               )}
             </div>
