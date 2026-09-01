@@ -150,6 +150,39 @@ export interface LightboxTranslations {
   removePersonTooltip: string;
   changePerson: string;
   badgeManual: string;
+  btnEditMetadata: string;
+  metadataEditorTitle: string;
+  tabDescriptions: string;
+  tabSceneLocation: string;
+  tabExifCamera: string;
+  tabTagsNotes: string;
+  editSummaryEn: string;
+  editSummaryRu: string;
+  editDescriptionEn: string;
+  editDescriptionRu: string;
+  editLocationName: string;
+  editCaptureDate: string;
+  editEnvironment: string;
+  editLightingEn: string;
+  editLightingRu: string;
+  editWeatherEn: string;
+  editWeatherRu: string;
+  editTimeOfDayEn: string;
+  editTimeOfDayRu: string;
+  editCameraMake: string;
+  editCameraModel: string;
+  editLensModel: string;
+  editTags: string;
+  tagsPlaceholder: string;
+  addTagBtn: string;
+  editOcrText: string;
+  editTranscriptionEn: string;
+  editTranscriptionRu: string;
+  btnSaveMetadata: string;
+  btnSavingMetadata: string;
+  btnCancel: string;
+  metadataSavedSuccess: string;
+  metadataSaveError: string;
 }
 
 export interface FaceRegistryTranslations {

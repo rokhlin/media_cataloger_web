@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Query, Res, BadRequestException, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Res, BadRequestException, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MediaService } from './media.service.js';
 import { ThumbnailService } from './thumbnail.service.js';
-import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto } from './dto/media.dto.js';
+import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto, UpdateMediaMetadataDto } from './dto/media.dto.js';
 
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -220,4 +220,19 @@ export class MediaController {
   async removeFaceFromFile(@Body() body: RemoveFaceFromFileDto) {
     return this.mediaService.removeFaceFromFile(body.file, body.face_id);
   }
+
+  @Post('metadata')
+  @ApiOperation({ summary: 'Update and persist metadata attributes for a media file (descriptions, scene, tags, EXIF)' })
+  @ApiResponse({ status: 200, description: 'Metadata successfully saved and synchronized' })
+  async updateMetadataPost(@Body() body: UpdateMediaMetadataDto) {
+    return this.mediaService.updateMediaMetadata(body);
+  }
+
+  @Patch('metadata')
+  @ApiOperation({ summary: 'Partially update and persist metadata attributes for a media file' })
+  @ApiResponse({ status: 200, description: 'Metadata successfully saved and synchronized' })
+  async updateMetadataPatch(@Body() body: UpdateMediaMetadataDto) {
+    return this.mediaService.updateMediaMetadata(body);
+  }
 }
+

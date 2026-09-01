@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AppConfigService } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FamilyTreePublicService } from '../family-tree/family-tree-public.service.js';
+import { UpdateMediaMetadataDto } from './dto/media.dto.js';
 
 export interface ScannedMediaFile {
   filePath: string;
@@ -1196,5 +1197,183 @@ export class MediaService {
       message: `Face/Person '${trimmedFaceId}' removed from file.`,
     };
   }
+
+  /**
+   * Update metadata attributes for a media file, synchronizing changes
+   * to both the SQLite database and the local sidecar JSON file.
+   */
+  async updateMediaMetadata(dto: UpdateMediaMetadataDto): Promise<any> {
+    if (!dto.file || !dto.file.trim()) {
+      throw new BadRequestException('File parameter cannot be empty');
+    }
+
+    const trimmedFile = dto.file.trim();
+    let resolvedFile: string;
+    try {
+      resolvedFile = this.resolveMediaFilePath(trimmedFile);
+    } catch {
+      resolvedFile = trimmedFile;
+    }
+
+    this.db.initDb();
+
+    // Prepare tags array / string
+    let parsedTags: string[] = [];
+    if (Array.isArray(dto.tags)) {
+      parsedTags = dto.tags.map((t) => String(t).trim()).filter(Boolean);
+    } else if (typeof dto.tags === 'string' && dto.tags.trim()) {
+      parsedTags = dto.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+
+    const dbUpdates: Record<string, any> = {
+      ...dto,
+      tags: parsedTags,
+    };
+    delete dbUpdates.file;
+
+    // 1. Update SQLite Database
+    const updatedDbRecord = this.db.updateMediaMetadata(resolvedFile, dbUpdates);
+
+    // 2. Synchronize Sidecar JSON file on disk
+    let sidecarFile = this.findSidecarFile(resolvedFile);
+    if (!sidecarFile) {
+      const outFolder = this.config.outputFolder;
+      if (!fs.existsSync(outFolder)) {
+        fs.mkdirSync(outFolder, { recursive: true });
+      }
+      sidecarFile = path.join(outFolder, `${path.basename(resolvedFile)}.json`);
+    }
+
+    try {
+      let sidecarData: any = {};
+      if (fs.existsSync(sidecarFile)) {
+        try {
+          const raw = fs.readFileSync(sidecarFile, 'utf-8');
+          sidecarData = JSON.parse(raw);
+        } catch {
+          sidecarData = {};
+        }
+      }
+
+      // Merge into sidecar metadata/analysis structure
+      if (!sidecarData.gemini_analysis && !sidecarData.analysis && !sidecarData.metadata) {
+        sidecarData.gemini_analysis = {};
+      }
+      const targetAnalysis = sidecarData.gemini_analysis || sidecarData.analysis || sidecarData.metadata;
+
+      if (dto.summary !== undefined) {
+        targetAnalysis.summary = dto.summary;
+        sidecarData.summary = dto.summary;
+      }
+      if (dto.summary_ru !== undefined) {
+        targetAnalysis.summary_ru = dto.summary_ru;
+        sidecarData.summary_ru = dto.summary_ru;
+      }
+      if (dto.description !== undefined) {
+        targetAnalysis.description = dto.description;
+        sidecarData.description = dto.description;
+      }
+      if (dto.description_ru !== undefined) {
+        targetAnalysis.description_ru = dto.description_ru;
+        sidecarData.description_ru = dto.description_ru;
+      }
+      if (dto.environment !== undefined) {
+        targetAnalysis.environment = dto.environment;
+        sidecarData.environment = dto.environment;
+      }
+      if (dto.lighting !== undefined) {
+        targetAnalysis.lighting = dto.lighting;
+        sidecarData.lighting = dto.lighting;
+      }
+      if (dto.lighting_ru !== undefined) {
+        targetAnalysis.lighting_ru = dto.lighting_ru;
+        sidecarData.lighting_ru = dto.lighting_ru;
+      }
+      if (dto.weather !== undefined) {
+        targetAnalysis.weather = dto.weather;
+        sidecarData.weather = dto.weather;
+      }
+      if (dto.weather_ru !== undefined) {
+        targetAnalysis.weather_ru = dto.weather_ru;
+        sidecarData.weather_ru = dto.weather_ru;
+      }
+      if (dto.time_of_day !== undefined) {
+        targetAnalysis.time_of_day = dto.time_of_day;
+        sidecarData.time_of_day = dto.time_of_day;
+      }
+      if (dto.time_of_day_ru !== undefined) {
+        targetAnalysis.time_of_day_ru = dto.time_of_day_ru;
+        sidecarData.time_of_day_ru = dto.time_of_day_ru;
+      }
+      if (dto.ocr_text !== undefined) {
+        targetAnalysis.ocr_text = dto.ocr_text;
+        sidecarData.ocr_text = dto.ocr_text;
+      }
+      if (dto.location_name !== undefined) {
+        targetAnalysis.location_name = dto.location_name;
+        sidecarData.location_name = dto.location_name;
+      }
+      if (dto.camera_make !== undefined) {
+        if (!sidecarData.exif) sidecarData.exif = {};
+        sidecarData.exif.camera_make = dto.camera_make;
+        sidecarData.camera_make = dto.camera_make;
+      }
+      if (dto.camera_model !== undefined) {
+        if (!sidecarData.exif) sidecarData.exif = {};
+        sidecarData.exif.camera_model = dto.camera_model;
+        sidecarData.camera_model = dto.camera_model;
+      }
+      if (dto.lens_model !== undefined) {
+        if (!sidecarData.exif) sidecarData.exif = {};
+        sidecarData.exif.lens_model = dto.lens_model;
+        sidecarData.lens_model = dto.lens_model;
+      }
+      if (dto.media_date !== undefined) {
+        sidecarData.media_date = dto.media_date;
+      }
+      if (dto.transcription !== undefined) {
+        targetAnalysis.transcription = dto.transcription;
+        sidecarData.transcription = dto.transcription;
+      }
+      if (dto.transcription_ru !== undefined) {
+        targetAnalysis.transcription_ru = dto.transcription_ru;
+        sidecarData.transcription_ru = dto.transcription_ru;
+      }
+      if (dto.timeline_events !== undefined) {
+        targetAnalysis.timeline_events = dto.timeline_events;
+        sidecarData.timeline_events = dto.timeline_events;
+      }
+      if (dto.tags !== undefined) {
+        sidecarData.tags = parsedTags;
+        targetAnalysis.tags = parsedTags;
+      }
+
+      sidecarData.updated_at = new Date().toISOString();
+      if (!sidecarData.file_path) {
+        sidecarData.file_path = resolvedFile;
+      }
+      if (!sidecarData.filename) {
+        sidecarData.filename = path.basename(resolvedFile);
+      }
+
+      const sidecarDir = path.dirname(sidecarFile);
+      if (!fs.existsSync(sidecarDir)) {
+        fs.mkdirSync(sidecarDir, { recursive: true });
+      }
+      fs.writeFileSync(sidecarFile, JSON.stringify(sidecarData, null, 2), 'utf-8');
+    } catch (err) {
+      this.logger.warn(`Sidecar sync notice for '${resolvedFile}': ${err}`);
+    }
+
+    // 3. Clear cache and re-index
+    this.invalidateCache();
+
+    return {
+      status: 'success',
+      message: 'Media metadata successfully updated and synchronized.',
+      data: updatedDbRecord,
+    };
+  }
 }
+
 

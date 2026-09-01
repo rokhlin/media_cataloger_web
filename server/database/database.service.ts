@@ -234,6 +234,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         transcription: 'TEXT',
         transcription_ru: 'TEXT',
         timeline_events: 'TEXT',
+        tags: 'TEXT',
+        camera_make: 'TEXT',
+        camera_model: 'TEXT',
+        lens_model: 'TEXT',
+        location_name: 'TEXT',
       };
       for (const [col, type] of Object.entries(metaAdditions)) {
         if (!mmCols.has(col)) {
@@ -416,6 +421,92 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     transaction();
   }
+
+  /**
+   * Update selective metadata fields for a media file.
+   * Performs an atomic UPSERT on media_items and media_metadata.
+   */
+  updateMediaMetadata(filePath: string, updates: Record<string, any>): any {
+    const db = this.getDb();
+    const baseName = path.basename(filePath);
+    const mId = `media_${Buffer.from(filePath).toString('hex').slice(0, 16)}`;
+
+    let fileSize = updates.file_size || 0;
+    let mtime = updates.mtime || 0;
+    if (fileSize === 0) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const st = fs.statSync(filePath);
+          fileSize = st.size;
+          mtime = st.mtimeMs;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const transaction = db.transaction(() => {
+      // Ensure media_items record exists
+      db.prepare(`
+        INSERT INTO media_items (id, file_path, file_name, media_type, file_size, mtime, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'PROCESSED', datetime('now', 'localtime'))
+        ON CONFLICT(file_path) DO UPDATE SET
+          updated_at = datetime('now', 'localtime')
+      `).run(mId, filePath, baseName, updates.media_type || 'image', fileSize, mtime);
+
+      // Ensure media_metadata row exists
+      db.prepare(`
+        INSERT OR IGNORE INTO media_metadata (media_id)
+        VALUES (?)
+      `).run(mId);
+
+      // Build dynamic UPDATE for media_metadata
+      const allowedMetaCols = [
+        'summary', 'summary_ru', 'description', 'description_ru',
+        'environment', 'lighting', 'lighting_ru', 'weather', 'weather_ru',
+        'time_of_day', 'time_of_day_ru', 'ocr_text', 'exif_analysis', 'exif_analysis_ru',
+        'transcription', 'transcription_ru', 'timeline_events',
+        'camera_make', 'camera_model', 'lens_model', 'location_name', 'tags'
+      ];
+
+      const setClauses: string[] = [];
+      const values: any[] = [];
+
+      for (const col of allowedMetaCols) {
+        if (col in updates) {
+          setClauses.push(`${col} = ?`);
+          let val = updates[col];
+          if (col === 'tags' && Array.isArray(val)) {
+            val = JSON.stringify(val);
+          } else if (col === 'timeline_events' && typeof val === 'object' && val !== null) {
+            val = JSON.stringify(val);
+          }
+          values.push(val === undefined ? null : val);
+        }
+      }
+
+      if (setClauses.length > 0) {
+        values.push(mId);
+        db.prepare(`UPDATE media_metadata SET ${setClauses.join(', ')} WHERE media_id = ?`).run(...values);
+      }
+
+      if (updates.media_date !== undefined) {
+        db.prepare(`UPDATE media_items SET media_date = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`)
+          .run(updates.media_date, mId);
+      }
+    });
+
+    transaction();
+
+    // Fetch and return the consolidated updated record
+    return db.prepare(`
+      SELECT m.id as media_id, m.file_path, m.file_name, m.media_type, m.media_date, m.status, m.updated_at, md.*
+      FROM media_items m
+      LEFT JOIN media_metadata md ON m.id = md.media_id
+      WHERE m.file_path = ? OR m.id = ?
+    `).get(filePath, mId);
+  }
+
 
   // --- Face Counts & Face lists by file ---
   getFacesCountBySourceFile(): Record<string, number> {

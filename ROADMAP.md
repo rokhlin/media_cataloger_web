@@ -44,9 +44,9 @@
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
 - [x] **Media Tagging System**: Support custom and person tagging for media assets with sidecar synchronization.
-- [ ] **Metadata Editing**: Add full support for viewing and editing metadata.
-- [ ] **Write Analysis to File Metadata**: Option to embed analysis results directly back into media files (EXIF/XMP/ID3).
-- [ ] **In-Viewer Metadata Editor**: Direct inline metadata editing within the preview modal/window.
+- [x] **Metadata Editing**: Add full support for viewing and editing metadata.
+- [ ] **Write Analysis to File Metadata**: Option to embed analysis results directly back into media files (EXIF/XMP/ID3). Disabled by default. This feature should be configurable in the admin panel.
+- [x] **In-Viewer Metadata Editor**: Direct inline metadata editing within the preview modal/window.
 - [ ] **AI Analysis Agent**: Dedicated autonomous AI agent for deep file analysis and insights.
 - [ ] **Face Optimization Service**: Background service for periodic face embedding optimization and clustering.
 - [ ] **Advanced Duplicate Grouping**: Enhanced UI and pipeline for managing duplicate and burst photos.
@@ -65,8 +65,8 @@
 - [ ] **Memories & Flashbacks**: "On this day" and smart milestone memory reminders.
 
 ### Security, Access Control & Admin
-- [ ] **Authentication & Route Guards**: User login, JWT sessions, and route protection.
-- [ ] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels.
+- [ ] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.
+- [ ] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels. Admin can give specific permissions to users. For example: view-only mode for some users. Admin can manage user accounts (create, edit, delete).
 - [x] **Admin Dashboard**: System health monitoring, feature flag controls, and administrative settings.
 - [ ] **Secret / Vault Folder**: Encrypted private folder protected by password/PIN.
 - [ ] **Vault Search Exclusion**: Strictly exclude hidden and private vault items from global searches and indexing.

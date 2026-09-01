@@ -14,6 +14,7 @@ import type {
 import { useLanguage } from '../i18n/LanguageContext';
 import { mediaOrganizationService } from '../services/mediaOrganizationService';
 import { FlagsManager } from '../services/featureFlagsContext';
+import MetadataEditorModal from './MetadataEditorModal';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
 
@@ -104,12 +105,14 @@ export default function InputSourcesGallery({
   const [reassignTargetPerson, setReassignTargetPerson] = useState('');
   const [reassignCustomName, setReassignCustomName] = useState('');
   const [isReassigning, setIsReassigning] = useState(false);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
 
   // Reset lightbox state when modal opens
   useEffect(() => {
     if (selectedMedia) {
       setLightboxLang('active');
       setIsAddingPerson(false);
+      setIsEditingMetadata(false);
       setSelectedPersonToTag('');
       setCustomPersonName('');
       setReassigningFaceId(null);
@@ -117,6 +120,13 @@ export default function InputSourcesGallery({
       setReassignCustomName('');
     }
   }, [selectedMedia]);
+
+  const handleMetadataSaved = (updated: GalleryMediaFile) => {
+    setSelectedMedia(updated);
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
 
   // Extract distinct recognized people and face counts across all media files
   const distinctPeople = useMemo(() => {
@@ -1795,7 +1805,18 @@ export default function InputSourcesGallery({
               <div className="media-lightbox-sidebar">
                 {/* File Details Section */}
                 <div className="lightbox-section">
-                  <h4 className="lightbox-section-title">{t('fileDetails')}</h4>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <h4 className="lightbox-section-title" style={{ margin: 0 }}>{t('fileDetails')}</h4>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      onClick={() => setIsEditingMetadata(true)}
+                      title={t('btnEditMetadata')}
+                    >
+                      {t('btnEditMetadata')}
+                    </button>
+                  </div>
                   <div className="lightbox-detail-row">
                     <span className="lightbox-label">{t('fullPath')}:</span>
                     <span className="lightbox-value" title={selectedMedia.file_path || selectedMedia.filename}>
@@ -2047,6 +2068,47 @@ export default function InputSourcesGallery({
                               ? selectedMedia.transcription_ru || selectedMedia.transcription
                               : selectedMedia.transcription || selectedMedia.transcription_ru}
                           </span>
+                        </div>
+                      )}
+
+                      {selectedMedia.location_name && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">📍 {t('editLocationName')}:</span>
+                          <span className="lightbox-value">{selectedMedia.location_name}</span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.camera_make || selectedMedia.camera_model || selectedMedia.lens_model) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">📷 {t('editCameraMake')}:</span>
+                          <span className="lightbox-value">
+                            {[selectedMedia.camera_make, selectedMedia.camera_model, selectedMedia.lens_model].filter(Boolean).join(' ')}
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedMedia.tags && (Array.isArray(selectedMedia.tags) ? selectedMedia.tags.length > 0 : Boolean(selectedMedia.tags)) && (
+                        <div style={{ marginTop: '0.4rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          {(Array.isArray(selectedMedia.tags)
+                            ? selectedMedia.tags
+                            : typeof selectedMedia.tags === 'string'
+                            ? (selectedMedia.tags as string).split(',').map((t: string) => t.trim()).filter(Boolean)
+                            : []
+                          ).map((tag: string) => (
+                            <span
+                              key={tag}
+                              className="badge-pill"
+                              style={{
+                                background: 'rgba(59, 130, 246, 0.18)',
+                                border: '1px solid rgba(59, 130, 246, 0.35)',
+                                color: '#93c5fd',
+                                fontSize: '0.72rem',
+                                padding: '0.15rem 0.45rem',
+                              }}
+                            >
+                              #{tag}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -2378,6 +2440,14 @@ export default function InputSourcesGallery({
           </div>
         </div>
       )}
+
+      {/* In-Viewer Metadata Editor Modal */}
+      <MetadataEditorModal
+        isOpen={isEditingMetadata}
+        onClose={() => setIsEditingMetadata(false)}
+        mediaFile={selectedMedia}
+        onSaved={handleMetadataSaved}
+      />
     </div>
   );
 }

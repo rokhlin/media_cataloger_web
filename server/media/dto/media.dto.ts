@@ -63,3 +63,74 @@ export class ListMediaFilesQueryDto {
   refresh?: boolean | string;
 }
 
+export class UpdateMediaMetadataDto {
+  @ApiProperty({ description: 'File path or filename of the media item to update', example: 'photos/vacation.jpg' })
+  @IsString()
+  @IsNotEmpty()
+  file: string;
+
+  @ApiProperty({ required: false, description: 'English summary of the media item' })
+  summary?: string;
+
+  @ApiProperty({ required: false, description: 'Russian summary of the media item' })
+  summary_ru?: string;
+
+  @ApiProperty({ required: false, description: 'Detailed English description' })
+  description?: string;
+
+  @ApiProperty({ required: false, description: 'Detailed Russian description' })
+  description_ru?: string;
+
+  @ApiProperty({ required: false, description: 'Scene environment (e.g. indoor, outdoor)', example: 'outdoor' })
+  environment?: string;
+
+  @ApiProperty({ required: false, description: 'Lighting condition (English)', example: 'natural golden hour' })
+  lighting?: string;
+
+  @ApiProperty({ required: false, description: 'Lighting condition (Russian)', example: 'естественный золотой час' })
+  lighting_ru?: string;
+
+  @ApiProperty({ required: false, description: 'Weather condition (English)', example: 'sunny clear sky' })
+  weather?: string;
+
+  @ApiProperty({ required: false, description: 'Weather condition (Russian)', example: 'солнечно, ясно' })
+  weather_ru?: string;
+
+  @ApiProperty({ required: false, description: 'Time of day (English)', example: 'sunset' })
+  time_of_day?: string;
+
+  @ApiProperty({ required: false, description: 'Time of day (Russian)', example: 'закат' })
+  time_of_day_ru?: string;
+
+  @ApiProperty({ required: false, description: 'OCR text detected in image' })
+  ocr_text?: string;
+
+  @ApiProperty({ required: false, description: 'Camera manufacturer / make', example: 'Sony' })
+  camera_make?: string;
+
+  @ApiProperty({ required: false, description: 'Camera model', example: 'ILCE-7RM4' })
+  camera_model?: string;
+
+  @ApiProperty({ required: false, description: 'Camera lens model', example: 'FE 24-70mm F2.8 GM' })
+  lens_model?: string;
+
+  @ApiProperty({ required: false, description: 'Location / Landmark name', example: 'Central Park, New York' })
+  location_name?: string;
+
+  @ApiProperty({ required: false, description: 'Capture date/time in ISO or YYYY-MM-DD format', example: '2024-05-18' })
+  media_date?: string;
+
+  @ApiProperty({ required: false, description: 'Audio speech transcription (English)' })
+  transcription?: string;
+
+  @ApiProperty({ required: false, description: 'Audio speech transcription (Russian)' })
+  transcription_ru?: string;
+
+  @ApiProperty({ required: false, description: 'Timeline events for video clips' })
+  timeline_events?: any;
+
+  @ApiProperty({ required: false, description: 'Tags or keywords for media classification', example: ['vacation', 'family', 'beach'] })
+  tags?: string[] | string;
+}
+
+

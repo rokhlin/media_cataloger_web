@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Life Events & Timeline system (`FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`) with gallery photo attachment picker.
   - Graph integrity & cycle detection service (`GraphIntegrityService`) preventing circular parentage anomalies.
   - Interactive modals: `PersonDetailDrawer`, `QuickAddRelativeModal`, and `FaceLinkModal` linking recognized media faces to tree persons.
+- **Metadata Editing & In-Viewer Editor (`MetadataEditorModal`)**:
+  - Full support for viewing, modifying, and persisting metadata (summaries EN/RU, descriptions EN/RU, environment, lighting, weather, time of day, location, capture date, camera make/model/lens, OCR text, audio transcriptions, and tag chips).
+  - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
+  - Automatic bidirectional synchronization with on-disk sidecar JSON files.
+  - Interactive multi-tab in-viewer metadata editor modal in `MediaGallery` with instant reactive UI refresh and 100% English 🇬🇧 and Russian 🇷🇺 localization.
 - **Developer Guidelines & Rules Documentation**:
   - `.agents/rules/jest-testing-for-js-ts.md`: Strict testing requirements, mock isolation, and Jest best practices.
   - `.agents/rules/nest-js-development-best-practices.md`: Modular backend architecture and clean service standards.

@@ -71,6 +71,12 @@ export interface MediaFileItem {
   transcription?: string;
   transcription_ru?: string;
   timeline_events?: TimelineEventItem[];
+  camera_make?: string;
+  camera_model?: string;
+  lens_model?: string;
+  location_name?: string;
+  media_date?: string;
+  tags?: string[];
   folder?: string;
   sidecar_path?: string;
   sidecar?: Record<string, unknown> | null;
