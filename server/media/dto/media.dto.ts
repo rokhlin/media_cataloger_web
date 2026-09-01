@@ -61,6 +61,9 @@ export class ListMediaFilesQueryDto {
 
   @ApiProperty({ required: false, description: 'Force refresh and bust scan cache', example: false })
   refresh?: boolean | string;
+
+  @ApiProperty({ required: false, enum: ['false', 'true', 'all'], description: 'Vault filter mode. Defaults to false (excludes secret vault items)' })
+  vault?: 'false' | 'true' | 'all';
 }
 
 export class UpdateMediaMetadataDto {

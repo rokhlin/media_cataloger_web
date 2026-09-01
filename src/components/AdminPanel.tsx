@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useFeatureFlags, normalizeClassName, DEFAULT_FEATURE_FLAG_PRESETS } from '../services/featureFlagsContext';
+import UserManagementTab from './UserManagementTab';
 import type { FeatureFlag } from '../models/featureFlags';
 import type { StatusInfo } from '../models/status';
 import './AdminPanel.css';
@@ -27,6 +28,9 @@ export default function AdminPanel({
     clearAllFlags,
     disabledClassesCount,
   } = useFeatureFlags();
+
+  // Subtab state
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users'>('flags');
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -265,8 +269,34 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* 1. Feature Flags Management Dropdown / Accordion Section */}
-      <div className="admin-card" id="admin-feature-flags-card">
+      {/* Subtab Navigation Bar */}
+      <div className="admin-subtabs-bar" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className={`btn ${activeAdminSubTab === 'flags' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveAdminSubTab('flags')}
+          id="tab-btn-admin-flags"
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
+        >
+          ⚡ {t('adminTabFlags' as any) || 'Feature Flags & System'}
+        </button>
+        <button
+          type="button"
+          className={`btn ${activeAdminSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveAdminSubTab('users')}
+          id="tab-btn-admin-users"
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
+        >
+          👥 {t('adminTabUsers' as any) || 'User & Role Management (RBAC)'}
+        </button>
+      </div>
+
+      {activeAdminSubTab === 'users' ? (
+        <UserManagementTab />
+      ) : (
+        <>
+          {/* 1. Feature Flags Management Dropdown / Accordion Section */}
+          <div className="admin-card" id="admin-feature-flags-card">
         <div
           className={`admin-card-header-collapsible ${isFlagsSectionOpen ? 'open' : ''}`}
           onClick={() => setIsFlagsSectionOpen((prev) => !prev)}
@@ -697,6 +727,8 @@ export default function AdminPanel({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Add / Edit Feature Flag Modal */}
       {isModalOpen && (

@@ -90,6 +90,36 @@ export class MediaService {
   }
 
   /**
+   * Check if a given file path belongs to secret vault
+   */
+  isVaultPath(filePath: string): boolean {
+    if (!filePath) return false;
+    const norm = filePath.replace(/\\/g, '/');
+    if (this.db.isItemInVault(filePath) || this.db.isItemInVault(norm)) {
+      return true;
+    }
+    const config = this.db.getVaultConfig();
+    const vaultFolder = config?.vault_folder;
+    if (vaultFolder && vaultFolder.trim()) {
+      const normFolder = vaultFolder.replace(/\\/g, '/').toLowerCase();
+      const normPathLower = norm.toLowerCase();
+      if (
+        normPathLower.includes(`/${normFolder}/`) ||
+        normPathLower.startsWith(`${normFolder}/`) ||
+        normPathLower.endsWith(`/${normFolder}`) ||
+        path.basename(path.dirname(norm)).toLowerCase() === normFolder
+      ) {
+        return true;
+      }
+    }
+    const parts = norm.toLowerCase().split('/');
+    if (parts.some((p) => p === '.vault' || p === 'vault' || p === '_vault')) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Invalidate in-memory scan cache
    */
   invalidateCache(): void {
@@ -576,6 +606,7 @@ export class MediaService {
         faces: dedupFaces,
         face_names: faceNames,
         has_unassigned_faces: hasUnassigned,
+        is_vault: this.isVaultPath(filePath),
         error_message: syncRec ? syncRec.error_message : null,
       };
 
@@ -644,6 +675,7 @@ export class MediaService {
     sort_by?: 'name' | 'date' | 'size' | 'status' | 'faces';
     sort_order?: 'asc' | 'desc';
     refresh?: boolean | string;
+    vault?: 'false' | 'true' | 'all';
   }) {
     this.db.initDb();
 
@@ -685,6 +717,13 @@ export class MediaService {
 
     // Filter items
     let filtered = allItems;
+
+    // Secret Vault isolation filter: default is to exclude all vault items
+    if (query?.vault === 'true') {
+      filtered = filtered.filter((item) => item.is_vault);
+    } else if (query?.vault !== 'all') {
+      filtered = filtered.filter((item) => !item.is_vault);
+    }
 
     if (query) {
       const search = query.search?.trim().toLowerCase();

@@ -398,6 +398,89 @@ export interface AdminPanelTranslations {
   systemStorageTitle: string;
 }
 
+export interface AuthAndVaultTranslations {
+  authSignIn: string;
+  authSignOut: string;
+  authLoginTitle: string;
+  authLoginSubtitle: string;
+  authUsernameLabel: string;
+  authPasswordLabel: string;
+  authSignInButton: string;
+  authSigningIn: string;
+  authInvalidCredentials: string;
+  authUsernameRequired: string;
+  authPasswordRequired: string;
+  authQuickAdminDemo: string;
+  authSwitchAccount: string;
+  authLoginRequired: string;
+  authCannotDeleteSelf: string;
+  authConfirmDeleteUser: string;
+  authPasswordMinLength: string;
+
+  navVault: string;
+  navVaultTooltip: string;
+  vaultShortLabel: string;
+  vaultTitle: string;
+  vaultUnlockedTitle: string;
+  vaultLockedTitle: string;
+  vaultSetupTitle: string;
+  vaultUnlockedSubtitle: string;
+  vaultLockedSubtitle: string;
+  vaultSetupSubtitle: string;
+  vaultIncorrectPin: string;
+  vaultPinMinLength: string;
+  vaultPinMismatch: string;
+  vaultSessionActive: string;
+  vaultAutoLockNotice: string;
+  vaultAutoLockIn: string;
+  vaultProtectedFilesCount: string;
+  vaultNewPinLabel: string;
+  vaultConfirmPinLabel: string;
+  vaultFolderLabel: string;
+  vaultFolderHelp: string;
+  vaultSettingUp: string;
+  vaultSetupButton: string;
+  vaultEnterPassphrasePlaceholder: string;
+  vaultUnlockButton: string;
+  vaultLockNowButton: string;
+  vaultAddToVault: string;
+  vaultRemoveFromVault: string;
+
+  adminTabFlags: string;
+  adminTabUsers: string;
+  rbacUsersTitle: string;
+  rbacUsersSubtitle: string;
+  rbacAddUserButton: string;
+  rbacLoadingUsers: string;
+  rbacColUsername: string;
+  rbacColDisplayName: string;
+  rbacColRole: string;
+  rbacColPermissions: string;
+  rbacColActions: string;
+  rbacYouPill: string;
+  rbacAllPermissions: string;
+  rbacNoPermissions: string;
+  rbacEditUserTitle: string;
+  rbacCreateUserTitle: string;
+  rbacUserModalSubtitle: string;
+  rbacDisplayNameLabel: string;
+  rbacNewPasswordOptional: string;
+  rbacRoleLabel: string;
+  rbacPermissionsLabel: string;
+  permViewMedia: string;
+  permEditMetadata: string;
+  permManageFaces: string;
+  permAdminPanel: string;
+  permVaultAccess: string;
+  permManageUsers: string;
+  permViewMediaDesc: string;
+  permEditMetadataDesc: string;
+  permManageFacesDesc: string;
+  permAdminPanelDesc: string;
+  permVaultAccessDesc: string;
+  permManageUsersDesc: string;
+}
+
 export type TranslationDictionary = HeaderTranslations &
   ExecutionControlsTranslations &
   GalleryTranslations &
@@ -407,4 +490,5 @@ export type TranslationDictionary = HeaderTranslations &
   ThemeTranslations &
   LogsTranslations &
   CommonTranslations &
-  AdminPanelTranslations;
+  AdminPanelTranslations &
+  AuthAndVaultTranslations;

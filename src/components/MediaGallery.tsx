@@ -12,6 +12,8 @@ import type {
   FolderTreeNode,
 } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useAuth } from '../services/authContext';
+import { useVault } from '../services/vaultContext';
 import { mediaOrganizationService } from '../services/mediaOrganizationService';
 import { FlagsManager } from '../services/featureFlagsContext';
 import MetadataEditorModal from './MetadataEditorModal';
@@ -59,6 +61,8 @@ export default function InputSourcesGallery({
   activeInputFolders = [],
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
+  const { canEdit, canManageFaces, isAdmin } = useAuth();
+  const { isUnlocked, addVaultItem, removeVaultItem } = useVault();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'images' | 'videos'>('all');
@@ -2377,28 +2381,32 @@ export default function InputSourcesGallery({
                                   {isManual ? t('badgeManual') : f.is_reference ? t('badgeKnown') : t('badgePending')}
                                 </span>
 
-                                <button
-                                  type="button"
-                                  className="btn-icon-subtle"
-                                  onClick={() => {
-                                    setReassigningFaceId(f.face_id);
-                                    setReassignTargetPerson(f.name || '');
-                                    setReassignCustomName('');
-                                  }}
-                                  title={t('changePerson')}
-                                >
-                                  ✏️
-                                </button>
+                                {canManageFaces && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="btn-icon-subtle"
+                                      onClick={() => {
+                                        setReassigningFaceId(f.face_id);
+                                        setReassignTargetPerson(f.name || '');
+                                        setReassignCustomName('');
+                                      }}
+                                      title={t('changePerson')}
+                                    >
+                                      ✏️
+                                    </button>
 
-                                <button
-                                  type="button"
-                                  className="btn-icon-subtle"
-                                  style={{ color: '#ef4444' }}
-                                  onClick={() => handleRemoveFace(f.face_id)}
-                                  title={t('removePersonTooltip')}
-                                >
-                                  🗑️
-                                </button>
+                                    <button
+                                      type="button"
+                                      className="btn-icon-subtle"
+                                      style={{ color: '#ef4444' }}
+                                      onClick={() => handleRemoveFace(f.face_id)}
+                                      title={t('removePersonTooltip')}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2409,7 +2417,41 @@ export default function InputSourcesGallery({
                 </div>
 
                 {/* Actions */}
-                <div className="lightbox-section lightbox-actions-footer">
+                <div className="lightbox-section lightbox-actions-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {canEdit && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                      onClick={() => setIsEditingMetadata(true)}
+                      type="button"
+                    >
+                      ✏️ {t('btnEditMetadata' as any) || 'Edit Metadata'}
+                    </button>
+                  )}
+
+                  {(canEdit || isUnlocked || isAdmin) && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                      onClick={async () => {
+                        const filePath = selectedMedia.file_path || selectedMedia.filename;
+                        if (selectedMedia.is_vault) {
+                          await removeVaultItem(filePath);
+                          setSelectedMedia((prev) => (prev ? { ...prev, is_vault: false } : null));
+                        } else {
+                          await addVaultItem(filePath);
+                          setSelectedMedia((prev) => (prev ? { ...prev, is_vault: true } : null));
+                        }
+                        if (onRefresh) onRefresh();
+                      }}
+                      type="button"
+                    >
+                      {selectedMedia.is_vault
+                        ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Remove from Secret Vault'}`
+                        : `🔒 ${t('vaultAddToVault' as any) || 'Move to Secret Vault'}`}
+                    </button>
+                  )}
+
                   <button
                     className="btn btn-accent"
                     style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}

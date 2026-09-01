@@ -15,9 +15,18 @@ import { errorInterceptor } from './utils/errorInterceptor';
 import { mediaCacheService } from './services/mediaCacheService';
 import HeaderNavTabs from './components/HeaderNavTabs';
 import AdminPanel from './components/AdminPanel';
+import { AuthProvider, useAuth } from './services/authContext';
+import { VaultProvider, useVault } from './services/vaultContext';
+import LoginModal from './components/LoginModal';
+import VaultModal from './components/VaultModal';
 import './App.css';
 
-function App() {
+function AppMain() {
+  const { canAccessAdmin, canManageFaces } = useAuth();
+  const { isUnlocked, isConfigured } = useVault();
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isVaultOpen, setIsVaultOpen] = useState(false);
+
   const [statusInfo, setStatusInfo] = useState<StatusInfo>({
     status: 'checking',
     current_task: null,
@@ -766,6 +775,8 @@ function App() {
           setSettingsTab('appearance');
           setIsSettingsOpen(true);
         }}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        onOpenVault={() => setIsVaultOpen(true)}
         showLogs={showLogs}
         onToggleLogs={() => setShowLogs((prev) => !prev)}
         isScanning={isMediaLoading || Boolean(scanProgress?.is_scanning)}
@@ -820,6 +831,63 @@ function App() {
             </div>
           )}
 
+          {activeTab === 'vault' && (
+            <div className="tab-pane active" id="pane-vault">
+              {!isUnlocked ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '60vh',
+                    gap: '1.25rem',
+                    textAlign: 'center',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    borderRadius: '16px',
+                    border: '1px dashed rgba(255, 255, 255, 0.15)',
+                    padding: '2rem',
+                  }}
+                >
+                  <span style={{ fontSize: '3.5rem' }}>🔒</span>
+                  <div>
+                    <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Secret Vault is Locked</h2>
+                    <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
+                      Private media files in the secret vault are isolated and hidden. Enter your PIN or Master Passphrase to view and manage vault items.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setIsVaultOpen(true)}
+                    style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
+                    id="btn-unlock-vault-pane"
+                  >
+                    🔓 {isConfigured ? 'Unlock Secret Vault' : 'Setup Master PIN'}
+                  </button>
+                </div>
+              ) : (
+                <InputSourcesGallery
+                  mediaFiles={mediaFiles.filter((m) => m.is_vault)}
+                  isLoading={isMediaLoading}
+                  isBackgroundLoading={isBackgroundLoading}
+                  totalKnownFiles={mediaFiles.filter((m) => m.is_vault).length}
+                  onRefresh={loadMediaFiles}
+                  onFetchMore={fetchMoreMediaFiles}
+                  onStartSingleAnalysis={handleStartSingleAnalysis}
+                  onSwitchToControls={() => setActiveTab('media_library')}
+                  persons={persons}
+                  uiSettings={uiSettings}
+                  disabled={isRunning || isPaused}
+                  onReloadFaces={loadFaces}
+                  onViewInFamilyTree={handleViewInFamilyTree}
+                  scannedFilesCount={scanProgress?.scanned_count || 0}
+                  activeInputFolders={settings?.input_folders || []}
+                />
+              )}
+            </div>
+          )}
+
           {activeTab === 'media_library' && (
             <div className="tab-pane active media-library-layout" id="pane-media-library">
               <FaceRegistry
@@ -836,7 +904,7 @@ function App() {
                 onResetFacesByFilename={handleResetFacesByFilename}
                 onDeleteFace={handleDeleteFace}
                 onDeleteFacesBatch={handleDeleteFacesBatch}
-                disabled={isRunning || isPaused}
+                disabled={isRunning || isPaused || !canManageFaces}
                 uiSettings={uiSettings}
                 onViewInFamilyTree={handleViewInFamilyTree}
               />
@@ -868,11 +936,46 @@ function App() {
 
           {activeTab === 'admin' && (
             <div className="tab-pane active" id="pane-admin">
-              <AdminPanel
-                statusInfo={statusInfo}
-                mediaFilesCount={mediaFiles.length}
-                facesCount={faces.length}
-              />
+              {!canAccessAdmin ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '60vh',
+                    gap: '1.25rem',
+                    textAlign: 'center',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    borderRadius: '16px',
+                    border: '1px dashed rgba(239, 68, 68, 0.3)',
+                    padding: '2rem',
+                  }}
+                >
+                  <span style={{ fontSize: '3.5rem' }}>🛡️</span>
+                  <div>
+                    <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Administrator Privileges Required</h2>
+                    <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
+                      You need to sign in with an Administrator account to configure feature flags, system parameters, and manage users.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setIsLoginOpen(true)}
+                    style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
+                    id="btn-admin-signin"
+                  >
+                    🔑 Sign In as Admin
+                  </button>
+                </div>
+              ) : (
+                <AdminPanel
+                  statusInfo={statusInfo}
+                  mediaFilesCount={mediaFiles.length}
+                  facesCount={faces.length}
+                />
+              )}
             </div>
           )}
         </main>
@@ -907,8 +1010,29 @@ function App() {
         onSaveUiSettings={handleSaveUiSettings}
         initialTab={settingsTab}
       />
+
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+      />
+
+      <VaultModal
+        isOpen={isVaultOpen}
+        onClose={() => setIsVaultOpen(false)}
+        onUnlocked={() => {
+          loadMediaFiles(true);
+        }}
+      />
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <VaultProvider>
+        <AppMain />
+      </VaultProvider>
+    </AuthProvider>
+  );
+}

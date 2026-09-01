@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject } from '@nest
 import DatabaseConstructor, { Database } from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { AppConfigService } from '../config/config.service.js';
 
 @Injectable()
@@ -105,6 +106,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         duration REAL,
         media_date TEXT,
         phash TEXT,
+        is_vault INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'PROCESSED',
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -158,6 +160,35 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        display_name TEXT,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'viewer',
+        permissions TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE IF NOT EXISTS vault_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        pin_hash TEXT,
+        pin_salt TEXT,
+        vault_folder TEXT,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        auto_lock_minutes INTEGER NOT NULL DEFAULT 15,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE IF NOT EXISTS vault_items (
+        file_path TEXT PRIMARY KEY,
+        added_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        notes TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -174,6 +205,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     if (!this.db) return;
 
     try {
+      // Migrate media_items columns if missing
+      const miCols = new Set((this.db.pragma('table_info(media_items)') as any[]).map((c: any) => c.name.toLowerCase()));
+      if (!miCols.has('is_vault')) {
+        this.db.exec('ALTER TABLE media_items ADD COLUMN is_vault INTEGER DEFAULT 0;');
+      }
+
       // Migrate media_faces columns if missing
       const mfCols = new Set((this.db.pragma('table_info(media_faces)') as any[]).map((c: any) => c.name.toLowerCase()));
       if (!mfCols.has('source_file')) {
@@ -245,6 +282,30 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           this.db.exec(`ALTER TABLE media_metadata ADD COLUMN ${col} ${type};`);
         }
       }
+
+      // Seed default admin account if no users exist
+      try {
+        const userCount = (this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0;
+        if (userCount === 0) {
+          const salt = crypto.randomBytes(16).toString('hex');
+          const hash = crypto.pbkdf2Sync('admin', salt, 10000, 64, 'sha512').toString('hex');
+          const defaultAdminPermissions = JSON.stringify([
+            'view_media',
+            'edit_metadata',
+            'manage_faces',
+            'admin_panel',
+            'vault_access',
+            'manage_users',
+          ]);
+          this.db.prepare(`
+            INSERT INTO users (id, username, display_name, password_hash, password_salt, role, permissions, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'admin', ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+          `).run('user_admin_default', 'admin', 'Administrator', hash, salt, defaultAdminPermissions);
+          this.logger.log('Seeded default administrator account (admin)');
+        }
+      } catch (userSeedErr) {
+        this.logger.warn(`Notice during default admin check: ${userSeedErr}`);
+      }
     } catch (err) {
       this.logger.warn(`Schema migration check notice: ${err}`);
     }
@@ -258,12 +319,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type);
         CREATE INDEX IF NOT EXISTS idx_media_date ON media_items(media_date DESC);
         CREATE INDEX IF NOT EXISTS idx_media_filename ON media_items(file_name);
+        CREATE INDEX IF NOT EXISTS idx_media_is_vault ON media_items(is_vault);
         CREATE INDEX IF NOT EXISTS idx_media_faces_media_id ON media_faces(media_id);
         CREATE INDEX IF NOT EXISTS idx_media_faces_face_id ON media_faces(face_id);
         CREATE INDEX IF NOT EXISTS idx_media_faces_source_file ON media_faces(source_file);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_faces_unique_src_face ON media_faces(source_file, face_id);
         CREATE INDEX IF NOT EXISTS idx_face_registry_person_id ON face_registry(person_id);
         CREATE INDEX IF NOT EXISTS idx_face_registry_face_id ON face_registry(face_id);
+        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+        CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
       `);
     } catch (err) {
       this.logger.warn(`Index creation notice: ${err}`);
@@ -1078,5 +1141,213 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     transaction();
     return true;
+  }
+
+  // --- Users & RBAC ---
+  getUserByUsername(username: string): any {
+    const db = this.getDb();
+    const row = db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username) as any;
+    if (!row) return null;
+    return {
+      ...row,
+      permissions: typeof row.permissions === 'string' ? JSON.parse(row.permissions || '[]') : row.permissions,
+    };
+  }
+
+  getUserById(id: string): any {
+    const db = this.getDb();
+    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    if (!row) return null;
+    return {
+      ...row,
+      permissions: typeof row.permissions === 'string' ? JSON.parse(row.permissions || '[]') : row.permissions,
+    };
+  }
+
+  listUsers(): any[] {
+    const db = this.getDb();
+    const rows = db.prepare('SELECT id, username, display_name, role, permissions, created_at, updated_at FROM users ORDER BY created_at ASC').all() as any[];
+    return rows.map((r) => ({
+      ...r,
+      permissions: typeof r.permissions === 'string' ? JSON.parse(r.permissions || '[]') : r.permissions,
+    }));
+  }
+
+  createUser(user: {
+    id: string;
+    username: string;
+    displayName?: string;
+    passwordHash: string;
+    passwordSalt: string;
+    role: string;
+    permissions: string[];
+  }): any {
+    const db = this.getDb();
+    const permJson = JSON.stringify(user.permissions || []);
+    db.prepare(`
+      INSERT INTO users (id, username, display_name, password_hash, password_salt, role, permissions, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    `).run(
+      user.id,
+      user.username.trim(),
+      user.displayName?.trim() || user.username.trim(),
+      user.passwordHash,
+      user.passwordSalt,
+      user.role || 'viewer',
+      permJson
+    );
+    return this.getUserById(user.id);
+  }
+
+  updateUser(
+    id: string,
+    updates: {
+      displayName?: string;
+      passwordHash?: string;
+      passwordSalt?: string;
+      role?: string;
+      permissions?: string[];
+    }
+  ): any {
+    const db = this.getDb();
+    const current = this.getUserById(id);
+    if (!current) return null;
+
+    const newDisplayName = updates.displayName !== undefined ? updates.displayName : current.display_name;
+    const newHash = updates.passwordHash !== undefined ? updates.passwordHash : current.password_hash;
+    const newSalt = updates.passwordSalt !== undefined ? updates.passwordSalt : current.password_salt;
+    const newRole = updates.role !== undefined ? updates.role : current.role;
+    const newPerms = updates.permissions !== undefined ? JSON.stringify(updates.permissions) : JSON.stringify(current.permissions || []);
+
+    db.prepare(`
+      UPDATE users SET
+        display_name = ?,
+        password_hash = ?,
+        password_salt = ?,
+        role = ?,
+        permissions = ?,
+        updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(newDisplayName, newHash, newSalt, newRole, newPerms, id);
+
+    return this.getUserById(id);
+  }
+
+  deleteUser(id: string): boolean {
+    const db = this.getDb();
+    const res = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    return res.changes > 0;
+  }
+
+  countUsers(): number {
+    const db = this.getDb();
+    const row = db.prepare('SELECT COUNT(*) as count FROM users').get() as any;
+    return row?.count || 0;
+  }
+
+  // --- Secret Vault Storage & Config ---
+  getVaultConfig(): any {
+    const db = this.getDb();
+    const row = db.prepare('SELECT * FROM vault_config WHERE id = 1').get() as any;
+    if (!row) return null;
+    return {
+      ...row,
+      is_enabled: Boolean(row.is_enabled),
+      has_pin: Boolean(row.pin_hash),
+    };
+  }
+
+  saveVaultConfig(config: {
+    pinHash?: string;
+    pinSalt?: string;
+    vaultFolder?: string;
+    isEnabled?: boolean;
+    autoLockMinutes?: number;
+  }): any {
+    const db = this.getDb();
+    const current = this.getVaultConfig();
+    const isEnabledNum = (config.isEnabled !== undefined ? config.isEnabled : current?.is_enabled ?? true) ? 1 : 0;
+    const autoLock = config.autoLockMinutes !== undefined ? config.autoLockMinutes : current?.auto_lock_minutes ?? 15;
+    const vaultFolder = config.vaultFolder !== undefined ? config.vaultFolder : current?.vault_folder ?? null;
+    const pinHash = config.pinHash !== undefined ? config.pinHash : current?.pin_hash ?? null;
+    const pinSalt = config.pinSalt !== undefined ? config.pinSalt : current?.pin_salt ?? null;
+
+    db.prepare(`
+      INSERT INTO vault_config (id, pin_hash, pin_salt, vault_folder, is_enabled, auto_lock_minutes, created_at, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        pin_hash = excluded.pin_hash,
+        pin_salt = excluded.pin_salt,
+        vault_folder = excluded.vault_folder,
+        is_enabled = excluded.is_enabled,
+        auto_lock_minutes = excluded.auto_lock_minutes,
+        updated_at = datetime('now', 'localtime')
+    `).run(pinHash, pinSalt, vaultFolder, isEnabledNum, autoLock);
+
+    return this.getVaultConfig();
+  }
+
+  listVaultItems(): string[] {
+    const db = this.getDb();
+    const rows = db.prepare('SELECT file_path FROM vault_items').all() as any[];
+    return rows.map((r) => r.file_path);
+  }
+
+  addVaultItem(filePath: string, notes?: string): boolean {
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    const transaction = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO vault_items (file_path, notes, added_at)
+        VALUES (?, ?, datetime('now', 'localtime'))
+        ON CONFLICT(file_path) DO UPDATE SET notes = COALESCE(excluded.notes, vault_items.notes)
+      `).run(norm, notes || null);
+
+      db.prepare(`
+        UPDATE media_items SET is_vault = 1, updated_at = datetime('now', 'localtime')
+        WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      `).run(filePath, norm, norm);
+    });
+
+    transaction();
+    return true;
+  }
+
+  removeVaultItem(filePath: string): boolean {
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    const transaction = db.transaction(() => {
+      db.prepare(`
+        DELETE FROM vault_items
+        WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      `).run(filePath, norm, norm);
+
+      db.prepare(`
+        UPDATE media_items SET is_vault = 0, updated_at = datetime('now', 'localtime')
+        WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      `).run(filePath, norm, norm);
+    });
+
+    transaction();
+    return true;
+  }
+
+  isItemInVault(filePath: string): boolean {
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    const row = db.prepare(`
+      SELECT 1 FROM vault_items
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      LIMIT 1
+    `).get(filePath, norm, norm);
+    if (row) return true;
+
+    // Also check if flagged in media_items
+    const miRow = db.prepare(`
+      SELECT is_vault FROM media_items
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      LIMIT 1
+    `).get(filePath, norm, norm) as any;
+    return Boolean(miRow?.is_vault);
   }
 }

@@ -81,6 +81,7 @@ export interface MediaFileItem {
   sidecar_path?: string;
   sidecar?: Record<string, unknown> | null;
   family_context?: FamilyContextData;
+  is_vault?: boolean;
 }
 
 export interface GalleryMediaFile extends MediaFileItem {

@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Query, Res, BadRequestException, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Res, Headers, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MediaService } from './media.service.js';
 import { ThumbnailService } from './thumbnail.service.js';
+import { VaultService } from '../vault/vault.service.js';
 import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto, UpdateMediaMetadataDto } from './dto/media.dto.js';
 
 function getMimeType(filePath: string): string {
@@ -81,7 +82,16 @@ export class MediaController {
   constructor(
     @Inject(MediaService) private readonly mediaService: MediaService,
     @Inject(ThumbnailService) private readonly thumbnailService: ThumbnailService,
+    @Inject(VaultService) private readonly vaultService: VaultService,
   ) {}
+
+  private checkVaultAccess(filePath: string, vaultToken?: string): void {
+    if (this.vaultService.isVaultFile(filePath)) {
+      if (!this.vaultService.isVaultUnlocked(vaultToken)) {
+        throw new ForbiddenException('Secret Vault item is locked. Authentication PIN required.');
+      }
+    }
+  }
 
   @Get('files')
   @ApiOperation({ summary: 'List all media files discovered in input sources with pagination, search, filter and sorting' })
@@ -105,6 +115,8 @@ export class MediaController {
     @Query('path') queryPath: string,
     @Query('file') queryFile: string,
     @Query('size') querySize: string,
+    @Query('vault_token') queryVaultToken: string,
+    @Headers('x-vault-token') headerVaultToken: string,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -112,6 +124,8 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
+    this.checkVaultAccess(resolved, headerVaultToken || queryVaultToken);
+    
     const size = querySize ? parseInt(querySize, 10) : 300;
 
     try {
@@ -134,6 +148,8 @@ export class MediaController {
     @Query('file') queryFile: string,
     @Query('preview') queryPreview: string,
     @Query('download') queryDownload: string,
+    @Query('vault_token') queryVaultToken: string,
+    @Headers('x-vault-token') headerVaultToken: string,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -141,6 +157,8 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
+    this.checkVaultAccess(resolved, headerVaultToken || queryVaultToken);
+
     const ext = path.extname(resolved).toLowerCase();
     const isHeic = ext === '.heic' || ext === '.heif';
     const isExplicitDownload = queryDownload === 'true' || queryDownload === '1';

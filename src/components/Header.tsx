@@ -2,11 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import type { StatusInfo } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../services/authContext';
+import { useVault } from '../services/vaultContext';
 
 interface HeaderProps {
   statusInfo?: StatusInfo;
   onOpenSettings?: () => void;
   onOpenAppearanceSettings?: () => void;
+  onOpenLogin?: () => void;
+  onOpenVault?: () => void;
   showLogs?: boolean;
   onToggleLogs?: () => void;
   isScanning?: boolean;
@@ -20,6 +24,8 @@ export default function Header({
   statusInfo,
   onOpenSettings,
   onOpenAppearanceSettings,
+  onOpenLogin,
+  onOpenVault,
   showLogs = false,
   onToggleLogs,
   isScanning = false,
@@ -30,25 +36,32 @@ export default function Header({
 }: HeaderProps) {
   const { language, setLanguage, t } = useLanguage();
   const { themeId, themeMode, activeTheme, presets, customThemes, setThemeId, toggleThemeMode } = useTheme();
+  const { currentUser, isAuthenticated, logout } = useAuth();
+  const { isUnlocked, isConfigured } = useVault();
   const { status, current_task, error, progress } = statusInfo || {};
 
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close theme menu on click outside
+  // Close menus on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
         setIsThemeMenuOpen(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
     }
-    if (isThemeMenuOpen) {
+    if (isThemeMenuOpen || isUserMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isThemeMenuOpen]);
+  }, [isThemeMenuOpen, isUserMenuOpen]);
 
   let dotClass = 'status-dot active';
   let statusText = t('statusIdle');
@@ -129,8 +142,28 @@ export default function Header({
       </div>
 
       <div className="header-right-section">
-        {/* visual-controls: Theme switcher, Language switcher, Logs toggle, Settings */}
+        {/* visual-controls: Theme switcher, Language switcher, Vault, Auth, Logs toggle, Settings */}
         <div className="visual-controls" id="visual-controls">
+          {/* Secret Vault Trigger */}
+          {onOpenVault && (
+            <button
+              type="button"
+              className={`btn btn-secondary ${isUnlocked ? 'active' : ''}`}
+              onClick={onOpenVault}
+              title={
+                isUnlocked
+                  ? t('vaultUnlockedTitle' as any) || 'Secret Vault Unlocked'
+                  : isConfigured
+                  ? t('vaultLockedTitle' as any) || 'Unlock Secret Vault'
+                  : t('vaultSetupTitle' as any) || 'Setup Secret Vault'
+              }
+              id="btn-header-vault"
+              style={{ padding: '0.55rem 0.9rem', fontSize: '0.88rem' }}
+            >
+              {isUnlocked ? '🔓' : '🔒'} {t('vaultShortLabel' as any) || 'Vault'}
+            </button>
+          )}
+
           {/* Theme Quick Switcher & Mode Toggle */}
           <div className="theme-switcher-container" ref={themeMenuRef}>
             <div className="theme-switcher-group">
@@ -239,6 +272,92 @@ export default function Header({
             </button>
           </div>
 
+          {/* User Account / Login Button */}
+          {isAuthenticated && currentUser ? (
+            <div className="theme-switcher-container" ref={userMenuRef}>
+              <button
+                type="button"
+                className={`btn btn-secondary ${isUserMenuOpen ? 'active' : ''}`}
+                onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                id="btn-user-profile"
+                style={{ padding: '0.5rem 0.9rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+              >
+                <span>👤</span>
+                <span style={{ fontWeight: 600, maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUser.displayName || currentUser.username}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    textTransform: 'uppercase',
+                    padding: '0.1rem 0.35rem',
+                    borderRadius: '4px',
+                    background:
+                      currentUser.role === 'admin'
+                        ? 'rgba(168, 85, 247, 0.3)'
+                        : currentUser.role === 'editor'
+                        ? 'rgba(59, 130, 246, 0.3)'
+                        : 'rgba(16, 185, 129, 0.3)',
+                    color:
+                      currentUser.role === 'admin'
+                        ? '#d8b4fe'
+                        : currentUser.role === 'editor'
+                        ? '#93c5fd'
+                        : '#6ee7b7',
+                  }}
+                >
+                  {currentUser.role}
+                </span>
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="theme-dropdown-menu" style={{ width: '220px' }}>
+                  <div className="theme-dropdown-header">
+                    <strong>{currentUser.displayName || currentUser.username}</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#9aa0a6' }}>@{currentUser.username}</div>
+                  </div>
+                  <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: '#cbd5e1', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div>Role: <strong style={{ textTransform: 'capitalize' }}>{currentUser.role}</strong></div>
+                  </div>
+                  <div className="theme-dropdown-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      className="btn-dropdown-customize"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        if (onOpenLogin) onOpenLogin();
+                      }}
+                      style={{ textAlign: 'left' }}
+                    >
+                      🔄 {t('authSwitchAccount' as any) || 'Switch Account'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-dropdown-customize"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        logout();
+                      }}
+                      style={{ textAlign: 'left', color: '#fca5a5' }}
+                    >
+                      🚪 {t('authSignOut' as any) || 'Sign Out'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onOpenLogin}
+              id="btn-header-login"
+              style={{ padding: '0.55rem 1rem', fontSize: '0.88rem' }}
+            >
+              🔑 {t('authSignIn' as any) || 'Sign In'}
+            </button>
+          )}
+
           {/* Logs toggle button */}
           <button
             className={`btn btn-secondary btn-logs-toggle ${showLogs ? 'active' : ''}`}
@@ -272,3 +391,4 @@ export default function Header({
     </header>
   );
 }
+

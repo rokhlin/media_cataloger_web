@@ -6,4 +6,5 @@ export * from './modals';
 export * from './i18n';
 export * from './theme';
 export * from './featureFlags';
+export * from './auth';
 export { FlagsManager } from '../services/featureFlagsContext';
