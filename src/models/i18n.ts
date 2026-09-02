@@ -6,10 +6,12 @@ export interface HeaderTranslations {
   navMain: string;
   navMediaLibrary: string;
   navFamilyTree: string;
+  navSettings: string;
   navAdmin: string;
   navMainTooltip: string;
   navMediaLibraryTooltip: string;
   navFamilyTreeTooltip: string;
+  navSettingsTooltip: string;
   navAdminTooltip: string;
   statusIdle: string;
   statusRunning: string;

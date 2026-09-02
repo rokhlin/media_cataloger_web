@@ -8,7 +8,7 @@ import FaceRegistry, {
   type FaceRegistryGroup,
 } from './components/FaceRegistry';
 import PipelineLogs from './components/PipelineLogs';
-import SettingsModal, { type SettingsTab } from './components/SettingsModal';
+import SystemSettings, { type SettingsTab } from './components/SystemSettings';
 import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
 import { errorInterceptor } from './utils/errorInterceptor';
@@ -81,7 +81,6 @@ function AppMain() {
   const [showLogs, setShowLogs] = useState(false);
 
   const [settings, setSettings] = useState<SettingsData | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('execution');
   const [pickerPending, setPickerPending] = useState(false);
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
@@ -788,11 +787,11 @@ function AppMain() {
         statusInfo={statusInfo}
         onOpenSettings={() => {
           setSettingsTab('execution');
-          setIsSettingsOpen(true);
+          setActiveTab('settings');
         }}
         onOpenAppearanceSettings={() => {
           setSettingsTab('appearance');
-          setIsSettingsOpen(true);
+          setActiveTab('settings');
         }}
         onOpenLogin={() => setIsLoginOpen(true)}
         onOpenVault={() => setIsVaultOpen(true)}
@@ -953,6 +952,30 @@ function AppMain() {
             </div>
           )}
 
+          {activeTab === 'settings' && (
+            <div className="tab-pane active" id="pane-settings">
+              <SystemSettings
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                onPickFolder={handlePickFolder}
+                isRunning={isRunning}
+                isPaused={isPaused}
+                currentTask={statusInfo.current_task}
+                onStartSync={handleStartSync}
+                onPauseSync={handlePauseSync}
+                onResumeSync={handleResumeSync}
+                onStopSync={handleStopSync}
+                onStartSingleAnalysis={handleStartSingleAnalysis}
+                onPickSingleFile={handlePickFile}
+                pickerPending={pickerPending}
+                uiSettings={uiSettings}
+                onSaveUiSettings={handleSaveUiSettings}
+                initialTab={settingsTab}
+                onTabChange={(tab) => setSettingsTab(tab)}
+              />
+            </div>
+          )}
+
           {activeTab === 'admin' && (
             <div className="tab-pane active" id="pane-admin">
               {!canAccessAdmin ? (
@@ -1013,27 +1036,6 @@ function AppMain() {
         onRefreshLogs={handleRefreshLogs}
         onClearLogs={handleClearLogs}
         isRefreshing={isRefreshingLogs}
-      />
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onSaveSettings={handleSaveSettings}
-        onPickFolder={handlePickFolder}
-        isRunning={isRunning}
-        isPaused={isPaused}
-        currentTask={statusInfo.current_task}
-        onStartSync={handleStartSync}
-        onPauseSync={handlePauseSync}
-        onResumeSync={handleResumeSync}
-        onStopSync={handleStopSync}
-        onStartSingleAnalysis={handleStartSingleAnalysis}
-        onPickSingleFile={handlePickFile}
-        pickerPending={pickerPending}
-        uiSettings={uiSettings}
-        onSaveUiSettings={handleSaveUiSettings}
-        initialTab={settingsTab}
       />
 
       <LoginModal
