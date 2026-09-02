@@ -56,5 +56,22 @@ export class SettingsController {
   async selectFile() {
     return this.settingsService.selectFile();
   }
+
+  @Public()
+  @Get('feature-flags')
+  @ApiOperation({ summary: 'Get feature flags stored in /data/feature_flags.json' })
+  @ApiResponse({ status: 200, description: 'List of feature flags' })
+  getFeatureFlags() {
+    return this.settingsService.getFeatureFlags();
+  }
+
+  @Public()
+  @Post('feature-flags')
+  @ApiOperation({ summary: 'Save feature flags to /data/feature_flags.json' })
+  @ApiResponse({ status: 200, description: 'Saved feature flags response' })
+  saveFeatureFlags(@Body() body: any) {
+    const flags = Array.isArray(body) ? body : body?.flags;
+    return this.settingsService.saveFeatureFlags(flags);
+  }
 }
 

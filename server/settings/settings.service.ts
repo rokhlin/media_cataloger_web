@@ -251,4 +251,34 @@ export class SettingsService {
     }
     return { file: '' };
   }
+
+  getFeatureFlags(): any[] {
+    const filePath = this.config.featureFlagsFilePath;
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to read feature flags from ${filePath}: ${err.message}`);
+      }
+    }
+    return [];
+  }
+
+  saveFeatureFlags(flags: any[]): { status: string; count: number; file_path: string } {
+    if (!Array.isArray(flags)) {
+      throw new Error('Feature flags must be an array');
+    }
+    const filePath = this.config.featureFlagsFilePath;
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(flags, null, 2), 'utf-8');
+    this.logger.log(`Saved ${flags.length} feature flags to ${filePath}`);
+    return { status: 'success', count: flags.length, file_path: filePath };
+  }
 }

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { FeatureFlag, FeatureFlagsContextValue } from '../models/featureFlags';
 
+import defaultFeatureFlagsPresets from '../../data/feature_flags.json';
+
 export const STORAGE_KEY = 'media_cataloger_feature_flags';
 export const STYLE_ELEMENT_ID = 'feature-flags-dynamic-styles';
 
@@ -14,50 +16,8 @@ export function normalizeFlagKey(key: string): string {
   return key.trim().toLowerCase().replace(/[\s-]+/g, '_');
 }
 
-export const DEFAULT_FEATURE_FLAG_PRESETS: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>[] = [
-  {
-    key: 'first_frame_thumbnail_generation',
-    classNames: ['gallery-video-play-overlay'],
-    isEnabled: true,
-    description: 'First-frame video thumbnail extraction and preview',
-  },
-  {
-    key: 'header_logs_button',
-    classNames: ['btn-logs-toggle'],
-    isEnabled: true,
-    description: 'Header logs toggle button',
-  },
-  {
-    key: 'theme_quick_switcher',
-    classNames: ['theme-switcher-container'],
-    isEnabled: true,
-    description: 'Header theme switcher and dark/light toggle',
-  },
-  {
-    key: 'language_switcher',
-    classNames: ['lang-switcher-wrap'],
-    isEnabled: true,
-    description: 'Language switch buttons (EN/RU)',
-  },
-  {
-    key: 'status_badge_header',
-    classNames: ['status-badge'],
-    isEnabled: true,
-    description: 'System status indicator badge in header',
-  },
-  {
-    key: 'gallery_view_mode_selector',
-    classNames: ['view-mode-selector'],
-    isEnabled: true,
-    description: 'Media gallery view mode switcher buttons',
-  },
-  {
-    key: 'media_filter_bar',
-    classNames: ['gallery-filter-bar', 'gallery-filters-row'],
-    isEnabled: true,
-    description: 'Media gallery search and filter toolbar',
-  },
-];
+export const DEFAULT_FEATURE_FLAG_PRESETS: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>[] =
+  defaultFeatureFlagsPresets as Omit<FeatureFlag, 'createdAt' | 'updatedAt'>[];
 
 /**
  * FlagsManager - Central singleton for querying and managing feature flags anywhere in the application.
@@ -78,6 +38,7 @@ class FlagsManagerSingleton {
     if (this.isInitialized) return;
     this.isInitialized = true;
     this.loadFromStorage();
+    this.fetchRemote();
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (e) => {
@@ -131,6 +92,63 @@ class FlagsManagerSingleton {
     this.applyCssRules();
   }
 
+  public async fetchRemote(): Promise<void> {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+    try {
+      let res = await fetch('/api/feature-flags');
+      if (!res.ok) {
+        res = await fetch('/data/feature_flags.json');
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          this.flagsMap.clear();
+          for (const item of data) {
+            if (item && item.key) {
+              const normKey = normalizeFlagKey(item.key);
+              this.flagsMap.set(normKey, {
+                ...item,
+                key: item.key,
+                classNames: Array.isArray(item.classNames)
+                  ? item.classNames.map(normalizeClassName).filter(Boolean)
+                  : [],
+                isEnabled: Boolean(item.isEnabled),
+              });
+            }
+          }
+          if (window.localStorage) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(this.flagsMap.values())));
+          }
+          this.applyCssRules();
+          this.notify();
+        }
+      }
+    } catch (e) {
+      console.warn('[FlagsManager] Failed to fetch remote flags from /data:', e);
+    }
+  }
+
+  public async persistRemote(): Promise<void> {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+    try {
+      const arr = Array.from(this.flagsMap.values());
+      const token = localStorage.getItem('media_cataloger_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      await fetch('/api/feature-flags', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(arr),
+      });
+    } catch (e) {
+      console.warn('[FlagsManager] Failed to persist flags to /data:', e);
+    }
+  }
+
   public persist(): void {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
@@ -138,6 +156,7 @@ class FlagsManagerSingleton {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
       this.applyCssRules();
       this.notify();
+      this.persistRemote();
     } catch (e) {
       console.warn('[FlagsManager] Failed to persist flags:', e);
     }

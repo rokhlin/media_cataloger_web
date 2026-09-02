@@ -184,6 +184,24 @@ export class AppConfigService {
     return path.resolve(this.projectRoot, 'data', 'config', 'settings.json');
   }
 
+  get featureFlagsFilePath(): string {
+    if (process.env.FEATURE_FLAGS_PATH && process.env.FEATURE_FLAGS_PATH.trim()) {
+      return path.resolve(process.env.FEATURE_FLAGS_PATH.trim());
+    }
+    const rootDataPath = path.resolve(this.projectRoot, 'data', 'feature_flags.json');
+    if (fs.existsSync(rootDataPath)) {
+      return rootDataPath;
+    }
+    const configDirPath = process.env.CONFIG_PATH && process.env.CONFIG_PATH.trim()
+      ? path.resolve(process.env.CONFIG_PATH.trim())
+      : path.resolve(this.projectRoot, 'data', 'config');
+    const inConfigPath = path.resolve(configDirPath, 'feature_flags.json');
+    if (fs.existsSync(inConfigPath)) {
+      return inConfigPath;
+    }
+    return rootDataPath;
+  }
+
   getSavedSettings(): Record<string, any> {
     const configPath = this.settingsFilePath;
     if (fs.existsSync(configPath)) {

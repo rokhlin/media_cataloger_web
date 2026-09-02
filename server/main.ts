@@ -45,6 +45,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Serve static files from /data if directory exists (e.g. data/feature_flags.json)
+  const dataDir = path.resolve(process.cwd(), 'data');
+  if (fs.existsSync(dataDir)) {
+    app.use('/data', express.static(dataDir));
+  }
+
   // Serve React SPA static files if frontend dist exists
   const distDir = path.resolve(process.cwd(), 'dist');
   const indexHtml = path.resolve(distDir, 'index.html');
