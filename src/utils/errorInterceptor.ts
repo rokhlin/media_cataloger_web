@@ -125,7 +125,13 @@ class ErrorInterceptorService {
         try {
           const response = await self.originalFetch!.apply(this, args);
 
-          if (!response.ok && !isPollingOrLogFetch) {
+          // Skip asset 404s (e.g. missing optional face thumbnails) from emitting error dialogs
+          const isAsset404 = response.status === 404 && typeof url === 'string' && (
+            url.includes('/api/faces/image/') ||
+            url.includes('/api/media/thumbnail')
+          );
+
+          if (!response.ok && !isPollingOrLogFetch && !isAsset404) {
             // Clone response to safely read error body without consuming caller's stream
             const cloned = response.clone();
             cloned.text().then((bodyText) => {

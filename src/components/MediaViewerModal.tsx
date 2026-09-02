@@ -22,7 +22,11 @@ export interface MediaViewerModalProps {
   hasNext?: boolean;
   onRefresh?: () => void;
   onReloadFaces?: () => Promise<void> | void;
-  onStartSingleAnalysis?: (filePath: string) => void;
+  onStartSingleAnalysis?: (
+    filePath: string,
+    onSuccess?: () => void,
+    onError?: (errMsg: string) => void
+  ) => Promise<boolean | void> | void;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
   persons?: PersonItem[];
   knownPersonOptions?: { name: string; avatarUrl?: string | null; count: number }[];
@@ -60,6 +64,9 @@ export default function MediaViewerModal({
   const [facesForSelected, setFacesForSelected] = useState<DetectedFaceRecord[]>([]);
   const [loadingFaces, setLoadingFaces] = useState(false);
   const [engineOnline, setEngineOnline] = useState<boolean>(isEngineConnected);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisSuccess, setAnalysisSuccess] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Sync prop changes
   useEffect(() => {
@@ -97,6 +104,76 @@ export default function MediaViewerModal({
       clearInterval(interval);
     };
   }, [isOpen]);
+
+  // Fetch the absolute freshest media details and sidecar analysis for the current file
+  const fetchCurrentMediaDetails = async (filePathTarget?: string) => {
+    const target = filePathTarget || selectedMedia?.file_path || selectedMedia?.filename;
+    if (!target) return;
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn(`/api/media/file-info?file=${encodeURIComponent(target)}`);
+      if (res.ok) {
+        const freshData: GalleryMediaFile = await res.json();
+        if (freshData) {
+          setSelectedMedia((prev) => {
+            if (!prev) return freshData;
+            return {
+              ...prev,
+              ...freshData,
+              // ensure we don't accidentally wipe faces if backend returns empty during transit
+              faces: (freshData.faces && freshData.faces.length > 0) ? freshData.faces : prev.faces,
+              face_names: (freshData.face_names && freshData.face_names.length > 0) ? freshData.face_names : prev.face_names,
+            };
+          });
+          if (onMediaUpdated) onMediaUpdated(freshData);
+          if (Array.isArray(freshData.faces) && freshData.faces.length > 0) {
+            const uniqueFaces = Array.from(new Map(freshData.faces.map((f: DetectedFaceRecord) => [f.face_id, f])).values());
+            setFacesForSelected(uniqueFaces);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not refresh current media details:', err);
+    }
+  };
+
+  const handleAnalyzeClick = async () => {
+    if (!isEngineConnected || !engineOnline) {
+      setAnalysisError(t('aiEngineErrorDescription') || t('aiEngineOfflineTooltip'));
+      return;
+    }
+    if (!onStartSingleAnalysis || !selectedMedia) return;
+
+    setIsAnalyzing(true);
+    setAnalysisSuccess(false);
+    setAnalysisError(null);
+    try {
+      const filePath = selectedMedia.file_path || selectedMedia.filename;
+      await onStartSingleAnalysis(
+        filePath,
+        () => {
+          setAnalysisSuccess(true);
+          setTimeout(() => setAnalysisSuccess(false), 5000);
+          fetchCurrentMediaDetails(filePath);
+          if (onRefresh) onRefresh();
+          if (onReloadFaces) onReloadFaces();
+
+          // Periodically re-fetch details in case AI semantics arrive a few seconds later
+          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 2000);
+          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 5000);
+          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 10000);
+        },
+        (errMsg) => {
+          setAnalysisError(errMsg || t('aiEngineErrorDescription'));
+        }
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('aiEngineErrorDescription');
+      setAnalysisError(msg);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
   const [lightboxLang, setLightboxLang] = useState<'active' | 'ru' | 'en'>('active');
 
   // Person tagging & reassignment state in Lightbox
@@ -110,11 +187,6 @@ export default function MediaViewerModal({
   const [reassignCustomName, setReassignCustomName] = useState('');
   const [isReassigning, setIsReassigning] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
-
-  // Sync prop changes
-  useEffect(() => {
-    setSelectedMedia(mediaFile);
-  }, [mediaFile]);
 
   // Reset lightbox local UI state when media changes or modal opens
   useEffect(() => {
@@ -902,13 +974,15 @@ export default function MediaViewerModal({
                 ) : (
                   <div className="lightbox-faces-list">
                     {facesForSelected.map((f) => {
-                      const cropUrl = f.image_path
-                        ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
-                        : f.face_id
-                        ? `/api/faces/image/${f.face_id}`
+                      const isManual = !f.face_id || f.face_id.startsWith('manual_') || f.face_id.startsWith('face_manual_');
+                      const cropUrl = !isManual
+                        ? (f.image_path
+                            ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
+                            : f.face_id
+                            ? `/api/faces/image/${f.face_id}`
+                            : null)
                         : null;
                       const isEditing = reassigningFaceId === f.face_id;
-                      const isManual = f.face_id.startsWith('manual_');
 
                       return (
                         <div className="lightbox-face-item" key={f.face_id}>
@@ -1133,25 +1207,33 @@ export default function MediaViewerModal({
                     width: '100%',
                     fontSize: '0.85rem',
                     padding: '0.5rem',
-                    opacity: disabled || !isEngineConnected || !engineOnline ? 0.6 : 1,
-                    cursor: disabled || !isEngineConnected || !engineOnline ? 'not-allowed' : 'pointer',
+                    opacity: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 0.6 : 1,
+                    cursor: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 'not-allowed' : 'pointer',
                   }}
-                  onClick={() => {
-                    if (!isEngineConnected || !engineOnline) {
-                      alert(t('aiEngineOfflineTooltip'));
-                      return;
-                    }
-                    if (onStartSingleAnalysis) {
-                      onStartSingleAnalysis(selectedMedia.file_path || selectedMedia.filename);
-                      onClose();
-                    }
-                  }}
-                  disabled={disabled || !isEngineConnected || !engineOnline}
+                  onClick={handleAnalyzeClick}
+                  disabled={disabled || isAnalyzing || !isEngineConnected || !engineOnline}
                   title={!isEngineConnected || !engineOnline ? t('aiEngineOfflineTooltip') : t('btnAnalyzeFile')}
                   type="button"
                 >
-                  {t('btnAnalyzeFile')}
+                  {isAnalyzing ? t('aiAnalyzingInProgress') : t('btnAnalyzeFile')}
                 </button>
+
+                {analysisSuccess && (
+                  <div
+                    style={{
+                      padding: '0.45rem 0.65rem',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      color: '#4ade80',
+                      fontSize: '0.78rem',
+                      textAlign: 'center',
+                      animation: 'fadeIn 0.2s ease-out',
+                    }}
+                  >
+                    {t('aiAnalysisStartedSuccess')}
+                  </div>
+                )}
 
                 <a
                   href={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
@@ -1167,6 +1249,79 @@ export default function MediaViewerModal({
           </div>
         </div>
       </div>
+
+      {/* AI Engine Analysis Error Pop-up Modal */}
+      {analysisError && (
+        <div
+          className="modal-overlay active"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 11000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setAnalysisError(null)}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '480px',
+              width: '100%',
+              backgroundColor: 'var(--modal-bg, #1a1e2d)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)',
+              animation: 'fadeIn 0.2s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <span style={{ fontSize: '1.8rem' }}>⚠️</span>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>
+                {t('aiEngineErrorTitle')}
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 1rem 0', color: 'var(--text-secondary, #94a3b8)', fontSize: '0.88rem', lineHeight: '1.5' }}>
+              {t('aiEngineErrorDescription')}
+            </p>
+            {analysisError && typeof analysisError === 'string' && analysisError.trim() && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '8px',
+                  padding: '0.6rem 0.8rem',
+                  marginBottom: '1.25rem',
+                  fontSize: '0.8rem',
+                  color: '#f87171',
+                  fontFamily: 'monospace',
+                  wordBreak: 'break-word',
+                  maxHeight: '120px',
+                  overflowY: 'auto',
+                }}
+              >
+                {analysisError}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ padding: '0.45rem 1.2rem', fontSize: '0.88rem' }}
+                onClick={() => setAnalysisError(null)}
+              >
+                {t('close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* In-Viewer Metadata Editor Modal */}
       <MetadataEditorModal

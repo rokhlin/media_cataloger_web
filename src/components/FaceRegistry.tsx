@@ -243,10 +243,15 @@ export default function FaceRegistry({
   const getImageUrl = (imagePath?: string | null, fallbackFaceId?: string | null) => {
     if (imagePath && String(imagePath).trim()) {
       const filename = imagePath.split(/[/\\]/).pop();
-      return `/api/faces/image/${filename}`;
+      if (filename && !filename.startsWith('manual_') && !filename.startsWith('face_manual_')) {
+        return `/api/faces/image/${filename}`;
+      }
     }
     if (fallbackFaceId && String(fallbackFaceId).trim()) {
-      return `/api/faces/image/${fallbackFaceId.trim()}`;
+      const trimmedId = fallbackFaceId.trim();
+      if (!trimmedId.startsWith('manual_') && !trimmedId.startsWith('face_manual_')) {
+        return `/api/faces/image/${trimmedId}`;
+      }
     }
     return null;
   };

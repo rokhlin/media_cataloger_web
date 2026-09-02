@@ -125,6 +125,7 @@ export class MediaService {
   invalidateCache(): void {
     this.cachedMediaList = null;
     this.cacheTimestamp = 0;
+    this.sidecarCache.clear();
     this.filePathMap.clear();
     this.baseNamePathMap.clear();
     this.scanStatus.is_scanning = false;
@@ -452,23 +453,23 @@ export class MediaService {
         if (sdata) {
           const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
 
-          if (!desc) desc = ga.description || sdata.description || null;
-          if (!descRu) descRu = ga.description_ru || sdata.description_ru || null;
-          if (!summ) summ = ga.summary || sdata.summary || null;
-          if (!summRu) summRu = ga.summary_ru || sdata.summary_ru || null;
-          if (!environment) environment = ga.environment || sdata.environment || null;
-          if (!lighting) lighting = ga.lighting || sdata.lighting || null;
-          if (!lightingRu) lightingRu = ga.lighting_ru || sdata.lighting_ru || null;
-          if (!weather) weather = ga.weather || sdata.weather || null;
-          if (!weatherRu) weatherRu = ga.weather_ru || sdata.weather_ru || null;
-          if (!timeOfDay) timeOfDay = ga.time_of_day || sdata.time_of_day || null;
-          if (!timeOfDayRu) timeOfDayRu = ga.time_of_day_ru || sdata.time_of_day_ru || null;
-          if (!ocrText) ocrText = ga.ocr_text || sdata.ocr_text || null;
-          if (!exifAnalysis) exifAnalysis = ga.exif_analysis || sdata.exif_analysis || null;
-          if (!exifAnalysisRu) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru || null;
-          if (!transcription) transcription = ga.transcription || sdata.transcription || null;
-          if (!transcriptionRu) transcriptionRu = ga.transcription_ru || sdata.transcription_ru || null;
-          if (!timelineEvents) timelineEvents = ga.timeline_events || sdata.timeline_events || null;
+          if (ga.description || sdata.description) desc = ga.description || sdata.description;
+          if (ga.description_ru || sdata.description_ru) descRu = ga.description_ru || sdata.description_ru;
+          if (ga.summary || sdata.summary) summ = ga.summary || sdata.summary;
+          if (ga.summary_ru || sdata.summary_ru) summRu = ga.summary_ru || sdata.summary_ru;
+          if (ga.environment || sdata.environment) environment = ga.environment || sdata.environment;
+          if (ga.lighting || sdata.lighting) lighting = ga.lighting || sdata.lighting;
+          if (ga.lighting_ru || sdata.lighting_ru) lightingRu = ga.lighting_ru || sdata.lighting_ru;
+          if (ga.weather || sdata.weather) weather = ga.weather || sdata.weather;
+          if (ga.weather_ru || sdata.weather_ru) weatherRu = ga.weather_ru || sdata.weather_ru;
+          if (ga.time_of_day || sdata.time_of_day) timeOfDay = ga.time_of_day || sdata.time_of_day;
+          if (ga.time_of_day_ru || sdata.time_of_day_ru) timeOfDayRu = ga.time_of_day_ru || sdata.time_of_day_ru;
+          if (ga.ocr_text || sdata.ocr_text) ocrText = ga.ocr_text || sdata.ocr_text;
+          if (ga.exif_analysis || sdata.exif_analysis) exifAnalysis = ga.exif_analysis || sdata.exif_analysis;
+          if (ga.exif_analysis_ru || sdata.exif_analysis_ru) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru;
+          if (ga.transcription || sdata.transcription) transcription = ga.transcription || sdata.transcription;
+          if (ga.transcription_ru || sdata.transcription_ru) transcriptionRu = ga.transcription_ru || sdata.transcription_ru;
+          if (ga.timeline_events || sdata.timeline_events) timelineEvents = ga.timeline_events || sdata.timeline_events;
 
           // If faces are missing from DB, extract them from sidecar JSON
           const rawSidecarFaces = sdata.faces || sdata.detected_faces || ga.faces || ga.detected_faces || [];
@@ -953,6 +954,210 @@ export class MediaService {
         error: err.message || `File '${target}' is not accessible or not found`,
       };
     }
+  }
+
+  /**
+   * Get single media file full details, merging database metadata, sidecar JSON, and faces
+   */
+  async getMediaFileInfo(target: string): Promise<any> {
+    if (!target || !target.trim()) {
+      throw new BadRequestException('Empty media file path specified');
+    }
+    const trimmed = target.trim();
+    let resolved = trimmed;
+    try {
+      resolved = this.resolveMediaFilePath(trimmed);
+    } catch {
+      resolved = trimmed;
+    }
+
+    this.db.initDb();
+
+    let size = 0;
+    let mtime = 0;
+    try {
+      if (fs.existsSync(resolved)) {
+        const stat = fs.statSync(resolved);
+        size = stat.size;
+        mtime = stat.mtimeMs / 1000;
+      }
+    } catch {}
+
+    const baseName = path.basename(resolved);
+    const ext = path.extname(resolved).toLowerCase();
+    const isVideo = this.config.supportedVideoExts.has(ext);
+    const isImage = this.config.supportedPhotoExts.has(ext);
+
+    const syncRec = this.db.getSyncRecord(resolved) || this.db.getSyncRecord(trimmed) || this.db.getSyncRecord(baseName);
+    const dbMeta = this.db.getMediaMetadata(resolved) || this.db.getMediaMetadata(trimmed) || this.db.getMediaMetadata(baseName.toLowerCase());
+    let fileFaces = this.db.getFacesBySourceFile(resolved);
+    if (!fileFaces || fileFaces.length === 0) {
+      fileFaces = this.db.getFacesBySourceFile(trimmed);
+    }
+
+    let status = syncRec ? syncRec.status : 'UNPROCESSED';
+    let sidecar = syncRec ? syncRec.sidecar_path : null;
+
+    let desc: string | null = dbMeta?.description || null;
+    let descRu: string | null = dbMeta?.description_ru || null;
+    let summ: string | null = dbMeta?.summary || null;
+    let summRu: string | null = dbMeta?.summary_ru || null;
+    let environment: string | null = dbMeta?.environment || null;
+    let lighting: string | null = dbMeta?.lighting || null;
+    let lightingRu: string | null = dbMeta?.lighting_ru || null;
+    let weather: string | null = dbMeta?.weather || null;
+    let weatherRu: string | null = dbMeta?.weather_ru || null;
+    let timeOfDay: string | null = dbMeta?.time_of_day || null;
+    let timeOfDayRu: string | null = dbMeta?.time_of_day_ru || null;
+    let ocrText: string | null = dbMeta?.ocr_text || null;
+    let exifAnalysis: string | null = dbMeta?.exif_analysis || null;
+    let exifAnalysisRu: string | null = dbMeta?.exif_analysis_ru || null;
+    let transcription: string | null = dbMeta?.transcription || null;
+    let transcriptionRu: string | null = dbMeta?.transcription_ru || null;
+    let timelineEvents: any = null;
+    if (dbMeta?.timeline_events) {
+      try {
+        timelineEvents = typeof dbMeta.timeline_events === 'string' ? JSON.parse(dbMeta.timeline_events) : dbMeta.timeline_events;
+      } catch {
+        timelineEvents = dbMeta.timeline_events;
+      }
+    }
+
+    // Invalidate sidecar cache for this file to ensure freshest read
+    const resolvedSidecar = this.findSidecarFile(resolved, undefined, sidecar);
+    if (resolvedSidecar) {
+      this.sidecarCache.delete(resolvedSidecar);
+      sidecar = resolvedSidecar;
+      const sdata = this.readParsedSidecar(resolvedSidecar);
+      if (sdata) {
+        const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
+        if (ga.description || sdata.description) desc = ga.description || sdata.description;
+        if (ga.description_ru || sdata.description_ru) descRu = ga.description_ru || sdata.description_ru;
+        if (ga.summary || sdata.summary) summ = ga.summary || sdata.summary;
+        if (ga.summary_ru || sdata.summary_ru) summRu = ga.summary_ru || sdata.summary_ru;
+        if (ga.environment || sdata.environment) environment = ga.environment || sdata.environment;
+        if (ga.lighting || sdata.lighting) lighting = ga.lighting || sdata.lighting;
+        if (ga.lighting_ru || sdata.lighting_ru) lightingRu = ga.lighting_ru || sdata.lighting_ru;
+        if (ga.weather || sdata.weather) weather = ga.weather || sdata.weather;
+        if (ga.weather_ru || sdata.weather_ru) weatherRu = ga.weather_ru || sdata.weather_ru;
+        if (ga.time_of_day || sdata.time_of_day) timeOfDay = ga.time_of_day || sdata.time_of_day;
+        if (ga.time_of_day_ru || sdata.time_of_day_ru) timeOfDayRu = ga.time_of_day_ru || sdata.time_of_day_ru;
+        if (ga.ocr_text || sdata.ocr_text) ocrText = ga.ocr_text || sdata.ocr_text;
+        if (ga.exif_analysis || sdata.exif_analysis) exifAnalysis = ga.exif_analysis || sdata.exif_analysis;
+        if (ga.exif_analysis_ru || sdata.exif_analysis_ru) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru;
+        if (ga.transcription || sdata.transcription) transcription = ga.transcription || sdata.transcription;
+        if (ga.transcription_ru || sdata.transcription_ru) transcriptionRu = ga.transcription_ru || sdata.transcription_ru;
+        if (ga.timeline_events || sdata.timeline_events) timelineEvents = ga.timeline_events || sdata.timeline_events;
+
+        if (desc || descRu || summ || summRu || status === 'UNPROCESSED') {
+          status = 'PROCESSED';
+        }
+      }
+    }
+
+    const seenFids = new Set<string>();
+    const dedupFaces: any[] = [];
+    const faceNames: string[] = [];
+    let hasUnassigned = false;
+
+    for (const f of fileFaces || []) {
+      const fid = f.face_id || f.id;
+      if (fid && seenFids.has(fid)) continue;
+      if (fid) seenFids.add(fid);
+      dedupFaces.push(f);
+      const fname = f.name || f.person_name;
+      if (fname && !faceNames.includes(fname)) {
+        faceNames.push(fname);
+      }
+      if (!f.is_reference || (fname && fname.startsWith('face_'))) {
+        hasUnassigned = true;
+      }
+    }
+
+    let folder = '';
+    for (const inFolder of this.config.inputFolders) {
+      if (resolved.startsWith(inFolder)) {
+        folder = inFolder;
+        break;
+      }
+    }
+
+    const item: any = {
+      file_path: resolved,
+      filename: baseName,
+      folder: folder || path.dirname(resolved),
+      file_size: size,
+      mtime: mtime,
+      is_video: isVideo,
+      is_image: isImage,
+      status: status,
+      sidecar_path: sidecar,
+      description: desc,
+      description_ru: descRu,
+      summary: summ,
+      summary_ru: summRu,
+      environment: environment,
+      lighting: lighting,
+      lighting_ru: lightingRu,
+      weather: weather,
+      weather_ru: weatherRu,
+      time_of_day: timeOfDay,
+      time_of_day_ru: timeOfDayRu,
+      ocr_text: ocrText,
+      exif_analysis: exifAnalysis,
+      exif_analysis_ru: exifAnalysisRu,
+      transcription: transcription,
+      transcription_ru: transcriptionRu,
+      timeline_events: timelineEvents,
+      face_count: dedupFaces.length,
+      faces: dedupFaces,
+      face_names: faceNames,
+      has_unassigned_faces: hasUnassigned,
+      is_vault: this.isVaultPath(resolved),
+      error_message: syncRec ? syncRec.error_message : null,
+    };
+
+    if (this.familyTreePublicService && faceNames.length > 0) {
+      try {
+        const photoKinship = this.familyTreePublicService.analyzePhotoKinship({
+          person_names: faceNames,
+          media_file_path: resolved,
+        });
+        if (photoKinship.identifiedPersons.length > 0) {
+          item.family_context = {
+            suggested_caption: photoKinship.suggestedCaption,
+            summary_description: photoKinship.summaryDescription,
+            identified_members: photoKinship.identifiedPersons.map((p) => ({
+              name: p.name,
+              tree_person_id: p.treePersonId,
+              kinship: p.kinshipToRoot?.primaryTerm || null,
+              category: p.kinshipToRoot?.category || null,
+            })),
+            relationships: photoKinship.relationships.map((r) => ({
+              person_a: r.personA,
+              person_b: r.personB,
+              kinship: r.kinshipAtoB,
+            })),
+            milestones: photoKinship.contextualMilestones,
+          };
+          if (!item.description && photoKinship.suggestedCaption) {
+            item.enriched_family_caption = photoKinship.suggestedCaption;
+          }
+        }
+      } catch {}
+    }
+
+    // Update in cachedMediaList if present
+    if (this.cachedMediaList) {
+      const idx = this.cachedMediaList.findIndex(
+        (f) => f.file_path === resolved || f.filename === baseName
+      );
+      if (idx !== -1) {
+        this.cachedMediaList[idx] = item;
+      }
+    }
+
+    return item;
   }
 
   async getMediaSidecar(target: string): Promise<any> {

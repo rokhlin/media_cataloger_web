@@ -140,6 +140,10 @@ export interface LightboxTranslations {
   noFacesIndexed: string;
   btnAnalyzeFile: string;
   aiEngineOfflineTooltip: string;
+  aiEngineErrorTitle: string;
+  aiEngineErrorDescription: string;
+  aiAnalyzingInProgress: string;
+  aiAnalysisStartedSuccess: string;
   btnOpenOriginal: string;
   prevImageTooltip: string;
   nextImageTooltip: string;

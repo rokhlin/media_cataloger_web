@@ -205,6 +205,21 @@ export class MediaController {
     return this.mediaService.verifyFileAccess(file.trim());
   }
 
+  @Get('file-info')
+  @ApiOperation({ summary: 'Get full media file item details including latest AI analysis, EXIF and faces' })
+  @ApiQuery({ name: 'path', required: false, description: 'Full path or relative path to media file' })
+  @ApiQuery({ name: 'file', required: false, description: 'Filename or subpath to media file' })
+  async getMediaFileInfo(
+    @Query('path') queryPath: string,
+    @Query('file') queryFile: string,
+  ) {
+    const target = queryPath || queryFile;
+    if (!target || !target.trim()) {
+      throw new BadRequestException('Missing file or path parameter');
+    }
+    return this.mediaService.getMediaFileInfo(target);
+  }
+
   @Get('sidecar')
   @ApiOperation({ summary: 'Get full sidecar JSON metadata for a media file' })
   @ApiQuery({ name: 'path', required: false })

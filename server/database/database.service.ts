@@ -407,6 +407,25 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  getMediaMetadata(filePath: string): any {
+    if (!filePath) return null;
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    const baseName = path.basename(filePath);
+    try {
+      const row = db.prepare(`
+        SELECT m.id as media_id, m.file_path, m.file_name, md.*
+        FROM media_items m
+        LEFT JOIN media_metadata md ON m.id = md.media_id
+        WHERE m.file_path = ? OR m.file_path = ? OR m.file_name = ? OR LOWER(m.file_name) = ?
+        LIMIT 1
+      `).get(filePath, norm, baseName, baseName.toLowerCase()) as any;
+      return row || null;
+    } catch {
+      return null;
+    }
+  }
+
   saveMediaMetadata(filePath: string, metadata: Record<string, any>, mediaId?: string): void {
     const db = this.getDb();
     const mId = mediaId || `media_${Buffer.from(filePath).toString('hex').slice(0, 16)}`;

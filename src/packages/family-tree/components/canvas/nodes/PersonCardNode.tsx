@@ -32,7 +32,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
       ? `${birthYear} – ${deathYear}`
       : deathYear ? `d. ${deathYear}` : 'Deceased';
 
-  const avatarUrl = person.avatar_url || (person.avatar_face_id ? `/api/faces/image/${person.avatar_face_id}` : null);
+  const avatarUrl = person.avatar_url || (person.avatar_face_id && !person.avatar_face_id.startsWith('manual_') && !person.avatar_face_id.startsWith('face_manual_') ? `/api/faces/image/${person.avatar_face_id}` : null);
   const initials = `${person.first_name?.[0] || ''}${person.last_name?.[0] || ''}`.toUpperCase() || '?';
 
   // Gender colors

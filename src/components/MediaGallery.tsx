@@ -26,7 +26,11 @@ interface InputSourcesGalleryProps {
   totalKnownFiles?: number | null;
   onRefresh?: () => void;
   onFetchMore?: () => void;
-  onStartSingleAnalysis?: (filePath: string) => void;
+  onStartSingleAnalysis?: (
+    filePath: string,
+    onSuccess?: () => void,
+    onError?: (errMsg: string) => void
+  ) => Promise<boolean | void> | void;
   onSwitchToControls?: () => void;
   persons?: PersonItem[];
   uiSettings?: UISettings;
@@ -92,6 +96,20 @@ export default function InputSourcesGallery({
   // Selected media item for full-screen Lightbox / Media Viewer modal
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(null);
 
+  // Keep selectedMedia synchronized if mediaFiles list updates in background
+  useEffect(() => {
+    if (selectedMedia && Array.isArray(mediaFiles)) {
+      const match = mediaFiles.find(
+        (f) =>
+          (f.file_path && f.file_path === selectedMedia.file_path) ||
+          f.filename === selectedMedia.filename
+      );
+      if (match && match !== selectedMedia) {
+        setSelectedMedia(match);
+      }
+    }
+  }, [mediaFiles, selectedMedia]);
+
   // Extract distinct recognized people and face counts across all media files
   const distinctPeople = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -126,7 +144,10 @@ export default function InputSourcesGallery({
       persons.forEach((p) => {
         if (p.name) {
           const sample = p.sample_images && p.sample_images.length > 0 ? p.sample_images[0] : null;
-          const avatar = sample ? `/api/faces/image/${sample.split(/[/\\]/).pop()}` : null;
+          const sampleFile = sample ? sample.split(/[/\\]/).pop() : null;
+          const avatar = sampleFile && !sampleFile.startsWith('manual_') && !sampleFile.startsWith('face_manual_')
+            ? `/api/faces/image/${sampleFile}`
+            : null;
           map.set(p.name, { name: p.name, avatarUrl: avatar, count: p.reference_count || 0 });
         }
       });
@@ -1466,6 +1487,7 @@ export default function InputSourcesGallery({
         isEngineConnected={isEngineConnected}
         onMediaUpdated={(updated) => {
           setSelectedMedia(updated);
+          mediaCacheService.upsert(updated);
           if (onRefresh) onRefresh();
         }}
       />

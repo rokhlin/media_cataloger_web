@@ -81,7 +81,7 @@ export const PersonDetailDrawer = ({
   if (!isDetailDrawerOpen || !person) return null;
 
   const fullName = person.full_name || `${person.first_name} ${person.last_name || ''}`.trim();
-  const avatarUrl = person.avatar_url || (person.avatar_face_id ? `/api/faces/image/${person.avatar_face_id}` : null);
+  const avatarUrl = person.avatar_url || (person.avatar_face_id && !person.avatar_face_id.startsWith('manual_') && !person.avatar_face_id.startsWith('face_manual_') ? `/api/faces/image/${person.avatar_face_id}` : null);
 
   const handleSaveBio = async (e: React.FormEvent) => {
     e.preventDefault();

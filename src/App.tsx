@@ -709,15 +709,24 @@ function AppMain() {
   };
 
   // Start Single Analysis
-  const handleStartSingleAnalysis = async (file: string, onSuccess?: () => void) => {
+  const handleStartSingleAnalysis = async (
+    file: string,
+    onSuccess?: () => void,
+    onError?: (errMsg: string) => void
+  ): Promise<boolean> => {
     if (statusInfo.connected === false) {
+      const offlineMsg = 'media_cataloger AI Engine is offline or disconnected. Please ensure the Python service is running.';
       appendConsoleMessage(
         'Cannot trigger single file analysis: media_cataloger AI Engine is offline or disconnected.',
         'WARN',
         'Pipeline'
       );
-      alert('media_cataloger AI Engine is offline or disconnected. Please ensure the Python service is running.');
-      return;
+      if (onError) {
+        onError(offlineMsg);
+      } else {
+        alert(offlineMsg);
+      }
+      return false;
     }
 
     appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
@@ -725,33 +734,44 @@ function AppMain() {
       const res = await authFetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
         method: 'POST',
       });
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (res.ok) {
         appendConsoleMessage(`Triggered file analysis successfully: ${result.message || 'Started'}`, 'INFO', 'Pipeline');
         if (onSuccess) onSuccess();
         checkStatus();
         fetchLogsInternal();
         // Follow-up refreshes to ensure new metadata/faces are shown as soon as worker completes
-        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 2500);
-        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 6000);
-        setTimeout(() => { loadMediaFiles(); loadFaces(); fetchLogsInternal(); }, 12000);
+        setTimeout(() => { loadMediaFiles(true); loadFaces(); fetchLogsInternal(); }, 2500);
+        setTimeout(() => { loadMediaFiles(true); loadFaces(); fetchLogsInternal(); }, 6000);
+        setTimeout(() => { loadMediaFiles(true); loadFaces(); fetchLogsInternal(); }, 12000);
+        return true;
       } else {
         if (res.status === 401) {
           setIsLoginOpen(true);
         }
-        const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
+        const errMsg = result.message || result.detail || result.error || `HTTP ${res.status}: Failed to start file analysis`;
         appendConsoleMessage(
           `Failed to analyze file '${file}': ${errMsg}`,
           'ERROR',
           'Pipeline',
-          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check file permissions, authentication, and supported formats.`
+          `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check if media_cataloger Python service is active and responsive.`
         );
-        alert(`Analysis Error:\n${errMsg}`);
+        if (onError) {
+          onError(errMsg);
+        } else {
+          alert(`Analysis Error:\n${errMsg}`);
+        }
+        return false;
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = err instanceof Error ? err.message : 'Unknown network error';
       appendConsoleMessage(`Network error during single file analysis: ${message}`, 'ERROR', 'Pipeline');
-      alert(`Network error connecting to server: ${message}`);
+      if (onError) {
+        onError(`Network error connecting to backend: ${message}`);
+      } else {
+        alert(`Network error connecting to server: ${message}`);
+      }
+      return false;
     }
   };
 

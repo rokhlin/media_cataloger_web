@@ -365,6 +365,12 @@ export class CatalogerClientService {
         this.db.saveMediaFaces(filePath, facesList);
       }
 
+      // Invalidate media scan cache and update single item in MediaService
+      this.mediaService.invalidateCache();
+      try {
+        await this.mediaService.getMediaFileInfo(filePath);
+      } catch {}
+
       return {
         ...sidecarData,
         faces: facesList,

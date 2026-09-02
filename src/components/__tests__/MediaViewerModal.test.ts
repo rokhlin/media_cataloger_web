@@ -72,8 +72,8 @@ describe('MediaViewerModal & Theme Adaptability', () => {
 
     assert.ok(content.includes('isEngineConnected'), 'MediaViewerModal must declare isEngineConnected prop');
     assert.ok(
-      content.includes('disabled={disabled || !isEngineConnected || !engineOnline}'),
-      'btnAnalyzeFile must be disabled when isEngineConnected or engineOnline is false'
+      content.includes('disabled={disabled || isAnalyzing || !isEngineConnected || !engineOnline}'),
+      'btnAnalyzeFile must be disabled when isEngineConnected or engineOnline is false or isAnalyzing'
     );
     assert.ok(
       content.includes('aiEngineOfflineTooltip'),

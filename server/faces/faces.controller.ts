@@ -65,6 +65,15 @@ export class FacesController {
   @Get('image/:filename')
   @ApiOperation({ summary: 'Serve cropped face thumbnail image' })
   async getFaceImage(@Param('filename') filename: string, @Res() res: Response) {
+    const cleanName = (filename || '').trim();
+    if (cleanName.startsWith('face_manual_') || cleanName.startsWith('manual_')) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#94a3b8"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>'
+      );
+    }
+
     try {
       const resolved = this.facesService.getFaceImagePath(filename);
       if (fs.existsSync(resolved)) {
@@ -81,7 +90,6 @@ export class FacesController {
     }
       // Proxy fallback from remote cataloger backend if face image is on the worker daemon
       const baseUrl = this.facesService.catalogerApiUrl;
-      const cleanName = (filename || '').trim();
       const baseClean = path.basename(cleanName);
       const candidates = Array.from(new Set([
         cleanName,

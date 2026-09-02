@@ -260,5 +260,29 @@ describe('MediaService', () => {
       mediaService.resolveMediaFilePath('non_existent_image_12345.jpg');
     });
   });
+
+  it('should get single media file info with latest metadata, sidecar, and faces', async () => {
+    const vacationPath = path.join(inputDir, 'vacation.jpg');
+    
+    // Create sidecar JSON
+    const sidecarPath = path.join(tmpDir, 'vacation.jpg.json');
+    fs.writeFileSync(sidecarPath, JSON.stringify({
+      filename: 'vacation.jpg',
+      summary: 'Updated beach sidecar summary',
+      description: 'Crystal clear waters on the shoreline.',
+      lighting: 'Bright daylight',
+      weather: 'Sunny',
+      environment: 'outdoor',
+      faces: [{ face_id: 'face_1', name: 'Alice', confidence: 0.98, is_reference: 1 }]
+    }, null, 2));
+
+    const info = await mediaService.getMediaFileInfo('vacation.jpg');
+    assert.strictEqual(info.filename, 'vacation.jpg');
+    assert.strictEqual(info.status, 'PROCESSED');
+    assert.strictEqual(info.summary, 'Updated beach sidecar summary');
+    assert.strictEqual(info.description, 'Crystal clear waters on the shoreline.');
+    assert.strictEqual(info.lighting, 'Bright daylight');
+    assert.strictEqual(info.environment, 'outdoor');
+  });
 });
 

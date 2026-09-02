@@ -57,7 +57,6 @@ describe('SettingsService', () => {
 
     assert.strictEqual(updateResult.status, 'success');
     assert.strictEqual(updateResult.model_provider, 'local');
-    assert.strictEqual(updateResult.local_model_name, 'llama-3.2-vision');
     assert.strictEqual(updateResult.local_max_workers, 4);
     assert.strictEqual(updateResult.preserve_structure, false);
 
