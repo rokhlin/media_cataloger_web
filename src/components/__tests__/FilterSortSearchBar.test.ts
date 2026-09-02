@@ -101,4 +101,22 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
       'MediaGallery must render SearchBar inside gallery-title-wrap'
     );
   });
+
+  it('should verify min chars to start search is 3 letters', () => {
+    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
+    const content = fs.readFileSync(componentPath, 'utf8');
+
+    assert.ok(
+      content.includes('trimmedSearch.length < 3') && content.includes('{trimmedSearch.length}/3'),
+      'SearchBar must show hint for less than 3 characters'
+    );
+
+    const workerPath = path.resolve('src/services/mediaOrganization.worker.ts');
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+
+    assert.ok(
+      workerContent.includes('trimmedSearch.length >= 3'),
+      'Worker must activate search at 3 characters'
+    );
+  });
 });

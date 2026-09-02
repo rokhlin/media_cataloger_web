@@ -136,8 +136,8 @@ export const executionControlsTranslationsRu: ExecutionControlsTranslations = {
 
 export const galleryTranslationsEn: GalleryTranslations = {
   galleryTitle: 'Media Gallery',
-  searchPlaceholder: 'Search descriptions, folders, face names (min 5 chars)...',
-  searchHint: 'Type at least 5 characters to filter media items',
+  searchPlaceholder: 'Search descriptions, folders, face names (min 3 chars)...',
+  searchHint: 'Type at least 3 characters to filter media items',
   filterAllTypes: 'All Types',
   filterImages: '📷 Photos',
   filterVideos: '🎥 Videos',
@@ -196,8 +196,8 @@ export const galleryTranslationsEn: GalleryTranslations = {
 
 export const galleryTranslationsRu: GalleryTranslations = {
   galleryTitle: 'Галерея медиафайлов',
-  searchPlaceholder: 'Поиск по описанию, папке, именам лиц (мин. 5 символов)...',
-  searchHint: 'Введите не менее 5 символов для фильтрации медиафайлов',
+  searchPlaceholder: 'Поиск по описанию, папке, именам лиц (мин. 3 символа)...',
+  searchHint: 'Введите не менее 3 символов для фильтрации медиафайлов',
   filterAllTypes: 'Все типы',
   filterImages: '📷 Фото',
   filterVideos: '🎥 Видео',

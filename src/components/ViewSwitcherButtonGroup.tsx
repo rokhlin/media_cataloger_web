@@ -156,9 +156,8 @@ export const ViewSwitcherButtonGroup: React.FC<ViewSwitcherButtonGroupProps> = (
                   <div className="view-switcher-menu-divider" />
                   <button
                     type="button"
-                    className={`view-switcher-menu-item view-switcher-menu-toggle ${
-                      isSimilarityGrouped ? 'active' : ''
-                    }`}
+                    className={`view-switcher-menu-item view-switcher-menu-toggle ${isSimilarityGrouped ? 'active' : ''
+                      }`}
                     onClick={() => {
                       onToggleSimilarityGrouped();
                       setIsOpen(false);
@@ -177,23 +176,7 @@ export const ViewSwitcherButtonGroup: React.FC<ViewSwitcherButtonGroupProps> = (
           )}
         </div>
 
-        {/* Quick action button for similarity grouping beside the dropdown */}
-        {onToggleSimilarityGrouped && (
-          <button
-            type="button"
-            className={`filter-btn view-switcher-similar-btn ${isSimilarityGrouped ? 'active' : ''}`}
-            onClick={onToggleSimilarityGrouped}
-            title={similarityTitle}
-            style={{
-              background: isSimilarityGrouped
-                ? 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))'
-                : undefined,
-              borderColor: isSimilarityGrouped ? 'var(--primary-color, #6366f1)' : undefined,
-            }}
-          >
-            ✨ {similarityLabel}
-          </button>
-        )}
+
       </div>
     );
   }

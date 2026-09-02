@@ -49,9 +49,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       />
       {searchQuery && (
         <div className="search-status-tag-wrap">
-          {trimmedSearch.length > 0 && trimmedSearch.length < 5 ? (
+          {trimmedSearch.length > 0 && trimmedSearch.length < 3 ? (
             <span className="search-min-hint" title={t('searchHint')}>
-              {trimmedSearch.length}/5
+              {trimmedSearch.length}/3
             </span>
           ) : (
             <span className="search-active-hint" title="Active">

@@ -239,7 +239,7 @@ export class MediaOrganizationWorker {
 
   filterMediaFiles(files: GalleryMediaFile[], criteria: FilterCriteria): GalleryMediaFile[] {
     const trimmedSearch = (criteria.searchQuery || '').trim().toLowerCase();
-    const isSearchActive = trimmedSearch.length >= 5;
+    const isSearchActive = trimmedSearch.length >= 3;
 
     return files.filter((item) => {
       if (isSearchActive) {
