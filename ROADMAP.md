@@ -66,6 +66,9 @@
 - [ ] **Photo Stories**: Dynamic story creation and presentation from photo series.
 - [ ] **AI Story Generation**: Automatic AI narrative and story generation based on photo context.
 - [ ] **Memories & Flashbacks**: "On this day" and smart milestone memory reminders.
+- [x] **View Switcher Button Group**  refactoring. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. 
+- [x] **Filter, Sort and Search Bar** Refactor the search bar. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. Dropdown menu should be at the same line with `View Switcher Button Group` dropdown
+- [x] **Face Registry UI** Refactor the face registry UI. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. Dropdown menu should be at the same line with `Filter, Sort and Search Bar` dropdown
 
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.

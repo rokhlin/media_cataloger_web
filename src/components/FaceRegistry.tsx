@@ -9,6 +9,7 @@ import type {
   AssignmentConfig,
 } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import FaceRegistryUI from './FaceRegistryUI';
 
 export type { FaceRegistryFace, FaceRegistryPerson, FaceRegistryGroup };
 
@@ -316,35 +317,13 @@ export default function FaceRegistry({
       </div>
 
       {/* Tabs */}
-      <div className="face-tabs">
-        <button
-          className={`face-tab-btn ${activeTab === 'groups' ? 'active' : ''}`}
-          onClick={() => setActiveTab('groups')}
-          type="button"
-        >
-          <span>👥 {t('tabClusters')}</span>
-          {unrecognizedGroups.length > 0 ? (
-            <span className="face-tab-badge">{unrecognizedGroups.length}</span>
-          ) : (
-            <span className="badge-pill">0</span>
-          )}
-        </button>
-        <button
-          className={`face-tab-btn ${activeTab === 'persons' ? 'active' : ''}`}
-          onClick={() => setActiveTab('persons')}
-          type="button"
-        >
-          <span>👤 {t('tabKnownPersons')}</span>
-          <span className="badge-pill">{displayPersons.length}</span>
-        </button>
-        <button
-          className={`face-tab-btn ${activeTab === 'all-unrecognized' ? 'active' : ''}`}
-          onClick={() => setActiveTab('all-unrecognized')}
-          type="button"
-        >
-          <span>❓ {t('tabUnrecognizedFaces')} ({unrecognizedFaces.length})</span>
-        </button>
-      </div>
+      <FaceRegistryUI
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        clustersCount={unrecognizedGroups.length}
+        personsCount={displayPersons.length}
+        unrecognizedCount={unrecognizedFaces.length}
+      />
 
       {/* Search bar */}
       <div className="search-box">

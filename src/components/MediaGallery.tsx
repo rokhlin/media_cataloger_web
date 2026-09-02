@@ -17,6 +17,9 @@ import { mediaCacheService } from '../services/mediaCacheService';
 import { FlagsManager } from '../services/featureFlagsContext';
 import { errorInterceptor } from '../utils/errorInterceptor';
 import MediaViewerModal from './MediaViewerModal';
+import ViewSwitcherButtonGroup from './ViewSwitcherButtonGroup';
+import FilterSortSearchBar from './FilterSortSearchBar';
+import FaceRegistryUI from './FaceRegistryUI';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
 
@@ -202,8 +205,6 @@ export default function InputSourcesGallery({
   };
 
   // Filtered and sorted files
-  const trimmedSearch = searchQuery.trim();
-
   const [isSimilarityGrouped, setIsSimilarityGrouped] = useState(true);
   const [filteredFiles, setFilteredFiles] = useState<GalleryMediaFile[]>([]);
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
@@ -544,6 +545,8 @@ export default function InputSourcesGallery({
   const videoCount = mediaFiles.filter((f) => f.is_video).length;
   const showRefresh = FlagsManager.IsActive('app-show-media-file-refresh');
   const showSwitchToControls = FlagsManager.IsActive('app-show-controls-switch');
+  const isFilterBarDropdown = FlagsManager.IsActive('filter_bar_dropdown', false);
+  const isFaceRegistryDropdown = FlagsManager.IsActive('face_registry_dropdown', false);
 
   // Render single media card item with thumbnail miniature and async decoding
   const renderCardItem = (file: GalleryMediaFile) => {
@@ -1178,60 +1181,45 @@ export default function InputSourcesGallery({
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* View Switcher Button Group */}
-          <div className="filter-button-group view-switcher-group">
-            <button
-              type="button"
-              className={`filter-btn ${viewMode === 'gallery' ? 'active' : ''}`}
-              onClick={() => setViewMode('gallery')}
-              title={t('viewModeGallery')}
-            >
-              🔲 {t('viewModeGallery')}
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${viewMode === 'list' ? 'active' : ''}`}
-              onClick={() => setViewMode('list')}
-              title={t('viewModeList')}
-            >
-              📋 {t('viewModeList')}
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${viewMode === 'folder_tree' ? 'active' : ''}`}
-              onClick={() => setViewMode('folder_tree')}
-              title={t('viewModeTree')}
-            >
-              📁 {t('viewModeTree')}
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${viewMode === 'date_grouped' ? 'active' : ''}`}
-              onClick={() => setViewMode('date_grouped')}
-              title={t('viewModeDate')}
-            >
-              📅 {t('viewModeDate')}
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${viewMode === 'person_grouped' ? 'active' : ''}`}
-              onClick={() => setViewMode('person_grouped')}
-              title={t('viewModePerson')}
-            >
-              👥 {t('viewModePerson')}
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${isSimilarityGrouped ? 'active' : ''}`}
-              onClick={() => setIsSimilarityGrouped((prev) => !prev)}
-              title={t('toggleSimilarityGrouping' as any) || 'Group Similar & Burst Photos'}
-              style={{
-                background: isSimilarityGrouped ? 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))' : undefined,
-                borderColor: isSimilarityGrouped ? 'var(--primary-color, #6366f1)' : undefined,
-              }}
-            >
-              ✨ {t('groupSimilar' as any) || 'Group Similar'}
-            </button>
-          </div>
+          <ViewSwitcherButtonGroup
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            isSimilarityGrouped={isSimilarityGrouped}
+            onToggleSimilarityGrouped={() => setIsSimilarityGrouped((prev) => !prev)}
+          />
+
+          {/* Filter, Sort and Search Bar (dropdown representation on the same line when active) */}
+          {isFilterBarDropdown && (
+            <FilterSortSearchBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              faceFilter={faceFilter}
+              onFaceFilterChange={setFaceFilter}
+              selectedPerson={selectedPerson}
+              onPersonChange={setSelectedPerson}
+              distinctPeople={distinctPeople}
+              sortBy={sortBy}
+              onSortByChange={setSortBy}
+              sortOrder={sortOrder}
+              onToggleSortOrder={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+              selectedFolder={selectedFolder}
+              onClearFolder={() => setSelectedFolder(null)}
+              hasActiveFilters={hasActiveFilters}
+              onResetFilters={handleClearFilters}
+              asDropdown={true}
+            />
+          )}
+
+          {/* Face Registry UI (dropdown representation on the same line) */}
+          <FaceRegistryUI
+            personsCount={persons.length}
+            onOpenFaceRegistry={onSwitchToControls}
+            asDropdown={isFaceRegistryDropdown}
+          />
 
           {(showRefresh && onRefresh) && (
             <button
@@ -1247,7 +1235,7 @@ export default function InputSourcesGallery({
             </button>
           )}
 
-          {(showSwitchToControls && onSwitchToControls) && (
+          {(showSwitchToControls && onSwitchToControls && !isFaceRegistryDropdown) && (
             <button
               className="btn btn-secondary"
               style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
@@ -1261,202 +1249,31 @@ export default function InputSourcesGallery({
         </div>
       </div>
 
-      {/* Filter, Sort and Search Bar */}
-      <div className="gallery-filters-row">
-        <div className="search-box" style={{ flex: 1, minWidth: '240px', margin: 0, position: 'relative' }}>
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            className="input-control"
-            placeholder={t('searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingRight: searchQuery ? '5rem' : '1rem' }}
-          />
-          {searchQuery && (
-            <div className="search-status-tag-wrap">
-              {trimmedSearch.length > 0 && trimmedSearch.length < 5 ? (
-                <span className="search-min-hint" title={t('searchHint')}>
-                  {trimmedSearch.length}/5
-                </span>
-              ) : (
-                <span className="search-active-hint" title="Active">
-                  ✓ {t('searchActiveStatus')}
-                </span>
-              )}
-              <button
-                type="button"
-                className="search-clear-inline-btn"
-                onClick={() => setSearchQuery('')}
-                title="Clear"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Active Folder Filter Tag */}
-          {selectedFolder && (
-            <span
-              className="badge-pill badge-pill-accent"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem' }}
-            >
-              📁 {selectedFolder.split(/[/\\]/).pop()}
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
-                onClick={() => setSelectedFolder(null)}
-                title={t('clearFolderFilter')}
-              >
-                ✕
-              </button>
-            </span>
-          )}
-
-          {/* Type Filter */}
-          <div className="filter-button-group">
-            <button
-              className={`filter-btn ${typeFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setTypeFilter('all')}
-              type="button"
-            >
-              {t('filterAllTypes')}
-            </button>
-            <button
-              className={`filter-btn ${typeFilter === 'images' ? 'active' : ''}`}
-              onClick={() => setTypeFilter('images')}
-              type="button"
-            >
-              {t('filterImages')}
-            </button>
-            <button
-              className={`filter-btn ${typeFilter === 'videos' ? 'active' : ''}`}
-              onClick={() => setTypeFilter('videos')}
-              type="button"
-            >
-              {t('filterVideos')}
-            </button>
-          </div>
-
-          {/* Status Filter */}
-          <div className="filter-button-group">
-            <button
-              className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('all')}
-              type="button"
-            >
-              {t('filterAllStatus')}
-            </button>
-            <button
-              className={`filter-btn ${statusFilter === 'PROCESSED' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('PROCESSED')}
-              type="button"
-            >
-              {t('filterProcessed')}
-            </button>
-            <button
-              className={`filter-btn ${statusFilter === 'UNPROCESSED' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('UNPROCESSED')}
-              type="button"
-            >
-              {t('filterUnprocessed')}
-            </button>
-            <button
-              className={`filter-btn ${statusFilter === 'PENDING' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('PENDING')}
-              type="button"
-            >
-              {t('filterPending')}
-            </button>
-          </div>
-
-          {/* Face Mode Filter */}
-          <div className="filter-button-group">
-            <button
-              className={`filter-btn ${faceFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setFaceFilter('all')}
-              type="button"
-            >
-              {t('filterFaceAll')}
-            </button>
-            <button
-              className={`filter-btn ${faceFilter === 'with_faces' ? 'active' : ''}`}
-              onClick={() => setFaceFilter('with_faces')}
-              type="button"
-            >
-              {t('filterFaceWith')}
-            </button>
-            <button
-              className={`filter-btn ${faceFilter === 'no_faces' ? 'active' : ''}`}
-              onClick={() => setFaceFilter('no_faces')}
-              type="button"
-            >
-              {t('filterFaceWithout')}
-            </button>
-            <button
-              className={`filter-btn ${faceFilter === 'unassigned' ? 'active' : ''}`}
-              onClick={() => setFaceFilter('unassigned')}
-              type="button"
-            >
-              {t('filterFaceUnassigned')}
-            </button>
-          </div>
-
-          {/* Person Dropdown */}
-          <select
-            className="input-control"
-            value={selectedPerson}
-            onChange={(e) => setSelectedPerson(e.target.value)}
-            style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', minWidth: '120px' }}
-          >
-            <option value="all">{t('filterPersonAll')}</option>
-            {distinctPeople.map(([name, count]) => (
-              <option key={name} value={name}>
-                👤 {name} ({count})
-              </option>
-            ))}
-          </select>
-
-          {/* Sort Field & Order */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-            <select
-              className="input-control"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as MediaSortField)}
-              style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', minWidth: '100px' }}
-              title={t('sortBy')}
-            >
-              <option value="date">📅 {t('colDate')}</option>
-              <option value="name">🔤 {t('colFilename')}</option>
-              <option value="size">💾 {t('colSize')}</option>
-              <option value="status">📊 {t('colStatus')}</option>
-              <option value="faces">👤 {t('colFaces')}</option>
-            </select>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem' }}
-              onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-              title={`${t('sortOrder')}: ${sortOrder === 'asc' ? t('sortAsc') : t('sortDesc')}`}
-            >
-              {sortOrder === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              className="btn btn-secondary"
-              onClick={handleClearFilters}
-              type="button"
-              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', color: '#f87171' }}
-            >
-              {t('btnResetFilters')}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Filter, Sort and Search Bar (expanded row representation when dropdown flag is inactive) */}
+      {!isFilterBarDropdown && (
+        <FilterSortSearchBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          faceFilter={faceFilter}
+          onFaceFilterChange={setFaceFilter}
+          selectedPerson={selectedPerson}
+          onPersonChange={setSelectedPerson}
+          distinctPeople={distinctPeople}
+          sortBy={sortBy}
+          onSortByChange={setSortBy}
+          sortOrder={sortOrder}
+          onToggleSortOrder={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+          selectedFolder={selectedFolder}
+          onClearFolder={() => setSelectedFolder(null)}
+          hasActiveFilters={hasActiveFilters}
+          onResetFilters={handleClearFilters}
+          asDropdown={false}
+        />
+      )}
 
       {/* Main Content Area based on View Mode */}
       <div
