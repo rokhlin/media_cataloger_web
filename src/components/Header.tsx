@@ -18,6 +18,9 @@ interface HeaderProps {
   currentLoadingFilename?: string | null;
   isNavExpanded?: boolean;
   onToggleNavExpanded?: () => void;
+  activeTab?: string;
+  pageTitle?: string;
+  pageSubtitle?: string;
 }
 
 export default function Header({
@@ -33,6 +36,9 @@ export default function Header({
   currentLoadingFilename = null,
   isNavExpanded = true,
   onToggleNavExpanded,
+  activeTab = 'main',
+  pageTitle,
+  pageSubtitle,
 }: HeaderProps) {
   const { language, setLanguage, t } = useLanguage();
   const { themeId, themeMode, activeTheme, presets, customThemes, setThemeId, toggleThemeMode } = useTheme();
@@ -115,6 +121,73 @@ export default function Header({
     ? (t('navCollapse' as any) || 'Collapse navigation')
     : (t('navExpand' as any) || 'Expand navigation');
 
+  // Dynamic page title & explanation subtitle based on activeTab
+  const getPageTitleAndSubtitle = () => {
+    if (pageTitle) {
+      return { title: pageTitle, subtitle: pageSubtitle || '' };
+    }
+
+    const isRu = language === 'ru';
+    switch (activeTab) {
+      case 'main':
+        return {
+          title: (t as any)('galleryTitle') || (isRu ? 'Галерея медиафайлов' : 'Media Gallery'),
+          subtitle: isRu
+            ? 'Просмотр, фильтрация и организация каталогизированных фото и видео'
+            : 'Browse, filter, view and organize cataloged media files, photos and videos',
+        };
+      case 'duplicates':
+        return {
+          title: isRu ? 'Поиск и очистка дубликатов' : 'Duplicates Manager',
+          subtitle: isRu
+            ? 'Поиск, группировка, сравнение и удаление похожих и серийных снимков'
+            : 'Find, group, compare and clean up duplicate and burst photos',
+        };
+      case 'media_library':
+        return {
+          title: (t as any)('faceRegistryTitle') || (isRu ? 'Распознавание лиц и группы' : 'Face Recognition & Groups'),
+          subtitle: isRu
+            ? 'Кластеризация лиц, назначение персон и управление конвейером анализа'
+            : 'Face cluster inspection, identity assignment and pipeline analysis',
+        };
+      case 'family_tree':
+        return {
+          title: (t as any)('navFamilyTree') || (isRu ? 'Семейное древо' : 'Family Tree'),
+          subtitle: isRu
+            ? 'Интерактивный генеалогический граф и хроника жизни родственников'
+            : 'Interactive genealogical relationship graph and life chronology',
+        };
+      case 'settings':
+        return {
+          title: (t as any)('navSettings') || (isRu ? 'Настройки системы' : 'System Settings'),
+          subtitle: isRu
+            ? 'Настройка папок, путей хранения, параметров ИИ и визуальных предпочтений'
+            : 'Configure input folders, storage paths, AI models and visual preferences',
+        };
+      case 'admin':
+        return {
+          title: (t as any)('adminTitle') || (isRu ? 'Панель администратора' : 'Admin Dashboard'),
+          subtitle: isRu
+            ? 'Мониторинг системы, управление пользователями и переключение флагов функций'
+            : 'System health monitoring, user account management and feature flag controls',
+        };
+      case 'vault':
+        return {
+          title: isRu ? 'Секретное хранилище' : 'Secret Vault',
+          subtitle: isRu
+            ? 'Зашифрованные персональные медиафайлы с защитой по паролю или PIN'
+            : 'Encrypted private folder protected by password or master PIN',
+        };
+      default:
+        return {
+          title: t('appTitle'),
+          subtitle: t('appSubtitle'),
+        };
+    }
+  };
+
+  const { title: displayTitle, subtitle: displaySubtitle } = getPageTitleAndSubtitle();
+
   return (
     <header className="app-header">
       <div className="header-brand-wrap">
@@ -136,8 +209,8 @@ export default function Header({
         </button>
 
         <div className="logo-section">
-          <h1>{t('appTitle')}</h1>
-          <p>{t('appSubtitle')}</p>
+          <h1>{displayTitle}</h1>
+          <p>{displaySubtitle}</p>
         </div>
       </div>
 

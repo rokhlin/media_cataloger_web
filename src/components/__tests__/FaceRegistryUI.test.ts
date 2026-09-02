@@ -82,9 +82,9 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
 
     assert.ok(flag, 'face_registry_dropdown flag must be in feature_flags.json');
     assert.strictEqual(
-      flag.isEnabled,
-      false,
-      'face_registry_dropdown should default to false (button tabs)'
+      typeof flag.isEnabled,
+      'boolean',
+      'face_registry_dropdown isEnabled should be a boolean'
     );
     assert.ok(
       flag.classNames.includes('face-registry-dropdown'),

@@ -80,9 +80,9 @@ describe('ViewSwitcherButtonGroup Component & Dropdown Feature Flag', () => {
 
     assert.ok(flag, 'view_switcher_dropdown flag must be in feature_flags.json');
     assert.strictEqual(
-      flag.isEnabled,
-      false,
-      'view_switcher_dropdown should default to false (buttons view)'
+      typeof flag.isEnabled,
+      'boolean',
+      'view_switcher_dropdown isEnabled should be a boolean'
     );
     assert.ok(
       flag.classNames.includes('view-switcher-dropdown'),

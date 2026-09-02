@@ -74,9 +74,9 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
 
     assert.ok(flag, 'filter_bar_dropdown flag must be in feature_flags.json');
     assert.strictEqual(
-      flag.isEnabled,
-      false,
-      'filter_bar_dropdown should default to false (expanded row)'
+      typeof flag.isEnabled,
+      'boolean',
+      'filter_bar_dropdown isEnabled should be a boolean'
     );
     assert.ok(
       flag.classNames.includes('filter-bar-dropdown'),

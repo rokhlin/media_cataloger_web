@@ -859,6 +859,7 @@ function AppMain() {
         }
         isNavExpanded={isNavExpanded}
         onToggleNavExpanded={handleToggleNav}
+        activeTab={activeTab}
       />
 
       <div className="app-body-layout">

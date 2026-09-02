@@ -540,10 +540,7 @@ export default function InputSourcesGallery({
   const listBottomPadding = Math.max(0, (totalListRows - endListRow) * TABLE_ROW_HEIGHT);
 
   const totalCount = mediaFiles.length;
-  const processedCount = mediaFiles.filter((f) => f.status === 'PROCESSED').length;
-  const imageCount = mediaFiles.filter((f) => f.is_image).length;
   const videoCount = mediaFiles.filter((f) => f.is_video).length;
-  const showRefresh = FlagsManager.IsActive('app-show-media-file-refresh');
   const showSwitchToControls = FlagsManager.IsActive('app-show-controls-switch');
   const isFilterBarDropdown = FlagsManager.IsActive('filter_bar_dropdown', false);
   const isFaceRegistryDropdown = FlagsManager.IsActive('face_registry_dropdown', false);
@@ -1162,16 +1159,9 @@ export default function InputSourcesGallery({
     <div className="card media-gallery-card">
       <div className="gallery-header-row">
         <div className="gallery-title-wrap">
-          <h2 style={{ margin: 0 }}>{t('galleryTitle')}</h2>
           <div className="gallery-stats-badges">
             <span className="badge-pill badge-pill-accent">
-              {totalCount} {t('badgeMediaFiles')}
-            </span>
-            <span className="badge-pill badge-pill-success">
-              {processedCount} {t('badgeCataloged')}
-            </span>
-            <span className="badge-pill badge-pill-secondary">
-              📷 {imageCount} {t('badgePhotos')}
+              {t('showingFilesCount')}: {Math.min(visibleFiles.length, filteredFiles.length)} / {totalCount} {t('badgeMediaFiles')}
             </span>
             <span className="badge-pill badge-pill-secondary">
               🎥 {videoCount} {t('badgeVideos')}
@@ -1221,19 +1211,6 @@ export default function InputSourcesGallery({
             asDropdown={isFaceRegistryDropdown}
           />
 
-          {(showRefresh && onRefresh) && (
-            <button
-              className="btn btn-secondary"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-              onClick={onRefresh}
-              disabled={isLoading || disabled}
-              type="button"
-              title={t('btnRefreshGallery')}
-            >
-              <span>🔄</span>
-              <span>{t('btnRefreshGallery')}</span>
-            </button>
-          )}
 
           {(showSwitchToControls && onSwitchToControls && !isFaceRegistryDropdown) && (
             <button
@@ -1389,7 +1366,8 @@ export default function InputSourcesGallery({
                 }}
               >
                 <span>
-                  {t('showingFilesCount')}: <strong>{Math.min(visibleFiles.length, filteredFiles.length)}</strong> / {filteredFiles.length} {t('badgeMediaFiles')}
+                  {t('showingFilesCount')}: <strong>{Math.min(visibleFiles.length, filteredFiles.length)}</strong> / {totalCount} {t('badgeMediaFiles')}
+                  {videoCount > 0 && ` • 🎥 ${videoCount} ${t('badgeVideos')}`}
                   {' '}({Math.min(loadedRows, Math.ceil(filteredFiles.length / effectiveCols))} / {Math.ceil(filteredFiles.length / effectiveCols)} rows)
                 </span>
 
