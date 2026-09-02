@@ -4,9 +4,78 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useFeatureFlags, FlagsManager } from '../services/featureFlagsContext';
 import './FilterSortSearchBar.css';
 
-export interface FilterSortSearchBarProps {
+export interface SearchBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  placeholder?: string;
+  className?: string;
+  isCompact?: boolean;
+  style?: React.CSSProperties;
+  id?: string;
+}
+
+export const SearchBar: React.FC<SearchBarProps> = ({
+  searchQuery,
+  onSearchChange,
+  placeholder,
+  className = '',
+  isCompact = false,
+  style,
+  id,
+}) => {
+  const { t } = useLanguage();
+  const trimmedSearch = (searchQuery || '').trim();
+
+  return (
+    <div
+      id={id}
+      className={`search-box ${className}`.trim()}
+      style={{
+        flex: isCompact ? 'none' : 1,
+        minWidth: isCompact ? '100%' : '240px',
+        margin: 0,
+        position: 'relative',
+        ...style,
+      }}
+    >
+      <span className="search-icon">🔍</span>
+      <input
+        type="text"
+        className="input-control"
+        placeholder={placeholder || t('searchPlaceholder')}
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        style={{ paddingRight: searchQuery ? '5rem' : '1rem', width: '100%' }}
+      />
+      {searchQuery && (
+        <div className="search-status-tag-wrap">
+          {trimmedSearch.length > 0 && trimmedSearch.length < 5 ? (
+            <span className="search-min-hint" title={t('searchHint')}>
+              {trimmedSearch.length}/5
+            </span>
+          ) : (
+            <span className="search-active-hint" title="Active">
+              ✓ {t('searchActiveStatus')}
+            </span>
+          )}
+          <button
+            type="button"
+            className="search-clear-inline-btn"
+            onClick={() => onSearchChange('')}
+            title="Clear"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export interface FilterSortSearchBarProps {
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  showSearch?: boolean;
   typeFilter: 'all' | 'images' | 'videos';
   onTypeFilterChange: (type: 'all' | 'images' | 'videos') => void;
   statusFilter: 'all' | 'PROCESSED' | 'UNPROCESSED' | 'PENDING';
@@ -30,8 +99,9 @@ export interface FilterSortSearchBarProps {
 }
 
 export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
-  searchQuery,
+  searchQuery = '',
   onSearchChange,
+  showSearch = false,
   typeFilter,
   onTypeFilterChange,
   statusFilter,
@@ -91,7 +161,7 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
     };
   }, [isOpen]);
 
-  const trimmedSearch = searchQuery.trim();
+  const trimmedSearch = (searchQuery || '').trim();
 
   // Active filter count calculation
   const activeFiltersCount = useMemo(() => {
@@ -100,54 +170,20 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
     if (statusFilter !== 'all') count++;
     if (faceFilter !== 'all') count++;
     if (selectedPerson !== 'all') count++;
-    if (trimmedSearch.length > 0) count++;
+    if (showSearch && trimmedSearch.length > 0) count++;
     if (selectedFolder) count++;
     return count;
-  }, [typeFilter, statusFilter, faceFilter, selectedPerson, trimmedSearch, selectedFolder]);
+  }, [typeFilter, statusFilter, faceFilter, selectedPerson, trimmedSearch, selectedFolder, showSearch]);
 
   // Common Search Input element
-  const renderSearchInput = (isCompact = false) => (
-    <div
-      className="search-box"
-      style={{
-        flex: isCompact ? 'none' : 1,
-        minWidth: isCompact ? '100%' : '240px',
-        margin: 0,
-        position: 'relative',
-      }}
-    >
-      <span className="search-icon">🔍</span>
-      <input
-        type="text"
-        className="input-control"
-        placeholder={t('searchPlaceholder')}
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        style={{ paddingRight: searchQuery ? '5rem' : '1rem', width: '100%' }}
+  const renderSearchInput = (isCompact = false) =>
+    onSearchChange ? (
+      <SearchBar
+        searchQuery={searchQuery}
+        onSearchChange={onSearchChange}
+        isCompact={isCompact}
       />
-      {searchQuery && (
-        <div className="search-status-tag-wrap">
-          {trimmedSearch.length > 0 && trimmedSearch.length < 5 ? (
-            <span className="search-min-hint" title={t('searchHint')}>
-              {trimmedSearch.length}/5
-            </span>
-          ) : (
-            <span className="search-active-hint" title="Active">
-              ✓ {t('searchActiveStatus')}
-            </span>
-          )}
-          <button
-            type="button"
-            className="search-clear-inline-btn"
-            onClick={() => onSearchChange('')}
-            title="Clear"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-    </div>
-  );
+    ) : null;
 
   // Common Folder Filter Pill
   const renderFolderPill = () =>
@@ -196,7 +232,7 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
             aria-expanded={isOpen}
             title={t('filterAllTypes') || 'Filter & Sort'}
           >
-            <span>🔍 {t('sortBy') || 'Filter & Sort'}</span>
+            <span>{t('sortBy') || 'Filter & Sort'}</span>
             {activeFiltersCount > 0 && (
               <span className="filter-active-badge">{activeFiltersCount}</span>
             )}
@@ -215,12 +251,15 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
               aria-label="Filter and Sort Options"
             >
               {/* Search Box in Dropdown */}
-              <div className="filter-dropdown-section">
-                <span className="filter-dropdown-section-title">Search</span>
-                {renderSearchInput(true)}
-              </div>
-
-              <div className="filter-dropdown-divider" />
+              {showSearch && onSearchChange && (
+                <>
+                  <div className="filter-dropdown-section">
+                    <span className="filter-dropdown-section-title">Search</span>
+                    {renderSearchInput(true)}
+                  </div>
+                  <div className="filter-dropdown-divider" />
+                </>
+              )}
 
               {/* Type Filter */}
               <div className="filter-dropdown-section">
@@ -409,7 +448,7 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
       className={`gallery-filters-row gallery-filter-bar ${className}`.trim()}
     >
       {/* Search Box */}
-      {renderSearchInput(false)}
+      {showSearch && onSearchChange && renderSearchInput(false)}
 
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {/* Active Folder Filter Tag */}

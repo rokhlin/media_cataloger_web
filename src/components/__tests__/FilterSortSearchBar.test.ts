@@ -83,4 +83,22 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
       'classNames should include filter-bar-dropdown'
     );
   });
+
+  it('should verify SearchBar is exported and rendered in MediaGallery gallery-title-wrap', () => {
+    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
+    const content = fs.readFileSync(componentPath, 'utf8');
+
+    assert.ok(
+      content.includes('export const SearchBar') && content.includes('interface SearchBarProps'),
+      'FilterSortSearchBar must export SearchBar component and SearchBarProps interface'
+    );
+
+    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryContent = fs.readFileSync(galleryPath, 'utf8');
+
+    assert.ok(
+      galleryContent.includes('gallery-title-wrap') && galleryContent.includes('<SearchBar'),
+      'MediaGallery must render SearchBar inside gallery-title-wrap'
+    );
+  });
 });

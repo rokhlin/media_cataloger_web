@@ -1793,6 +1793,13 @@ select option:checked {
   align-items: center;
   gap: 0.8rem;
   flex-wrap: wrap;
+  flex: 1 1 0%;
+  min-width: 220px;
+}
+
+.gallery-title-wrap .search-box {
+  width: 100%;
+  min-width: 200px;
 }
 
 .gallery-stats-badges {

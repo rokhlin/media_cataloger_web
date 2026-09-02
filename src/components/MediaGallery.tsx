@@ -19,6 +19,7 @@ import { errorInterceptor } from '../utils/errorInterceptor';
 import MediaViewerModal from './MediaViewerModal';
 import ViewSwitcherButtonGroup from './ViewSwitcherButtonGroup';
 import FilterSortSearchBar from './FilterSortSearchBar';
+import { SearchBar } from './FilterSortSearchBar';
 import FaceRegistryUI from './FaceRegistryUI';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
@@ -1159,25 +1160,13 @@ export default function InputSourcesGallery({
     <div className="card media-gallery-card">
       <div className="gallery-header-row">
         <div className="gallery-title-wrap">
-          <div className="gallery-stats-badges">
-            <span className="badge-pill badge-pill-accent">
-              {t('showingFilesCount')}: {Math.min(visibleFiles.length, filteredFiles.length)} / {totalCount} {t('badgeMediaFiles')}
-            </span>
-            <span className="badge-pill badge-pill-secondary">
-              🎥 {videoCount} {t('badgeVideos')}
-            </span>
-          </div>
+          <SearchBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* View Switcher Button Group */}
-          <ViewSwitcherButtonGroup
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            isSimilarityGrouped={isSimilarityGrouped}
-            onToggleSimilarityGrouped={() => setIsSimilarityGrouped((prev) => !prev)}
-          />
-
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
           {/* Filter, Sort and Search Bar (dropdown representation on the same line when active) */}
           {isFilterBarDropdown && (
             <FilterSortSearchBar
@@ -1203,6 +1192,14 @@ export default function InputSourcesGallery({
               asDropdown={true}
             />
           )}
+
+          {/* View Switcher Button Group */}
+          <ViewSwitcherButtonGroup
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            isSimilarityGrouped={isSimilarityGrouped}
+            onToggleSimilarityGrouped={() => setIsSimilarityGrouped((prev) => !prev)}
+          />
 
           {/* Face Registry UI (dropdown representation on the same line) */}
           <FaceRegistryUI
