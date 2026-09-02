@@ -1099,7 +1099,7 @@ export default function FaceRegistry({
                         style={{ width: '60px', height: '60px', borderRadius: '8px' }}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#f3f4f6' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                           {sourceImageModal.face.name || sourceImageModal.face.face_id}
                         </div>
                         <span className="face-id-label">{sourceImageModal.face.face_id}</span>
@@ -1109,7 +1109,7 @@ export default function FaceRegistry({
 
                   <div className="lightbox-detail-row">
                     <span className="lightbox-label">{t('personNameLabel')}</span>
-                    <span className="lightbox-value" style={{ fontWeight: 600, color: '#93c5fd' }}>
+                    <span className="lightbox-value" style={{ fontWeight: 600, color: 'var(--primary-color)' }}>
                       {sourceImageModal.face?.name || sourceImageModal.face?.person_id || t('unassignedName')}
                     </span>
                   </div>
