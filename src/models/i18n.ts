@@ -139,6 +139,7 @@ export interface LightboxTranslations {
   loadingFaces: string;
   noFacesIndexed: string;
   btnAnalyzeFile: string;
+  aiEngineOfflineTooltip: string;
   btnOpenOriginal: string;
   prevImageTooltip: string;
   nextImageTooltip: string;

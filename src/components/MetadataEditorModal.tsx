@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GalleryMediaFile } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useAuth } from '../services/authContext';
 
 interface MetadataEditorModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function MetadataEditorModal({
   onSaved,
 }: MetadataEditorModalProps) {
   const { t } = useLanguage();
+  const { authFetch } = useAuth();
 
   const [activeTab, setActiveTab] = useState<TabType>('descriptions');
   const [isSaving, setIsSaving] = useState(false);
@@ -148,7 +150,8 @@ export default function MetadataEditorModal({
     };
 
     try {
-      const res = await fetch('/api/media/metadata', {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -198,7 +201,7 @@ export default function MetadataEditorModal({
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay active"
       style={{
         position: 'fixed',
         inset: 0,

@@ -41,4 +41,57 @@ describe('MediaViewerModal & Theme Adaptability', () => {
     assert.ok(galleryContent.includes('<MediaViewerModal'), 'MediaGallery must render MediaViewerModal component');
     assert.ok(!galleryContent.includes('className="modal-card media-lightbox-card"'), 'MediaGallery must not render inline lightbox card markup');
   });
+
+  it('should verify MediaViewerModal restricts btnEditMetadata to PROCESSED media and canEdit', () => {
+    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const content = fs.readFileSync(modalPath, 'utf8');
+
+    assert.ok(
+      content.includes("canEdit && selectedMedia.status === 'PROCESSED'"),
+      'btnEditMetadata must strictly require canEdit and selectedMedia.status === "PROCESSED"'
+    );
+  });
+
+  it('should verify MediaViewerModal restricts vault actions strictly to admin users', () => {
+    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const content = fs.readFileSync(modalPath, 'utf8');
+
+    assert.ok(
+      content.includes('{isAdmin && ('),
+      'Vault actions (add/remove) must be guarded strictly by isAdmin'
+    );
+    assert.ok(
+      !content.includes('(canEdit || isUnlocked || isAdmin) && ('),
+      'Vault actions must not allow regular editors or non-admin unlocked sessions'
+    );
+  });
+
+  it('should verify MediaViewerModal disables btnAnalyzeFile when AI Engine is offline', () => {
+    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const content = fs.readFileSync(modalPath, 'utf8');
+
+    assert.ok(content.includes('isEngineConnected'), 'MediaViewerModal must declare isEngineConnected prop');
+    assert.ok(
+      content.includes('disabled={disabled || !isEngineConnected || !engineOnline}'),
+      'btnAnalyzeFile must be disabled when isEngineConnected or engineOnline is false'
+    );
+    assert.ok(
+      content.includes('aiEngineOfflineTooltip'),
+      'btnAnalyzeFile must display aiEngineOfflineTooltip when disconnected'
+    );
+  });
+
+  it('should verify MetadataEditorModal uses active overlay and authFetch', () => {
+    const editorPath = path.resolve('src/components/MetadataEditorModal.tsx');
+    const content = fs.readFileSync(editorPath, 'utf8');
+
+    assert.ok(
+      content.includes('className="modal-overlay active"'),
+      'MetadataEditorModal must render with active overlay class'
+    );
+    assert.ok(
+      content.includes('authFetch || fetch'),
+      'MetadataEditorModal must use authFetch to persist metadata'
+    );
+  });
 });

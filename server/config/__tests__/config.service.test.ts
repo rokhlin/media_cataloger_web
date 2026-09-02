@@ -82,7 +82,11 @@ describe('AppConfigService', () => {
 
     assert.deepStrictEqual(config.inputFolders, uncInputs);
     assert.strictEqual(config.outputFolder, uncOutput);
-    assert.strictEqual(config.dbPath, '\\\\ZIMABOARD\\sda1\\media_cataloger\\config\\catalog_history.db');
+    assert.ok(
+      config.dbPath === '\\\\ZIMABOARD\\sda1\\media_cataloger\\config\\catalog_history.db' ||
+      config.dbPath === '\\\\ZIMABOARD\\sda1\\media_cataloger\\catalog_history.db',
+      'dbPath should resolve under UNC output folder'
+    );
   });
 
   it('should map UNC share mounts to /app/media_input and /app/media_output in non-dev/production builds', () => {

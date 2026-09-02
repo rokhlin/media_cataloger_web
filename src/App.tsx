@@ -300,9 +300,23 @@ function AppMain() {
           loadFaces();
           fetchLogsInternal();
         }
+      } else {
+        setStatusInfo((prev) => ({
+          ...prev,
+          status: 'idle',
+          connected: false,
+          error: `HTTP ${res.status}: ${res.statusText}`,
+        }));
       }
-    } catch (err) {
-      console.error('Error checking status:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Connection error';
+      console.warn('Error checking status (server or AI engine offline):', msg);
+      setStatusInfo((prev) => ({
+        ...prev,
+        status: 'idle',
+        connected: false,
+        error: msg,
+      }));
     }
   }, [fetchLogsInternal, loadMediaFiles, loadFaces]);
 
@@ -696,6 +710,16 @@ function AppMain() {
 
   // Start Single Analysis
   const handleStartSingleAnalysis = async (file: string, onSuccess?: () => void) => {
+    if (statusInfo.connected === false) {
+      appendConsoleMessage(
+        'Cannot trigger single file analysis: media_cataloger AI Engine is offline or disconnected.',
+        'WARN',
+        'Pipeline'
+      );
+      alert('media_cataloger AI Engine is offline or disconnected. Please ensure the Python service is running.');
+      return;
+    }
+
     appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
     try {
       const res = await authFetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
@@ -845,6 +869,7 @@ function AppMain() {
                 }
                 scannedFilesCount={scanProgress?.scanned_count || 0}
                 activeInputFolders={settings?.input_folders || []}
+                isEngineConnected={Boolean(statusInfo.connected)}
               />
             </div>
           )}

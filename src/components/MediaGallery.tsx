@@ -37,6 +37,7 @@ interface InputSourcesGalleryProps {
   currentLoadingFilename?: string | null;
   scannedFilesCount?: number;
   activeInputFolders?: string[];
+  isEngineConnected?: boolean;
 }
 
 export default function InputSourcesGallery({
@@ -57,6 +58,7 @@ export default function InputSourcesGallery({
   currentLoadingFilename,
   scannedFilesCount = 0,
   activeInputFolders = [],
+  isEngineConnected = true,
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
 
@@ -1461,6 +1463,7 @@ export default function InputSourcesGallery({
         persons={persons}
         knownPersonOptions={knownPersonOptions}
         disabled={disabled}
+        isEngineConnected={isEngineConnected}
         onMediaUpdated={(updated) => {
           setSelectedMedia(updated);
           if (onRefresh) onRefresh();

@@ -27,6 +27,7 @@ export interface MediaViewerModalProps {
   persons?: PersonItem[];
   knownPersonOptions?: { name: string; avatarUrl?: string | null; count: number }[];
   disabled?: boolean;
+  isEngineConnected?: boolean;
   onMediaUpdated?: (updated: GalleryMediaFile) => void;
 }
 
@@ -47,18 +48,55 @@ export default function MediaViewerModal({
   persons = [],
   knownPersonOptions = [],
   disabled = false,
+  isEngineConnected = true,
   onMediaUpdated,
 }: MediaViewerModalProps) {
   const { t, language } = useLanguage();
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
-  const { addVaultItem, removeVaultItem, isUnlocked } = useVault();
+  const { addVaultItem, removeVaultItem } = useVault();
 
   // Selected media state (can be updated locally on tagging/vault actions)
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(mediaFile);
   const [facesForSelected, setFacesForSelected] = useState<DetectedFaceRecord[]>([]);
   const [loadingFaces, setLoadingFaces] = useState(false);
+  const [engineOnline, setEngineOnline] = useState<boolean>(isEngineConnected);
 
-  // In-lightbox language toggle: 'active' (follows global language) or specific 'ru' / 'en'
+  // Sync prop changes
+  useEffect(() => {
+    setSelectedMedia(mediaFile);
+  }, [mediaFile]);
+
+  useEffect(() => {
+    setEngineOnline(isEngineConnected);
+  }, [isEngineConnected]);
+
+  // Dynamically poll status to track AI engine availability in real-time
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    const verifyConnection = async () => {
+      try {
+        const res = await fetch('/api/status');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setEngineOnline(Boolean(data.connected));
+        } else if (isMounted) {
+          setEngineOnline(false);
+        }
+      } catch {
+        if (isMounted) {
+          setEngineOnline(false);
+        }
+      }
+    };
+
+    verifyConnection();
+    const interval = setInterval(verifyConnection, 2500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isOpen]);
   const [lightboxLang, setLightboxLang] = useState<'active' | 'ru' | 'en'>('active');
 
   // Person tagging & reassignment state in Lightbox
@@ -449,7 +487,7 @@ export default function MediaViewerModal({
               <div className="lightbox-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                   <h4 className="lightbox-section-title" style={{ margin: 0 }}>{t('fileDetails')}</h4>
-                  {canEdit && (
+                  {canEdit && selectedMedia.status === 'PROCESSED' && (
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -1051,7 +1089,7 @@ export default function MediaViewerModal({
 
               {/* Actions */}
               <div className="lightbox-section lightbox-actions-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {canEdit && (
+                {canEdit && selectedMedia.status === 'PROCESSED' && (
                   <button
                     className="btn btn-secondary"
                     style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
@@ -1062,7 +1100,7 @@ export default function MediaViewerModal({
                   </button>
                 )}
 
-                {(canEdit || isUnlocked || isAdmin) && (
+                {isAdmin && (
                   <button
                     className="btn btn-secondary"
                     style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
@@ -1091,14 +1129,25 @@ export default function MediaViewerModal({
 
                 <button
                   className="btn btn-accent"
-                  style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                  style={{
+                    width: '100%',
+                    fontSize: '0.85rem',
+                    padding: '0.5rem',
+                    opacity: disabled || !isEngineConnected || !engineOnline ? 0.6 : 1,
+                    cursor: disabled || !isEngineConnected || !engineOnline ? 'not-allowed' : 'pointer',
+                  }}
                   onClick={() => {
+                    if (!isEngineConnected || !engineOnline) {
+                      alert(t('aiEngineOfflineTooltip'));
+                      return;
+                    }
                     if (onStartSingleAnalysis) {
                       onStartSingleAnalysis(selectedMedia.file_path || selectedMedia.filename);
                       onClose();
                     }
                   }}
-                  disabled={disabled}
+                  disabled={disabled || !isEngineConnected || !engineOnline}
+                  title={!isEngineConnected || !engineOnline ? t('aiEngineOfflineTooltip') : t('btnAnalyzeFile')}
                   type="button"
                 >
                   {t('btnAnalyzeFile')}
