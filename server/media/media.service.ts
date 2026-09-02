@@ -142,6 +142,8 @@ export class MediaService {
   async scanInputFolders(): Promise<ScannedMediaFile[]> {
     const results: ScannedMediaFile[] = [];
     const supported = new Set([...this.config.supportedPhotoExts, ...this.config.supportedVideoExts]);
+    const visitedFiles = new Set<string>();
+    const visitedDirs = new Set<string>();
 
     this.scanStatus.is_scanning = true;
     this.scanStatus.started_at = Date.now();
@@ -157,6 +159,18 @@ export class MediaService {
 
     const traverse = async (dir: string, baseFolder: string) => {
       try {
+        let realDir = dir;
+        try {
+          realDir = fs.realpathSync(dir);
+        } catch {
+          // fallback to dir if realpath fails
+        }
+        const normDir = realDir.toLowerCase().replace(/\\/g, '/');
+        if (visitedDirs.has(normDir)) {
+          return;
+        }
+        visitedDirs.add(normDir);
+
         this.scanStatus.current_folder = dir;
         const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -171,6 +185,16 @@ export class MediaService {
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if (supported.has(ext)) {
+              let realFile = fullPath;
+              try {
+                realFile = fs.realpathSync(fullPath);
+              } catch {}
+              const normFile = realFile.toLowerCase().replace(/\\/g, '/');
+              if (visitedFiles.has(normFile)) {
+                continue;
+              }
+              visitedFiles.add(normFile);
+
               results.push({ filePath: fullPath, folder: baseFolder });
               this.registerIndexedFile(fullPath, baseFolder);
               this.scanStatus.scanned_count = results.length;
@@ -309,6 +333,14 @@ export class MediaService {
       const faceCounts = this.db.getFacesCountBySourceFile();
       const allFacesByFile = this.db.getAllFacesBySourceFile();
       const dbMetadata = this.db.getAllMediaMetadata();
+      const allMediaHashes = this.db.getAllMediaHashes ? this.db.getAllMediaHashes() : [];
+      const mediaHashMap = new Map<string, any>();
+      for (const h of allMediaHashes) {
+        if (h && h.file_path) {
+          mediaHashMap.set(h.file_path.toLowerCase().replace(/\\/g, '/'), h);
+          mediaHashMap.set(path.basename(h.file_path).toLowerCase(), h);
+        }
+      }
 
       // Pre-read output folder files to avoid hundreds of thousands of network stats over NAS
       const outputDirSidecars = new Set<string>();
@@ -418,8 +450,12 @@ export class MediaService {
       let transcriptionRu: string | null = null;
       let timelineEvents: any = null;
 
+      let captureDate: string | null = null;
+      let mediaDate: string | null = null;
       const m = dbMetadata[filePath] || dbMetadata[baseName.toLowerCase()];
       if (m) {
+        mediaDate = m.media_date || null;
+        captureDate = (m as any).capture_date || m.media_date || null;
         desc = m.description || null;
         descRu = m.description_ru || null;
         summ = m.summary || null;
@@ -470,6 +506,13 @@ export class MediaService {
           if (ga.transcription || sdata.transcription) transcription = ga.transcription || sdata.transcription;
           if (ga.transcription_ru || sdata.transcription_ru) transcriptionRu = ga.transcription_ru || sdata.transcription_ru;
           if (ga.timeline_events || sdata.timeline_events) timelineEvents = ga.timeline_events || sdata.timeline_events;
+          if (sdata.capture_date) captureDate = sdata.capture_date;
+          else if (sdata.exif?.DateTimeOriginal) captureDate = sdata.exif.DateTimeOriginal;
+          else if (sdata.exif?.CreateDate) captureDate = sdata.exif.CreateDate;
+          else if (sdata.media_date) captureDate = sdata.media_date;
+
+          if (sdata.media_date) mediaDate = sdata.media_date;
+          else if (captureDate && !mediaDate) mediaDate = captureDate;
 
           // If faces are missing from DB, extract them from sidecar JSON
           const rawSidecarFaces = sdata.faces || sdata.detected_faces || ga.faces || ga.detected_faces || [];
@@ -576,12 +619,19 @@ export class MediaService {
 
       const fc = dedupFaces.length > 0 ? dedupFaces.length : (faceCounts[filePath] || baseFaceCounts[baseName.toLowerCase()] || 0);
 
+      const normPath = filePath.toLowerCase().replace(/\\/g, '/');
+      const hashRec = mediaHashMap.get(normPath) || mediaHashMap.get(baseName.toLowerCase());
+      const phash = hashRec?.phash || null;
+
       const item: any = {
         file_path: filePath,
         filename: baseName,
         folder: folder,
         file_size: size,
         mtime: mtime,
+        capture_date: captureDate,
+        media_date: mediaDate,
+        phash: phash,
         is_video: isVideo,
         is_image: isImage,
         status: status,

@@ -13,6 +13,7 @@ import type {
 } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
 import { mediaOrganizationService } from '../services/mediaOrganizationService';
+import { mediaCacheService } from '../services/mediaCacheService';
 import { FlagsManager } from '../services/featureFlagsContext';
 import MediaViewerModal from './MediaViewerModal';
 
@@ -96,7 +97,7 @@ export default function InputSourcesGallery({
   // Selected media item for full-screen Lightbox / Media Viewer modal
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(null);
 
-  // Keep selectedMedia synchronized if mediaFiles list updates in background
+  // Keep selectedMedia synchronized if background scan or face update alters current media
   useEffect(() => {
     if (selectedMedia && Array.isArray(mediaFiles)) {
       const match = mediaFiles.find(
@@ -104,11 +105,25 @@ export default function InputSourcesGallery({
           (f.file_path && f.file_path === selectedMedia.file_path) ||
           f.filename === selectedMedia.filename
       );
-      if (match && match !== selectedMedia) {
-        setSelectedMedia(match);
+      if (
+        match &&
+        (match.status !== selectedMedia.status ||
+          match.face_count !== selectedMedia.face_count ||
+          match.description !== selectedMedia.description)
+      ) {
+        setSelectedMedia((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            ...match,
+            similar_group_files: prev.similar_group_files || match.similar_group_files,
+            similar_files_count: prev.similar_files_count || match.similar_files_count,
+            similarity_group_id: prev.similarity_group_id || match.similarity_group_id,
+          };
+        });
       }
     }
-  }, [mediaFiles, selectedMedia]);
+  }, [mediaFiles]);
 
   // Extract distinct recognized people and face counts across all media files
   const distinctPeople = useMemo(() => {
@@ -188,12 +203,34 @@ export default function InputSourcesGallery({
   // Filtered and sorted files
   const trimmedSearch = searchQuery.trim();
   
+  const [isSimilarityGrouped, setIsSimilarityGrouped] = useState(true);
   const [filteredFiles, setFilteredFiles] = useState<GalleryMediaFile[]>([]);
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
   const [dateGroups, setDateGroups] = useState<DateGroupNode[]>([]);
   const [personGroups, setPersonGroups] = useState<PersonGroupNode[]>([]);
   
   const [, startTransition] = useTransition();
+
+  // Find series group files for currently selected media (from file itself or matching item in filteredFiles)
+  const currentSeriesGroupFiles = useMemo(() => {
+    if (!selectedMedia) return undefined;
+    if (selectedMedia.similar_group_files && selectedMedia.similar_group_files.length > 1) {
+      return selectedMedia.similar_group_files;
+    }
+    const match = filteredFiles.find(
+      (f) =>
+        ((f.file_path && f.file_path === selectedMedia.file_path) || f.filename === selectedMedia.filename) &&
+        f.similar_group_files &&
+        f.similar_group_files.length > 1
+    ) || filteredFiles.find(
+      (f) =>
+        f.similar_group_files &&
+        f.similar_group_files.some(
+          (sf) => (sf.file_path && sf.file_path === selectedMedia.file_path) || sf.filename === selectedMedia.filename
+        )
+    );
+    return match?.similar_group_files;
+  }, [selectedMedia, filteredFiles]);
 
   // Async process for filtering and sorting
   useEffect(() => {
@@ -209,10 +246,16 @@ export default function InputSourcesGallery({
           selectedFolder: selectedFolder || undefined,
         });
         const sorted = await mediaOrganizationService.sortMediaFiles(filtered, sortBy, sortOrder);
+        let finalSorted = sorted;
+
+        if (isSimilarityGrouped) {
+          finalSorted = await mediaOrganizationService.groupBySimilarity(sorted, 0.90);
+          finalSorted = await mediaOrganizationService.sortMediaFiles(finalSorted, sortBy, sortOrder);
+        }
         
         if (isActive) {
           startTransition(() => {
-            setFilteredFiles(sorted);
+            setFilteredFiles(finalSorted);
           });
         }
       } catch (e) {
@@ -221,7 +264,7 @@ export default function InputSourcesGallery({
     };
     processFilters();
     return () => { isActive = false; };
-  }, [mediaFiles, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder]);
+  }, [mediaFiles, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder, isSimilarityGrouped]);
 
   // Async process for folder tree (depends only on mediaFiles)
   useEffect(() => {
@@ -502,13 +545,18 @@ export default function InputSourcesGallery({
 
     const isVideoThumbActive = FlagsManager.IsActive('first-frame-thumbnail-generation');
     const shouldLoadThumbnail = file.is_image || isVideoThumbActive;
+    const hasSeries = Boolean(file.similar_files_count && file.similar_files_count > 1);
 
     return (
       <div
-        className="gallery-card-item"
+        className={`gallery-card-item ${hasSeries ? 'is-series-stack' : ''}`}
         key={file.file_path || file.filename}
         onClick={() => setSelectedMedia(file)}
-        title={`${t('clickToView')}: ${file.filename}`}
+        title={
+          hasSeries
+            ? `${file.filename} (${file.similar_files_count} ${t('similarPhotosInGroup' as any) || 'photos in series'})`
+            : `${t('clickToView')}: ${file.filename}`
+        }
       >
         <div className="gallery-thumb-wrap">
           {shouldLoadThumbnail ? (
@@ -588,6 +636,14 @@ export default function InputSourcesGallery({
                 title={`${file.face_count} ${t('cardFaceCount')}`}
               >
                 👤 {file.face_count}
+              </span>
+            )}
+            {hasSeries && (
+              <span
+                className="gallery-tag gallery-tag-series"
+                title={`${file.similar_files_count} ${t('similarPhotosInGroup' as any) || 'photos in series'}`}
+              >
+                🗂️ {file.similar_files_count}
               </span>
             )}
             {file.family_context && (
@@ -806,8 +862,19 @@ export default function InputSourcesGallery({
                   </div>
                 </td>
                 <td>
-                  <div className="media-list-title" title={file.file_path || file.filename}>
-                    {file.filename}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <div className="media-list-title" title={file.file_path || file.filename}>
+                      {file.filename}
+                    </div>
+                    {Boolean(file.similar_files_count && file.similar_files_count > 1) && (
+                      <span
+                        className="gallery-tag gallery-tag-series"
+                        style={{ fontSize: '0.66rem', padding: '1px 5px', borderRadius: '3px' }}
+                        title={`${file.similar_files_count} ${t('similarPhotosInGroup' as any) || 'photos in series'}`}
+                      >
+                        🗂️ {file.similar_files_count}
+                      </span>
+                    )}
                   </div>
                   {Boolean(file.summary || file.summary_ru) && (
                     <div className="media-list-subdesc">
@@ -1099,6 +1166,18 @@ export default function InputSourcesGallery({
               title={t('viewModePerson')}
             >
               👥 {t('viewModePerson')}
+            </button>
+            <button
+              type="button"
+              className={`filter-btn ${isSimilarityGrouped ? 'active' : ''}`}
+              onClick={() => setIsSimilarityGrouped((prev) => !prev)}
+              title={t('toggleSimilarityGrouping' as any) || 'Group Similar & Burst Photos'}
+              style={{
+                background: isSimilarityGrouped ? 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))' : undefined,
+                borderColor: isSimilarityGrouped ? 'var(--primary-color, #6366f1)' : undefined,
+              }}
+            >
+              ✨ {t('groupSimilar' as any) || 'Group Similar'}
             </button>
           </div>
 
@@ -1470,6 +1549,7 @@ export default function InputSourcesGallery({
       <MediaViewerModal
         isOpen={Boolean(selectedMedia)}
         mediaFile={selectedMedia}
+        seriesGroupFiles={currentSeriesGroupFiles}
         onClose={() => setSelectedMedia(null)}
         currentIndex={currentIndex}
         totalFiles={filteredFiles.length}

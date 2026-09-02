@@ -9,6 +9,7 @@ import { FacesModule } from './faces/faces.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { CatalogerClientModule } from './cataloger-client/cataloger.module.js';
 import { FamilyTreeModule } from './family-tree/family-tree.module.js';
+import { DuplicatesModule } from './duplicates/duplicates.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { FamilyTreeModule } from './family-tree/family-tree.module.js';
     SettingsModule,
     CatalogerClientModule,
     FamilyTreeModule,
+    DuplicatesModule,
   ],
 })
 export class AppModule {}

@@ -15,6 +15,7 @@ import { errorInterceptor } from './utils/errorInterceptor';
 import { mediaCacheService } from './services/mediaCacheService';
 import HeaderNavTabs from './components/HeaderNavTabs';
 import AdminPanel from './components/AdminPanel';
+import DuplicatesManagerTab from './components/DuplicatesManagerTab';
 import { AuthProvider, useAuth } from './services/authContext';
 import { VaultProvider, useVault } from './services/vaultContext';
 import LoginModal from './components/LoginModal';
@@ -186,6 +187,7 @@ function AppMain() {
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
   const [totalKnownFiles, setTotalKnownFiles] = useState<number | null>(null);
   const chunkAbortControllerRef = useRef<AbortController | null>(null);
+  const wasScanningRef = useRef(false);
 
   // Load initial portion of media files (100 files) without re-rendering loops
   const loadMediaFiles = useCallback(async (refresh = false) => {
@@ -227,6 +229,14 @@ function AppMain() {
       setIsMediaLoading(false);
     }
   }, []);
+
+  // Automatically reload media files and recalculate series when background indexing completes
+  useEffect(() => {
+    if (wasScanningRef.current && !scanProgress?.is_scanning) {
+      loadMediaFiles(true);
+    }
+    wasScanningRef.current = Boolean(scanProgress?.is_scanning);
+  }, [scanProgress?.is_scanning, loadMediaFiles]);
 
   // Fetch more files on scroll on demand
   const fetchMoreMediaFiles = useCallback(async () => {
@@ -894,6 +904,22 @@ function AppMain() {
             </div>
           )}
 
+          {activeTab === 'duplicates' && (
+            <div className="tab-pane active" id="pane-duplicates">
+              <DuplicatesManagerTab
+                onRefreshMedia={() => loadMediaFiles(true)}
+                activeInputFolders={settings?.input_folders || []}
+                onOpenViewer={(filePath) => {
+                  const match = mediaFiles.find((m) => m.file_path === filePath || m.filename === filePath);
+                  if (match) {
+                    // Switch to main gallery tab with viewer open or handle directly
+                    setActiveTab('main');
+                  }
+                }}
+              />
+            </div>
+          )}
+
           {activeTab === 'vault' && (
             <div className="tab-pane active" id="pane-vault">
               {!isUnlocked ? (
@@ -1017,6 +1043,12 @@ function AppMain() {
                 onSaveUiSettings={handleSaveUiSettings}
                 initialTab={settingsTab}
                 onTabChange={(tab) => setSettingsTab(tab)}
+                onRefreshMedia={() => loadMediaFiles(true)}
+                onRescanSeries={async () => {
+                  await mediaCacheService.clear();
+                  await loadMediaFiles(true);
+                }}
+                scanProgress={scanProgress}
               />
             </div>
           )}

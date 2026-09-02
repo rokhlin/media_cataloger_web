@@ -43,6 +43,14 @@ class MediaOrganizationServiceProxy {
     return this.proxy.filterMediaFiles(files, criteria);
   }
 
+  async groupBySimilarity(
+    files: GalleryMediaFile[],
+    similarityThreshold = 0.90,
+    burstWindowSec = 3.0
+  ): Promise<GalleryMediaFile[]> {
+    return this.proxy.groupBySimilarity(files, similarityThreshold, burstWindowSec);
+  }
+
   /**
    * Helper formatting bytes (still synchronous, kept on main thread for quick UI updates)
    */

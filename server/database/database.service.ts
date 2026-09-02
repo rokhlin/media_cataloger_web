@@ -189,6 +189,31 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         notes TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS media_hashes (
+        file_path TEXT PRIMARY KEY,
+        content_hash TEXT,
+        phash TEXT,
+        width INTEGER,
+        height INTEGER,
+        file_size INTEGER,
+        mtime REAL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE IF NOT EXISTS duplicate_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        default_engine TEXT NOT NULL DEFAULT 'auto',
+        similarity_threshold REAL NOT NULL DEFAULT 0.90,
+        burst_window_seconds REAL NOT NULL DEFAULT 3.0,
+        default_keep_strategy TEXT NOT NULL DEFAULT 'highest_resolution',
+        target_move_folder TEXT,
+        auto_scan_on_sync INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      INSERT OR IGNORE INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy)
+      VALUES (1, 'auto', 0.90, 3.0, 'highest_resolution');
+
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -1414,4 +1439,147 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `).get(filePath, norm, norm) as any;
     return Boolean(miRow?.is_vault);
   }
+
+  // --- Duplicate & Perceptual Hash Operations ---
+
+  getMediaHash(filePath: string): any {
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    return db.prepare(`
+      SELECT * FROM media_hashes
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      LIMIT 1
+    `).get(filePath, norm, norm);
+  }
+
+  getAllMediaHashes(): any[] {
+    const db = this.getDb();
+    return db.prepare(`SELECT * FROM media_hashes`).all();
+  }
+
+  saveMediaHash(data: {
+    filePath: string;
+    contentHash?: string | null;
+    phash?: string | null;
+    width?: number | null;
+    height?: number | null;
+    fileSize?: number | null;
+    mtime?: number | null;
+  }): void {
+    const db = this.getDb();
+    const norm = data.filePath.replace(/\\/g, '/');
+    db.prepare(`
+      INSERT INTO media_hashes (file_path, content_hash, phash, width, height, file_size, mtime, created_at)
+      VALUES (@filePath, @contentHash, @phash, @width, @height, @fileSize, @mtime, datetime('now', 'localtime'))
+      ON CONFLICT(file_path) DO UPDATE SET
+        content_hash = COALESCE(excluded.content_hash, media_hashes.content_hash),
+        phash = COALESCE(excluded.phash, media_hashes.phash),
+        width = COALESCE(excluded.width, media_hashes.width),
+        height = COALESCE(excluded.height, media_hashes.height),
+        file_size = COALESCE(excluded.file_size, media_hashes.file_size),
+        mtime = COALESCE(excluded.mtime, media_hashes.mtime)
+    `).run({
+      filePath: norm,
+      contentHash: data.contentHash || null,
+      phash: data.phash || null,
+      width: data.width || null,
+      height: data.height || null,
+      fileSize: data.fileSize || 0,
+      mtime: data.mtime || 0,
+    });
+  }
+
+  deleteMediaHash(filePath: string): void {
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    db.prepare(`
+      DELETE FROM media_hashes
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+    `).run(filePath, norm, norm);
+  }
+
+  deleteMediaHashes(filePaths: string[]): void {
+    if (!filePaths || filePaths.length === 0) return;
+    const db = this.getDb();
+    const transaction = db.transaction(() => {
+      const stmt = db.prepare(`
+        DELETE FROM media_hashes
+        WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      `);
+      for (const fp of filePaths) {
+        const norm = fp.replace(/\\/g, '/');
+        stmt.run(fp, norm, norm);
+      }
+    });
+    transaction();
+  }
+
+  getDuplicateConfig(): {
+    default_engine: string;
+    similarity_threshold: number;
+    burst_window_seconds: number;
+    default_keep_strategy: string;
+    target_move_folder: string | null;
+    auto_scan_on_sync: boolean;
+    updated_at: string;
+  } {
+    const db = this.getDb();
+    const row = db.prepare(`SELECT * FROM duplicate_config WHERE id = 1`).get() as any;
+    if (!row) {
+      return {
+        default_engine: 'auto',
+        similarity_threshold: 0.90,
+        burst_window_seconds: 3.0,
+        default_keep_strategy: 'highest_resolution',
+        target_move_folder: null,
+        auto_scan_on_sync: false,
+        updated_at: new Date().toISOString(),
+      };
+    }
+    return {
+      default_engine: row.default_engine || 'auto',
+      similarity_threshold: Number(row.similarity_threshold) || 0.90,
+      burst_window_seconds: Number(row.burst_window_seconds) || 3.0,
+      default_keep_strategy: row.default_keep_strategy || 'highest_resolution',
+      target_move_folder: row.target_move_folder || null,
+      auto_scan_on_sync: Boolean(row.auto_scan_on_sync),
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+  }
+
+  saveDuplicateConfig(config: {
+    default_engine?: string;
+    similarity_threshold?: number;
+    burst_window_seconds?: number;
+    default_keep_strategy?: string;
+    target_move_folder?: string | null;
+    auto_scan_on_sync?: boolean;
+  }): any {
+    const db = this.getDb();
+    const current = this.getDuplicateConfig();
+    const updated = {
+      default_engine: config.default_engine !== undefined ? config.default_engine : current.default_engine,
+      similarity_threshold: config.similarity_threshold !== undefined ? config.similarity_threshold : current.similarity_threshold,
+      burst_window_seconds: config.burst_window_seconds !== undefined ? config.burst_window_seconds : current.burst_window_seconds,
+      default_keep_strategy: config.default_keep_strategy !== undefined ? config.default_keep_strategy : current.default_keep_strategy,
+      target_move_folder: config.target_move_folder !== undefined ? config.target_move_folder : current.target_move_folder,
+      auto_scan_on_sync: config.auto_scan_on_sync !== undefined ? (config.auto_scan_on_sync ? 1 : 0) : (current.auto_scan_on_sync ? 1 : 0),
+    };
+
+    db.prepare(`
+      INSERT INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy, target_move_folder, auto_scan_on_sync, updated_at)
+      VALUES (1, @default_engine, @similarity_threshold, @burst_window_seconds, @default_keep_strategy, @target_move_folder, @auto_scan_on_sync, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        default_engine = excluded.default_engine,
+        similarity_threshold = excluded.similarity_threshold,
+        burst_window_seconds = excluded.burst_window_seconds,
+        default_keep_strategy = excluded.default_keep_strategy,
+        target_move_folder = excluded.target_move_folder,
+        auto_scan_on_sync = excluded.auto_scan_on_sync,
+        updated_at = datetime('now', 'localtime')
+    `).run(updated);
+
+    return this.getDuplicateConfig();
+  }
 }
+

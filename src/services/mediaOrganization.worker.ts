@@ -290,8 +290,411 @@ export class MediaOrganizationWorker {
       return true;
     });
   }
+
+  /**
+   * Calculate Hamming distance between two 16-hex perceptual hashes
+   */
+  private calculateHammingDistance(h1?: string, h2?: string): number {
+    if (!h1 || !h2 || h1.length !== 16 || h2.length !== 16) return 64;
+    let dist = 0;
+    for (let i = 0; i < h1.length; i++) {
+      const v1 = parseInt(h1[i], 16);
+      const v2 = parseInt(h2[i], 16);
+      let xor = v1 ^ v2;
+      while (xor > 0) {
+        dist += xor & 1;
+        xor >>= 1;
+      }
+    }
+    return dist;
+  }
+
+  /**
+   * Helper to parse arbitrary date string or number to timestamp in seconds
+   */
+  private parseDateToSeconds(val: string | number | Date | undefined | null): number | null {
+    if (!val) return null;
+    if (typeof val === 'number') {
+      return val > 1e11 ? val / 1000 : val;
+    }
+    const str = String(val).trim();
+    if (!str) return null;
+
+    // Support standard EXIF colon notation: "2016:07:02 12:25:42"
+    const exifMatch = str.match(/^(\d{4}):(\d{2}):(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
+    if (exifMatch) {
+      const d = new Date(
+        parseInt(exifMatch[1], 10),
+        parseInt(exifMatch[2], 10) - 1,
+        parseInt(exifMatch[3], 10),
+        parseInt(exifMatch[4], 10),
+        parseInt(exifMatch[5], 10),
+        parseInt(exifMatch[6], 10)
+      );
+      const ts = d.getTime();
+      return isNaN(ts) ? null : ts / 1000;
+    }
+
+    const ts = new Date(str).getTime();
+    return isNaN(ts) ? null : ts / 1000;
+  }
+
+  /**
+   * Helper to parse date from common camera and messenger filename patterns
+   */
+  private parseDateFromFilename(filename: string): number | null {
+    if (!filename) return null;
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+
+    // Pattern 1: ISO date & time: "2016-07-02 12-25-42", "2016-07-02_12-25-42", "2016-07-02 12:25:42"
+    const isoMatch = nameWithoutExt.match(/(?:^|[^\d])(\d{4})[-_](\d{2})[-_](\d{2})[T_\s](\d{2})[-:_](\d{2})[-:_](\d{2})(?:[^\d]|$)/i);
+    if (isoMatch) {
+      const d = new Date(
+        parseInt(isoMatch[1], 10),
+        parseInt(isoMatch[2], 10) - 1,
+        parseInt(isoMatch[3], 10),
+        parseInt(isoMatch[4], 10),
+        parseInt(isoMatch[5], 10),
+        parseInt(isoMatch[6], 10)
+      );
+      const ts = d.getTime();
+      if (!isNaN(ts)) return ts / 1000;
+    }
+
+    // Pattern 2: Compact camera timestamp: "20150412_190907", "IMG_20200810_123456"
+    const compactMatch = nameWithoutExt.match(/(?:^|[A-Za-z_-])(\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})(?:[^\d]|$)/);
+    if (compactMatch) {
+      const d = new Date(
+        parseInt(compactMatch[1], 10),
+        parseInt(compactMatch[2], 10) - 1,
+        parseInt(compactMatch[3], 10),
+        parseInt(compactMatch[4], 10),
+        parseInt(compactMatch[5], 10),
+        parseInt(compactMatch[6], 10)
+      );
+      const ts = d.getTime();
+      if (!isNaN(ts)) return ts / 1000;
+    }
+
+    // Pattern 3: Date only with WhatsApp suffix: "VID-20260330-WA0000", "IMG-20260817-WA0001"
+    const waMatch = nameWithoutExt.match(/(?:VID|IMG)[-_](\d{4})(\d{2})(\d{2})[-_]WA/i);
+    if (waMatch) {
+      const d = new Date(
+        parseInt(waMatch[1], 10),
+        parseInt(waMatch[2], 10) - 1,
+        parseInt(waMatch[3], 10),
+        0, 0, 0
+      );
+      const ts = d.getTime();
+      if (!isNaN(ts)) return ts / 1000;
+    }
+
+    return null;
+  }
+
+  /**
+   * Helper to extract normalized timestamp in seconds from file metadata.
+   * Prioritizes real capture timestamps; NEVER falls back to filesystem mtime.
+   */
+  private getFileTimestamp(file: GalleryMediaFile): number | null {
+    // 1. Explicit EXIF capture date
+    if (file.capture_date) {
+      const ts = this.parseDateToSeconds(file.capture_date);
+      if (ts !== null) return ts;
+    }
+
+    // 2. EXIF / Media Date
+    if (file.media_date) {
+      const ts = this.parseDateToSeconds(file.media_date);
+      if (ts !== null) return ts;
+    }
+
+    // 3. Date encoded directly in filename
+    const fnDate = this.parseDateFromFilename(file.filename || '');
+    if (fnDate !== null) {
+      return fnDate;
+    }
+
+    // Never fall back to mtime if no other timestamp exists
+    return null;
+  }
+
+  /**
+   * Helper to extract series prefix and sequence index from filename
+   * E.g. 'IMG_8427_10.HEIC' -> prefix 'img_8427', index 10, isExplicitBurst: true
+   *      'IMG_8407_1.MOV'   -> prefix 'img_8407', index 1, isExplicitBurst: true
+   *      'IMG_8407.MOV'     -> prefix 'img_8407', index 0, isExplicitBurst: false
+   *      'Photo (1).jpg'    -> prefix 'photo', index 1, isExplicitBurst: true
+   */
+  private extractSeriesKey(filename: string): { seriesPrefix: string; index?: number; isExplicitBurst: boolean } {
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+
+    // Reject date-time filenames from being misinterpreted as series prefixes
+    // e.g. "2016-07-02 12-25-42" -> do NOT treat "-42" as sequence index 42!
+    if (/\d{4}[-_]\d{2}[-_]\d{2}[T_\s-]\d{2}[-_:]\d{2}[-_:]\d{2}/i.test(nameWithoutExt)) {
+      return { seriesPrefix: nameWithoutExt.toLowerCase(), index: 0, isExplicitBurst: false };
+    }
+
+    // Reject WhatsApp media files: "VID-20260330-WA0000_1"
+    if (/^(?:VID|IMG)[-_]\d{8}[-_]WA\d+/i.test(nameWithoutExt)) {
+      return { seriesPrefix: nameWithoutExt.toLowerCase(), index: 0, isExplicitBurst: false };
+    }
+
+    // 1. Explicit BURST tag: Name_BURST2020... or Name-BURST...
+    const burstMatch = nameWithoutExt.match(/^(.*?)[_-]BURST(?:\d+)?(?:[_-](\d+|COVER))?$/i);
+    if (burstMatch) {
+      return {
+        seriesPrefix: burstMatch[1].toLowerCase(),
+        index: burstMatch[2] ? (parseInt(burstMatch[2], 10) || 0) : 0,
+        isExplicitBurst: true,
+      };
+    }
+
+    // 2. Parentheses index: e.g. "IMG_8427 (1)", "Photo (2)"
+    const parenIndexMatch = nameWithoutExt.match(/^(.*?)\s*\((\d{1,4})\)$/);
+    if (parenIndexMatch) {
+      return {
+        seriesPrefix: parenIndexMatch[1].toLowerCase(),
+        index: parseInt(parenIndexMatch[2], 10),
+        isExplicitBurst: true,
+      };
+    }
+
+    // 3. Multi-segment index: e.g. "IMG_8427_1", "IMG_8427_10", "DSC_1234_1"
+    // Base identifier must be a camera/series tag like IMG_8427 or DSC_1234
+    const multiSegmentMatch = nameWithoutExt.match(/^((?:[A-Za-z]+[-_]\d+|[A-Za-z]{2,}[-_]))[-_](\d{1,3})$/);
+    if (multiSegmentMatch) {
+      return {
+        seriesPrefix: multiSegmentMatch[1].toLowerCase(),
+        index: parseInt(multiSegmentMatch[2], 10),
+        isExplicitBurst: true,
+      };
+    }
+
+    // Base name itself without index suffix
+    return { seriesPrefix: nameWithoutExt.toLowerCase(), index: 0, isExplicitBurst: false };
+  }
+
+  /**
+   * Helper to select the most suitable representative primary file from a group
+   */
+  private pickPrimaryFile(group: GalleryMediaFile[]): GalleryMediaFile {
+    if (group.length === 1) return group[0];
+    // Prefer PROCESSED files, then files with faces/descriptions, then first in sequence
+    const scored = [...group].sort((a, b) => {
+      const aProcessed = a.status === 'PROCESSED' ? 10 : 0;
+      const bProcessed = b.status === 'PROCESSED' ? 10 : 0;
+      const aFaces = (a.face_count || 0) > 0 ? 5 : 0;
+      const bFaces = (b.face_count || 0) > 0 ? 5 : 0;
+      return (bProcessed + bFaces) - (aProcessed + aFaces);
+    });
+    return scored[0] || group[0];
+  }
+
+  /**
+   * Group series shots (burst photos and sequential shots) within the same folder.
+   * Returns representative primary files with attached `similar_group_files` and `similar_files_count`.
+   */
+  groupBySimilarity(
+    files: GalleryMediaFile[],
+    _similarityThreshold = 0.90,
+    burstWindowSec = 3.0
+  ): GalleryMediaFile[] {
+    const assignedFiles = new Set<string>();
+    const result: GalleryMediaFile[] = [];
+
+    const getKey = (f: GalleryMediaFile) => (f.file_path || f.filename || '').toLowerCase();
+
+    // Group files by folder first (series grouping is strictly intra-folder)
+    const folderMap = new Map<string, GalleryMediaFile[]>();
+    for (const file of files) {
+      const folderKey = (file.folder || '').toLowerCase();
+      const list = folderMap.get(folderKey) || [];
+      list.push(file);
+      folderMap.set(folderKey, list);
+    }
+
+    for (const [, folderFiles] of folderMap.entries()) {
+      // Separate images and videos: photos and videos are grouped in their own series
+      const imageFiles = folderFiles.filter((f) => f.is_image);
+      const videoFiles = folderFiles.filter((f) => f.is_video);
+      const otherFiles = folderFiles.filter((f) => !f.is_image && !f.is_video);
+
+      const processGroupCollection = (mediaList: GalleryMediaFile[], mediaType: 'image' | 'video' | 'other') => {
+        if (mediaList.length === 0) return;
+
+        // 1. Group by Series Prefix (e.g. IMG_8427_1..IMG_8427_10 or IMG_8407_1..IMG_8407_6, IMG_8407)
+        const prefixMap = new Map<string, GalleryMediaFile[]>();
+        const hasExplicitBurst = new Set<string>();
+
+        for (const file of mediaList) {
+          if (assignedFiles.has(getKey(file))) continue;
+          const { seriesPrefix, isExplicitBurst } = this.extractSeriesKey(file.filename || '');
+          if (seriesPrefix) {
+            const list = prefixMap.get(seriesPrefix) || [];
+            list.push(file);
+            prefixMap.set(seriesPrefix, list);
+            if (isExplicitBurst) {
+              hasExplicitBurst.add(seriesPrefix);
+            }
+          }
+        }
+
+        for (const [prefix, group] of prefixMap.entries()) {
+          // Group if at least one file had an explicit burst suffix
+          if (group.length > 1 && hasExplicitBurst.has(prefix)) {
+            // Sort group in natural sequential order (1, 2, ... 10)
+            group.sort((a, b) => {
+              const aKey = this.extractSeriesKey(a.filename || '');
+              const bKey = this.extractSeriesKey(b.filename || '');
+              if (aKey.index !== undefined && bKey.index !== undefined && aKey.index !== bKey.index) {
+                return aKey.index - bKey.index;
+              }
+              const aTs = this.getFileTimestamp(a) || 0;
+              const bTs = this.getFileTimestamp(b) || 0;
+              return aTs - bTs || (a.filename || '').localeCompare(b.filename || '');
+            });
+
+            const primary = this.pickPrimaryFile(group);
+            const groupId = `series_${prefix}`;
+
+            // Clean non-circular member representation
+            const cleanGroupMembers: GalleryMediaFile[] = group.map((item) => {
+              const { similar_group_files: _, ...clean } = item;
+              return {
+                ...clean,
+                similarity_group_id: groupId,
+                is_primary_in_group: item === primary,
+                similar_files_count: group.length,
+              };
+            });
+
+            for (const f of group) {
+              assignedFiles.add(getKey(f));
+              f.similarity_group_id = groupId;
+              f.is_primary_in_group = (f === primary);
+              f.similar_files_count = group.length;
+              f.similar_group_files = cleanGroupMembers;
+            }
+            result.push(primary);
+          }
+        }
+
+        // 2. Group by Time-Proximity Burst Shots (strictly for photos, NOT videos)
+        if (mediaType === 'image') {
+          // Filter remaining candidates that have valid capture timestamps
+          const remainingCandidates = mediaList.filter(
+            (f) => !assignedFiles.has(getKey(f)) && this.getFileTimestamp(f) !== null
+          );
+          remainingCandidates.sort((a, b) => {
+            const aTs = this.getFileTimestamp(a)!;
+            const bTs = this.getFileTimestamp(b)!;
+            return aTs - bTs || (a.filename || '').localeCompare(b.filename || '');
+          });
+
+          let currentBurst: GalleryMediaFile[] = [];
+          let burstStartTs: number | null = null;
+
+          const commitBurst = () => {
+            if (currentBurst.length > 1) {
+              const primary = this.pickPrimaryFile(currentBurst);
+              const groupId = `burst_${primary.filename?.replace(/\.[^/.]+$/, '') || Date.now()}`;
+
+              // Clean non-circular member representation
+              const cleanGroupMembers: GalleryMediaFile[] = currentBurst.map((item) => {
+                const { similar_group_files: _, ...clean } = item;
+                return {
+                  ...clean,
+                  similarity_group_id: groupId,
+                  is_primary_in_group: item === primary,
+                  similar_files_count: currentBurst.length,
+                };
+              });
+
+              for (const f of currentBurst) {
+                assignedFiles.add(getKey(f));
+                f.similarity_group_id = groupId;
+                f.is_primary_in_group = (f === primary);
+                f.similar_files_count = currentBurst.length;
+                f.similar_group_files = cleanGroupMembers;
+              }
+              result.push(primary);
+            }
+          };
+
+          for (let i = 0; i < remainingCandidates.length; i++) {
+            const file = remainingCandidates[i];
+            if (assignedFiles.has(getKey(file))) continue;
+            const curTs = this.getFileTimestamp(file)!;
+
+            if (currentBurst.length === 0) {
+              currentBurst = [file];
+              burstStartTs = curTs;
+              continue;
+            }
+
+            // Anchor check: must be within burstWindowSec from the start of the burst
+            const timeDiffFromStart = Math.abs(curTs - (burstStartTs ?? curTs));
+            let isBurst = false;
+
+            if (timeDiffFromStart <= burstWindowSec) {
+              const anchorFile = currentBurst[0];
+              const prevFile = currentBurst[currentBurst.length - 1];
+
+              // Cascade confidence:
+              // 1. If visual hashes exist on both, compare Hamming distance
+              if (file.phash && (anchorFile.phash || prevFile.phash)) {
+                const compareHash = prevFile.phash || anchorFile.phash!;
+                const dist = this.calculateHammingDistance(file.phash, compareHash);
+                isBurst = dist <= 20; // Visual threshold passed
+              } else {
+                // 2. If visual hashes are absent:
+                // NEVER assume isBurst = true!
+                // Only group if filenames have explicit matching burst patterns AND capture date is within threshold
+                const keyA = this.extractSeriesKey(anchorFile.filename || '');
+                const keyCur = this.extractSeriesKey(file.filename || '');
+                if (keyA.isExplicitBurst && keyCur.isExplicitBurst && keyA.seriesPrefix === keyCur.seriesPrefix) {
+                  isBurst = true;
+                } else {
+                  isBurst = false;
+                }
+              }
+            }
+
+            if (isBurst) {
+              currentBurst.push(file);
+            } else {
+              commitBurst();
+              currentBurst = [file];
+              burstStartTs = curTs;
+            }
+          }
+
+          commitBurst();
+        }
+      };
+
+      processGroupCollection(imageFiles, 'image');
+      processGroupCollection(videoFiles, 'video');
+      processGroupCollection(otherFiles, 'other');
+    }
+
+    // Add all remaining unique files as individual cards
+    for (const f of files) {
+      if (!assignedFiles.has(getKey(f))) {
+        f.similar_files_count = 1;
+        f.similarity_group_id = undefined;
+        f.similar_group_files = undefined;
+        f.is_primary_in_group = true;
+        result.push(f);
+      }
+    }
+
+    return result;
+  }
 }
 
 if (typeof self !== 'undefined' && typeof self.addEventListener !== 'undefined') {
   expose(new MediaOrganizationWorker());
 }
+
