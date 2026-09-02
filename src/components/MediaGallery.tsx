@@ -15,6 +15,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { mediaOrganizationService } from '../services/mediaOrganizationService';
 import { mediaCacheService } from '../services/mediaCacheService';
 import { FlagsManager } from '../services/featureFlagsContext';
+import { errorInterceptor } from '../utils/errorInterceptor';
 import MediaViewerModal from './MediaViewerModal';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
@@ -202,13 +203,13 @@ export default function InputSourcesGallery({
 
   // Filtered and sorted files
   const trimmedSearch = searchQuery.trim();
-  
+
   const [isSimilarityGrouped, setIsSimilarityGrouped] = useState(true);
   const [filteredFiles, setFilteredFiles] = useState<GalleryMediaFile[]>([]);
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
   const [dateGroups, setDateGroups] = useState<DateGroupNode[]>([]);
   const [personGroups, setPersonGroups] = useState<PersonGroupNode[]>([]);
-  
+
   const [, startTransition] = useTransition();
 
   // Find series group files for currently selected media (from file itself or matching item in filteredFiles)
@@ -252,14 +253,26 @@ export default function InputSourcesGallery({
           finalSorted = await mediaOrganizationService.groupBySimilarity(sorted, 0.90);
           finalSorted = await mediaOrganizationService.sortMediaFiles(finalSorted, sortBy, sortOrder);
         }
-        
+
         if (isActive) {
           startTransition(() => {
             setFilteredFiles(finalSorted);
           });
+          if (selectedFolder) {
+            console.log(`[FolderTree] Filtered by folder "${selectedFolder}": ${finalSorted.length} / ${mediaFiles.length} files matched`);
+            if (finalSorted.length === 0 && mediaFiles.length > 0) {
+              console.warn(`[FolderTree] No media files matched folder filter "${selectedFolder}"`);
+              errorInterceptor.emitLog(
+                'WARN',
+                'FolderTree',
+                `No media files matched folder "${selectedFolder}" (${mediaFiles.length} total files available)`
+              );
+            }
+          }
         }
       } catch (e) {
         console.error("Filter error", e);
+        errorInterceptor.emitLog('ERROR', 'MediaGallery', `Filter error: ${e instanceof Error ? e.message : String(e)}`);
       }
     };
     processFilters();
@@ -652,17 +665,16 @@ export default function InputSourcesGallery({
                 style={{ background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#ffffff', fontWeight: 600 }}
                 title={file.family_context?.suggested_caption || 'Family Kinship Context'}
               >
-               {/* 🌳 */}
+                {/* 🌳 */}
               </span>
             )}
             <span
-              className={`gallery-tag ${
-                isProcessed
+              className={`gallery-tag ${isProcessed
                   ? 'gallery-tag-processed'
                   : isPending
-                  ? 'gallery-tag-pending'
-                  : 'gallery-tag-unprocessed'
-              }`}
+                    ? 'gallery-tag-pending'
+                    : 'gallery-tag-unprocessed'
+                }`}
             >
               {/* {isProcessed ? '✓' : isPending ? '⏳' : '○'} */}
             </span>
@@ -721,7 +733,21 @@ export default function InputSourcesGallery({
         <div
           className={`folder-tree-row ${isSelected ? 'active' : ''}`}
           style={{ paddingLeft: `${node.depth * 14 + 6}px` }}
-          onClick={() => setSelectedFolder(isSelected ? null : node.fullPath)}
+          onClick={() => {
+            const nextFolder = isSelected ? null : node.fullPath;
+            if (nextFolder) {
+              console.log(`[FolderTree] Selected folder "${node.name}" (${node.fullPath}, ${node.fileCount} file(s))`);
+              errorInterceptor.emitLog(
+                'INFO',
+                'FolderTree',
+                `Selected folder: "${node.name}" (${node.fileCount} items, path: ${node.fullPath})`
+              );
+            } else {
+              console.log(`[FolderTree] Deselected folder "${node.name}"`);
+              errorInterceptor.emitLog('INFO', 'FolderTree', `Cleared folder filter for "${node.name}"`);
+            }
+            setSelectedFolder(nextFolder);
+          }}
         >
           {hasChildren ? (
             <button
@@ -894,13 +920,12 @@ export default function InputSourcesGallery({
                 <td style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{formatDate(file.mtime)}</td>
                 <td>
                   <span
-                    className={`badge-pill ${
-                      isProcessed
+                    className={`badge-pill ${isProcessed
                         ? 'badge-pill-success'
                         : isPending
-                        ? 'badge-pill-accent'
-                        : 'badge-pill-secondary'
-                    }`}
+                          ? 'badge-pill-accent'
+                          : 'badge-pill-secondary'
+                      }`}
                     style={{ fontSize: '0.72rem', padding: '2px 6px' }}
                   >
                     {isProcessed ? '✓ Processed' : isPending ? '⏳ Pending' : '○ Unprocessed'}
@@ -963,7 +988,11 @@ export default function InputSourcesGallery({
                 type="button"
                 className="btn btn-secondary"
                 style={{ padding: '2px 6px', fontSize: '0.72rem' }}
-                onClick={() => setSelectedFolder(null)}
+                onClick={() => {
+                  console.log('[FolderTree] Cleared folder filter via tree header button');
+                  errorInterceptor.emitLog('INFO', 'FolderTree', 'Cleared folder filter');
+                  setSelectedFolder(null);
+                }}
                 title={t('clearFolderFilter')}
               >
                 ✕ {t('btnResetFilters')}
@@ -992,7 +1021,11 @@ export default function InputSourcesGallery({
             <button
               type="button"
               className="search-clear-inline-btn"
-              onClick={() => setSelectedFolder(null)}
+              onClick={() => {
+                console.log('[FolderTree] Cleared folder filter via active bar');
+                errorInterceptor.emitLog('INFO', 'FolderTree', 'Cleared folder filter');
+                setSelectedFolder(null);
+              }}
               title={t('clearFolderFilter')}
             >
               ✕
@@ -1002,7 +1035,26 @@ export default function InputSourcesGallery({
 
         {filteredFiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-            <p>{t('noMediaFound')}</p>
+            <p style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>{t('noMediaFound')}</p>
+            {selectedFolder ? (
+              <p style={{ fontSize: '0.85rem' }}>
+                {t('noMediaHintFiltered')}{' '}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '2px 8px', fontSize: '0.78rem', marginLeft: '0.5rem' }}
+                  onClick={() => {
+                    console.log('[FolderTree] Cleared folder filter via empty state button');
+                    errorInterceptor.emitLog('INFO', 'FolderTree', 'Cleared folder filter from empty state');
+                    setSelectedFolder(null);
+                  }}
+                >
+                  {t('clearFolderFilter')}
+                </button>
+              </p>
+            ) : (
+              <p style={{ fontSize: '0.85rem' }}>{t('noMediaHintEmpty')}</p>
+            )}
           </div>
         ) : (
           renderGalleryView()
@@ -1190,7 +1242,7 @@ export default function InputSourcesGallery({
               type="button"
               title={t('btnRefreshGallery')}
             >
-              <span >🔄</span>
+              <span>🔄</span>
               <span>{t('btnRefreshGallery')}</span>
             </button>
           )}

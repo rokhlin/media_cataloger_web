@@ -22,7 +22,8 @@ export class MediaOrganizationWorker {
     const rootMap = new Map<string, FolderTreeNode>();
 
     const getOrCreateNode = (fullPath: string, name: string, parentPath: string, depth: number): FolderTreeNode => {
-      const existing = rootMap.get(fullPath);
+      const key = (fullPath || 'root').toLowerCase();
+      const existing = rootMap.get(key);
       if (existing) return existing;
 
       const node: FolderTreeNode = {
@@ -38,16 +39,16 @@ export class MediaOrganizationWorker {
         children: [],
         files: [],
       };
-      rootMap.set(fullPath, node);
+      rootMap.set(key, node);
       return node;
     };
 
     for (const file of files) {
       const filePath = (file.file_path || file.filename || '').replace(/\\/g, '/');
-      const baseFolder = (file.folder || '').replace(/\\/g, '/');
+      const baseFolder = (file.folder || '').replace(/\\/g, '/').replace(/\/+$/, '');
 
       let relPath = filePath;
-      if (baseFolder && filePath.startsWith(baseFolder)) {
+      if (baseFolder && filePath.toLowerCase().startsWith(baseFolder.toLowerCase())) {
         relPath = filePath.slice(baseFolder.length).replace(/^\/+/, '');
       }
 
@@ -64,7 +65,7 @@ export class MediaOrganizationWorker {
       let depth = 1;
       for (const seg of folderSegments) {
         const nextPath = `${currentPath}/${seg}`;
-        let childNode = rootMap.get(nextPath);
+        let childNode = rootMap.get(nextPath.toLowerCase());
         if (!childNode) {
           childNode = getOrCreateNode(nextPath, seg, currentPath, depth);
           parentNode.children.push(childNode);
@@ -282,9 +283,68 @@ export class MediaOrganizationWorker {
       }
 
       if (criteria.selectedFolder) {
-        const target = criteria.selectedFolder.toLowerCase();
-        const matchesFolder = (item.folder && item.folder.toLowerCase().includes(target)) || (item.file_path && item.file_path.toLowerCase().includes(target));
-        if (!matchesFolder) return false;
+        const rawTarget = criteria.selectedFolder.replace(/\\/g, '/').replace(/\/+$/, '');
+        const target = rawTarget.toLowerCase();
+        if (target && target !== 'root') {
+          const itemFilePath = (item.file_path || item.filename || '').replace(/\\/g, '/');
+          const itemFilePathLower = itemFilePath.toLowerCase();
+          const lastSlash = itemFilePathLower.lastIndexOf('/');
+          const itemDirLower = lastSlash >= 0 ? itemFilePathLower.slice(0, lastSlash) : '';
+          const itemFolderLower = (item.folder || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+          // Target without optional 'root/' prefix if tree was rooted at 'Root'
+          const targetWithoutRoot = target.startsWith('root/') ? target.slice(5) : target;
+
+          // Check if item belongs to selected folder:
+          // 1. Direct directory match or subdirectory of selected folder
+          const matchesDir =
+            itemDirLower === target ||
+            itemDirLower.startsWith(target + '/') ||
+            itemDirLower === targetWithoutRoot ||
+            itemDirLower.startsWith(targetWithoutRoot + '/');
+
+          // 2. Base folder matches or is subfolder of target
+          const matchesFolder =
+            itemFolderLower === target ||
+            itemFolderLower.startsWith(target + '/') ||
+            itemFolderLower === targetWithoutRoot ||
+            itemFolderLower.startsWith(targetWithoutRoot + '/');
+
+          let matches = matchesDir || matchesFolder;
+
+          if (!matches) {
+            // Target might be a single folder name (no slashes) matching a path segment
+            if (!target.includes('/')) {
+              const dirSegments = itemDirLower.split('/').filter(Boolean);
+              const folderSegments = itemFolderLower.split('/').filter(Boolean);
+              matches = dirSegments.includes(target) || folderSegments.includes(target);
+            } else {
+              // Target might be a relative subpath matching the end of itemDir
+              matches =
+                itemDirLower.endsWith('/' + target) ||
+                itemFolderLower.endsWith('/' + target) ||
+                itemDirLower.endsWith('/' + targetWithoutRoot) ||
+                itemFolderLower.endsWith('/' + targetWithoutRoot);
+            }
+          }
+
+          if (!matches) {
+            // Boundary-safe fallback ensuring full folder segment match (e.g. not matching 'vacation-other' for 'vacation')
+            const targetSlash = target + '/';
+            const targetWithoutRootSlash = targetWithoutRoot + '/';
+            const normPathSlash = itemFilePathLower + '/';
+            const normFolderSlash = itemFolderLower ? itemFolderLower + '/' : '';
+
+            matches =
+              normPathSlash.includes(targetSlash) ||
+              (normFolderSlash.length > 0 && normFolderSlash.includes(targetSlash)) ||
+              (targetWithoutRoot.length > 0 &&
+                (normPathSlash.includes('/' + targetWithoutRootSlash) ||
+                 normFolderSlash.includes('/' + targetWithoutRootSlash)));
+          }
+
+          if (!matches) return false;
+        }
       }
 
       return true;

@@ -348,6 +348,73 @@ describe('MediaOrganizationWorker', () => {
     const grouped = worker.groupBySimilarity(diffVisualPhotos, 0.90, 3.0);
     assert.strictEqual(grouped.length, 2, 'Photos with close timestamps but different visual hashes must NOT be grouped');
   });
+
+  it('should correctly filter media files when selecting a folder with Windows backslashes and forward slashes', () => {
+    const windowsFiles: GalleryMediaFile[] = [
+      {
+        filename: 'pic1.jpg',
+        file_path: 'C:\\Users\\User\\media_input\\vacation\\pic1.jpg',
+        folder: 'C:\\Users\\User\\media_input',
+        is_image: true,
+      },
+      {
+        filename: 'pic2.jpg',
+        file_path: 'C:\\Users\\User\\media_input\\vacation\\sub\\pic2.jpg',
+        folder: 'C:\\Users\\User\\media_input',
+        is_image: true,
+      },
+      {
+        filename: 'pic3.jpg',
+        file_path: 'c:\\users\\user\\media_input\\work\\pic3.jpg',
+        folder: 'c:\\users\\user\\media_input',
+        is_image: true,
+      },
+      {
+        filename: 'root_pic.jpg',
+        file_path: 'C:\\Users\\User\\media_input\\root_pic.jpg',
+        folder: 'C:\\Users\\User\\media_input',
+        is_image: true,
+      },
+      {
+        filename: 'other_vacation.jpg',
+        file_path: 'C:\\Users\\User\\media_input\\vacation-other\\pic.jpg',
+        folder: 'C:\\Users\\User\\media_input',
+        is_image: true,
+      },
+    ];
+
+    // 1. Filter by subfolder 'vacation' (using forward slashes from tree node)
+    const vacationFiltered = worker.filterMediaFiles(windowsFiles, {
+      selectedFolder: 'C:/Users/User/media_input/vacation',
+    });
+    assert.strictEqual(vacationFiltered.length, 2, 'Should include vacation/pic1.jpg and vacation/sub/pic2.jpg');
+    const filenames = vacationFiltered.map((f) => f.filename);
+    assert.ok(filenames.includes('pic1.jpg'));
+    assert.ok(filenames.includes('pic2.jpg'));
+    assert.ok(!filenames.includes('other_vacation.jpg'), 'Must not match vacation-other folder');
+
+    // 2. Filter by root folder (should include all 5 files)
+    const rootFiltered = worker.filterMediaFiles(windowsFiles, {
+      selectedFolder: 'C:/Users/User/media_input',
+    });
+    assert.strictEqual(rootFiltered.length, 5, 'Root folder should include all descendant files');
+
+    // 3. Filter with case difference (lowercase c: vs uppercase C:)
+    const caseFiltered = worker.filterMediaFiles(windowsFiles, {
+      selectedFolder: 'C:/users/user/media_input/work',
+    });
+    assert.strictEqual(caseFiltered.length, 1);
+    assert.strictEqual(caseFiltered[0].filename, 'pic3.jpg');
+
+    // 4. Build folder tree for Windows paths and verify tree hierarchy
+    const tree = worker.buildFolderTree(windowsFiles);
+    assert.strictEqual(tree.length, 1, 'Should have 1 root node for media_input');
+    const rootNode = tree[0];
+    assert.strictEqual(rootNode.fileCount, 5, 'Root node should contain 5 files');
+    const vacationNode = rootNode.children.find((c) => c.name === 'vacation');
+    assert.ok(vacationNode, 'Vacation node should exist');
+    assert.strictEqual(vacationNode.fileCount, 2, 'Vacation folder should have 2 files');
+  });
 });
 
 describe('MediaCacheService', () => {
