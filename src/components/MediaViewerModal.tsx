@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type {
   GalleryMediaFile,
   DetectedFaceRecord,
@@ -13,6 +13,7 @@ import './MediaViewerModal.css';
 export interface MediaViewerModalProps {
   isOpen?: boolean;
   mediaFile: GalleryMediaFile | null;
+  seriesGroupFiles?: GalleryMediaFile[];
   onClose: () => void;
   currentIndex?: number;
   totalFiles?: number;
@@ -38,13 +39,14 @@ export interface MediaViewerModalProps {
 export default function MediaViewerModal({
   isOpen = true,
   mediaFile,
+  seriesGroupFiles,
   onClose,
   currentIndex = -1,
   totalFiles = 0,
   onPrev,
   onNext,
-  hasPrev,
-  hasNext,
+  hasPrev = false,
+  hasNext = false,
   onRefresh,
   onReloadFaces,
   onStartSingleAnalysis,
@@ -60,7 +62,14 @@ export default function MediaViewerModal({
   const { addVaultItem, removeVaultItem } = useVault();
 
   // Selected media state (can be updated locally on tagging/vault actions)
-  const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(mediaFile);
+  const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(() => {
+    if (!mediaFile) return null;
+    return {
+      ...mediaFile,
+      similar_group_files: mediaFile.similar_group_files || seriesGroupFiles,
+      similar_files_count: mediaFile.similar_files_count || seriesGroupFiles?.length,
+    };
+  });
   const [facesForSelected, setFacesForSelected] = useState<DetectedFaceRecord[]>([]);
   const [loadingFaces, setLoadingFaces] = useState(false);
   const [engineOnline, setEngineOnline] = useState<boolean>(isEngineConnected);
@@ -68,10 +77,33 @@ export default function MediaViewerModal({
   const [analysisSuccess, setAnalysisSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // Sync prop changes
+  // Sync prop changes while preserving series group files
   useEffect(() => {
-    setSelectedMedia(mediaFile);
-  }, [mediaFile]);
+    if (mediaFile) {
+      setSelectedMedia((prev) => {
+        const groupFiles = mediaFile.similar_group_files || seriesGroupFiles || prev?.similar_group_files;
+        return {
+          ...mediaFile,
+          similar_group_files: groupFiles,
+          similar_files_count: groupFiles ? groupFiles.length : (mediaFile.similar_files_count || prev?.similar_files_count),
+          similarity_group_id: mediaFile.similarity_group_id || prev?.similarity_group_id,
+        };
+      });
+    } else {
+      setSelectedMedia(null);
+    }
+  }, [mediaFile, seriesGroupFiles]);
+
+  // Derived effective group files for the carousel
+  const effectiveGroupFiles = useMemo(() => {
+    if (selectedMedia?.similar_group_files && selectedMedia.similar_group_files.length > 1) {
+      return selectedMedia.similar_group_files;
+    }
+    if (seriesGroupFiles && seriesGroupFiles.length > 1) {
+      return seriesGroupFiles;
+    }
+    return undefined;
+  }, [selectedMedia?.similar_group_files, seriesGroupFiles]);
 
   useEffect(() => {
     setEngineOnline(isEngineConnected);
@@ -120,6 +152,10 @@ export default function MediaViewerModal({
             return {
               ...prev,
               ...freshData,
+              // preserve client-side series grouping context
+              similar_group_files: prev.similar_group_files || seriesGroupFiles,
+              similar_files_count: prev.similar_files_count || seriesGroupFiles?.length,
+              similarity_group_id: prev.similarity_group_id,
               // ensure we don't accidentally wipe faces if backend returns empty during transit
               faces: (freshData.faces && freshData.faces.length > 0) ? freshData.faces : prev.faces,
               face_names: (freshData.face_names && freshData.face_names.length > 0) ? freshData.face_names : prev.face_names,
@@ -127,7 +163,8 @@ export default function MediaViewerModal({
           });
           if (onMediaUpdated) onMediaUpdated(freshData);
           if (Array.isArray(freshData.faces) && freshData.faces.length > 0) {
-            const uniqueFaces = Array.from(new Map(freshData.faces.map((f: DetectedFaceRecord) => [f.face_id, f])).values());
+            const validFaces = (freshData.faces as DetectedFaceRecord[]).filter((f) => Boolean(f && f.face_id));
+            const uniqueFaces = Array.from(new Map(validFaces.map((f) => [f.face_id, f])).values());
             setFacesForSelected(uniqueFaces);
           }
         }
@@ -516,40 +553,115 @@ export default function MediaViewerModal({
           <div className="media-lightbox-body">
             {/* Media Preview Viewport */}
             <div className="media-lightbox-preview">
-              {selectedMedia.is_video ? (
-                <video
-                  src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                  controls
-                  autoPlay
-                  className="media-lightbox-video"
-                />
-              ) : (
-                <>
-                  <img
-                    src={
-                      /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
-                        ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
-                        : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
-                    }
-                    alt={selectedMedia.filename}
-                    className="media-lightbox-image"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const fallback = target.nextElementSibling as HTMLElement;
-                      if (fallback) fallback.style.display = 'flex';
-                    }}
+              <div className="media-preview-content">
+                {selectedMedia.is_video ? (
+                  <video
+                    src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
+                    controls
+                    autoPlay
+                    className="media-lightbox-video"
                   />
-                  <div className="media-lightbox-fallback">
-                    <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
-                    <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {selectedMedia.filename}
-                    </p>
-                    <span style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                      {selectedMedia.file_path}
+                ) : (
+                  <>
+                    <img
+                      src={
+                        /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
+                          ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
+                          : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
+                      }
+                      alt={selectedMedia.filename}
+                      className="media-lightbox-image"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                    <div className="media-lightbox-fallback">
+                      <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
+                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {selectedMedia.filename}
+                      </p>
+                      <span style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
+                        {selectedMedia.file_path}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Similar & Burst Series Minimap Filmstrip */}
+              {effectiveGroupFiles && effectiveGroupFiles.length > 1 && (
+                <div className="media-viewer-similarity-strip">
+                  <div className="similarity-strip-title">
+                    <span>🗂️ {t('similarPhotosInGroup' as any) || 'Series Shots'} ({effectiveGroupFiles.length})</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 'auto' }}>
+                      {t('clickToView') || 'Click to view'}
                     </span>
                   </div>
-                </>
+                  <div className="similarity-strip-thumbs">
+                    {effectiveGroupFiles.map((simFile: GalleryMediaFile, idx: number) => {
+                      const isCurrent =
+                        (simFile.file_path && simFile.file_path === selectedMedia?.file_path) ||
+                        (simFile.filename && simFile.filename === selectedMedia?.filename);
+                      const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(simFile.file_path || simFile.filename)}&size=150`;
+
+                      return (
+                        <button
+                          key={simFile.file_path || simFile.filename || idx}
+                          type="button"
+                          className={`similarity-strip-thumb ${isCurrent ? 'active' : ''}`}
+                          onClick={() => {
+                            const updatedSimFile = {
+                              ...simFile,
+                              similar_group_files: effectiveGroupFiles,
+                              similar_files_count: effectiveGroupFiles.length,
+                              similarity_group_id: simFile.similarity_group_id || selectedMedia.similarity_group_id,
+                            };
+                            setSelectedMedia(updatedSimFile);
+                            fetchCurrentMediaDetails(updatedSimFile.file_path || updatedSimFile.filename);
+                            if (onMediaUpdated) onMediaUpdated(updatedSimFile);
+                          }}
+                          title={`${simFile.filename} (#${idx + 1})`}
+                        >
+                          <img
+                            src={thumbUrl}
+                            alt={simFile.filename}
+                            loading="lazy"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const fallback = target.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                          <div
+                            className="similarity-thumb-fallback"
+                            style={{
+                              display: 'none',
+                              width: '100%',
+                              height: '100%',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: '#1e1b4b',
+                              fontSize: '1rem',
+                            }}
+                          >
+                            {simFile.is_video ? '🎥' : '📷'}
+                          </div>
+                          <span className="strip-index-badge">#{idx + 1}</span>
+                          {simFile.is_video && (
+                            <span className="strip-video-indicator" title="Video">▶</span>
+                          )}
+                          {simFile.is_primary_in_group && (
+                            <span className="strip-primary-badge" title="Representative Primary">★</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 

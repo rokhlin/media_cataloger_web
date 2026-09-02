@@ -1895,6 +1895,27 @@ select option:checked {
   flex-direction: column;
   content-visibility: auto;
   contain-intrinsic-size: 140px 240px;
+  position: relative;
+}
+
+.gallery-card-item.is-series-stack {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.gallery-card-item.is-series-stack::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 24px 24px 0;
+  border-color: transparent var(--primary-color, #6366f1) transparent transparent;
+  z-index: 3;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .gallery-card-item:hover {
@@ -2022,6 +2043,23 @@ select option:checked {
   background: rgba(236, 72, 153, 0.85);
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+}
+
+.gallery-tag-series {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gallery-tag-family {
+  background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .gallery-tag-processed {

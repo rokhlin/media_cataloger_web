@@ -304,6 +304,14 @@ export interface SettingsTranslations {
   btnGo: string;
   emptyDirectory: string;
   loadingDirectory: string;
+  indexingAndSeriesActions: string;
+  indexingAndSeriesDesc: string;
+  reindexFolders: string;
+  reindexingInProgress: string;
+  rescanSeries: string;
+  rescanningInProgress: string;
+  reindexingSuccess: string;
+  rescanSeriesSuccess: string;
 }
 
 export interface LogsTranslations {
@@ -489,6 +497,47 @@ export interface AuthAndVaultTranslations {
   permManageUsersDesc: string;
 }
 
+export interface DuplicateTranslations {
+  navDuplicates: string;
+  navDuplicatesTooltip: string;
+  duplicateGroups: string;
+  duplicateCopies: string;
+  reclaimableSpace: string;
+  duplicateEngine: string;
+  duplicateDetectionRules: string;
+  duplicateMatchMode: string;
+  similarityThreshold: string;
+  burstWindow: string;
+  targetFolderScope: string;
+  btnStartDuplicateScan: string;
+  btnStopScan: string;
+  selectAllDuplicates: string;
+  deselectAll: string;
+  selectedSummary: string;
+  btnMoveDuplicates: string;
+  btnDeleteDuplicates: string;
+  keepPrimary: string;
+  btnCompare: string;
+  visualComparator: string;
+  confirmDeletionTitle: string;
+  confirmDeletionPrompt: string;
+  btnConfirmDelete: string;
+  moveDuplicatesTitle: string;
+  moveDuplicatesPrompt: string;
+  destinationFolder: string;
+  btnConfirmMove: string;
+  duplicatesDeleteSuccess: string;
+  duplicatesMoveSuccess: string;
+  noDuplicatesFound: string;
+  noDuplicatesHint: string;
+  tabDuplicates: string;
+  defaultKeepStrategy: string;
+  targetArchiveFolder: string;
+  similarPhotosInGroup: string;
+  groupSimilar: string;
+  toggleSimilarityGrouping: string;
+}
+
 export type TranslationDictionary = HeaderTranslations &
   ExecutionControlsTranslations &
   GalleryTranslations &
@@ -499,4 +548,5 @@ export type TranslationDictionary = HeaderTranslations &
   LogsTranslations &
   CommonTranslations &
   AdminPanelTranslations &
-  AuthAndVaultTranslations;
+  AuthAndVaultTranslations &
+  DuplicateTranslations;

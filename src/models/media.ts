@@ -82,6 +82,13 @@ export interface MediaFileItem {
   sidecar?: Record<string, unknown> | null;
   family_context?: FamilyContextData;
   is_vault?: boolean;
+  phash?: string;
+  content_hash?: string;
+  width?: number;
+  height?: number;
+  similarity_group_id?: string;
+  similar_files_count?: number;
+  is_primary_in_group?: boolean;
 }
 
 export interface GalleryMediaFile extends MediaFileItem {
@@ -94,9 +101,13 @@ export interface GalleryMediaFile extends MediaFileItem {
     is_reference?: boolean | number;
   }>;
   has_unassigned_faces?: boolean;
+  similarity_group_id?: string;
+  similar_files_count?: number;
+  is_primary_in_group?: boolean;
+  similar_group_files?: GalleryMediaFile[];
 }
 
-export type GalleryViewMode = 'gallery' | 'list' | 'folder_tree' | 'date_grouped' | 'person_grouped';
+export type GalleryViewMode = 'gallery' | 'list' | 'folder_tree' | 'date_grouped' | 'person_grouped' | 'similarity_grouped';
 
 export type MediaSortField = 'name' | 'date' | 'size' | 'status' | 'faces';
 export type MediaSortOrder = 'asc' | 'desc';
@@ -133,6 +144,82 @@ export interface PersonGroupNode {
   files: GalleryMediaFile[];
 }
 
+export interface SimilarityGroupNode {
+  groupId: string;
+  matchType: 'exact' | 'visual' | 'burst';
+  similarity: number;
+  count: number;
+  primaryFile: GalleryMediaFile;
+  files: GalleryMediaFile[];
+}
+
+export interface DuplicateItemInfo {
+  filePath: string;
+  filename: string;
+  folder: string;
+  fileSize: number;
+  mtime: number;
+  width?: number | null;
+  height?: number | null;
+  megapixels?: number | null;
+  phash?: string | null;
+  contentHash?: string | null;
+  isImage: boolean;
+  isVideo: boolean;
+  isPrimary: boolean;
+  similarityToPrimary?: number;
+  captureDate?: string | null;
+}
+
+export interface DuplicateGroup {
+  id: string;
+  matchType: 'exact' | 'visual' | 'burst';
+  similarity: number;
+  primaryFile: DuplicateItemInfo;
+  duplicates: DuplicateItemInfo[];
+  totalFiles: number;
+  reclaimableBytes: number;
+  folderBreakdown: string[];
+}
+
+export interface DuplicateSummary {
+  totalGroups: number;
+  totalDuplicateFiles: number;
+  totalReclaimableBytes: number;
+  exactGroupsCount: number;
+  visualGroupsCount: number;
+  burstGroupsCount: number;
+  scannedFilesCount: number;
+  lastScanTime: string | null;
+  engineUsed: string;
+}
+
+export interface DuplicateScanStatus {
+  isScanning: boolean;
+  engine: string;
+  stage: string;
+  current: number;
+  total: number;
+  percent: number;
+  currentFile: string | null;
+  foundGroupsCount: number;
+  foundDuplicatesCount: number;
+  reclaimableBytes: number;
+  startedAt: number | null;
+  elapsedMs: number;
+  error?: string | null;
+}
+
+export interface DuplicateConfig {
+  default_engine: 'cpu' | 'gpu' | 'auto';
+  similarity_threshold: number;
+  burst_window_seconds: number;
+  default_keep_strategy: 'highest_resolution' | 'largest_file_size' | 'newest' | 'oldest';
+  target_move_folder: string | null;
+  auto_scan_on_sync: boolean;
+  updated_at?: string;
+}
+
 export interface MediaCatalogResponse {
   files: GalleryMediaFile[];
   total: number;
@@ -148,4 +235,5 @@ export interface MediaCatalogResponse {
     videos: number;
   };
 }
+
 

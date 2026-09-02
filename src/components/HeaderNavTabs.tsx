@@ -10,8 +10,8 @@ export interface HeaderNavTabsProps {
 export interface NavTabItem {
   id: string;
   icon: string;
-  titleKey: 'navMain' | 'navMediaLibrary' | 'navFamilyTree' | 'navSettings' | 'navAdmin';
-  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navFamilyTreeTooltip' | 'navSettingsTooltip' | 'navAdminTooltip';
+  titleKey: 'navMain' | 'navMediaLibrary' | 'navDuplicates' | 'navFamilyTree' | 'navSettings' | 'navAdmin';
+  tooltipKey: 'navMainTooltip' | 'navMediaLibraryTooltip' | 'navDuplicatesTooltip' | 'navFamilyTreeTooltip' | 'navSettingsTooltip' | 'navAdminTooltip';
   requiredPermission?: 'admin_panel' | 'manage_faces';
 }
 
@@ -21,6 +21,12 @@ const NAV_TABS: NavTabItem[] = [
     icon: '🏠',
     titleKey: 'navMain',
     tooltipKey: 'navMainTooltip',
+  },
+  {
+    id: 'duplicates',
+    icon: '🗂️',
+    titleKey: 'navDuplicates',
+    tooltipKey: 'navDuplicatesTooltip',
   },
   {
     id: 'media_library',

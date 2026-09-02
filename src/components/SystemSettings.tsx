@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import DirectoryBrowserModal from './DirectoryBrowserModal';
 import './SystemSettings.css';
 
-export type SettingsTab = 'execution' | 'paths' | 'models' | 'appearance' | 'preferences';
+export type SettingsTab = 'execution' | 'paths' | 'models' | 'appearance' | 'preferences' | 'duplicates';
 
 export interface SystemSettingsProps {
   settings: SettingsData | null;
@@ -26,6 +26,9 @@ export interface SystemSettingsProps {
   onSaveUiSettings?: (settings: UISettings) => void;
   initialTab?: SettingsTab;
   onTabChange?: (tab: SettingsTab) => void;
+  onRefreshMedia?: () => Promise<void> | void;
+  onRescanSeries?: () => Promise<void> | void;
+  scanProgress?: any;
 }
 
 export default function SystemSettings({
@@ -44,6 +47,9 @@ export default function SystemSettings({
   onSaveUiSettings,
   initialTab = 'execution',
   onTabChange,
+  onRefreshMedia,
+  onRescanSeries,
+  scanProgress,
 }: SystemSettingsProps) {
   const { language, setLanguage, t } = useLanguage();
   const {
@@ -82,8 +88,85 @@ export default function SystemSettings({
   const [forceReprocess, setForceReprocess] = useState(false);
   const [singleFilePath, setSingleFilePath] = useState('');
 
+  // Folders reindex & series rescan states
+  const [isReindexing, setIsReindexing] = useState(false);
+  const [isRescanningSeries, setIsRescanningSeries] = useState(false);
+  const [reindexMessage, setReindexMessage] = useState<string | null>(null);
+
+  const handleReindexFolders = async () => {
+    setIsReindexing(true);
+    setReindexMessage(null);
+    try {
+      const res = await fetch('/api/media/files?refresh=true&limit=50');
+      if (res.ok) {
+        setReindexMessage(t('reindexingSuccess'));
+        if (onRefreshMedia) {
+          await onRefreshMedia();
+        }
+      } else {
+        setReindexMessage('Failed to trigger folder reindex.');
+      }
+    } catch (err: any) {
+      setReindexMessage(`Error: ${err.message}`);
+    } finally {
+      setIsReindexing(false);
+    }
+  };
+
+  const handleRescanSeries = async () => {
+    setIsRescanningSeries(true);
+    setReindexMessage(null);
+    try {
+      if (onRescanSeries) {
+        await onRescanSeries();
+      } else if (onRefreshMedia) {
+        await onRefreshMedia();
+      }
+      setReindexMessage(t('rescanSeriesSuccess'));
+    } catch (err: any) {
+      setReindexMessage(`Error: ${err.message}`);
+    } finally {
+      setIsRescanningSeries(false);
+    }
+  };
+
   // UI preferences local state
   const [localUiSettings, setLocalUiSettings] = useState<UISettings>(uiSettings);
+
+  // Duplicate & Similarity configuration state
+  const [dupConfig, setDupConfig] = useState<{
+    default_engine: 'auto' | 'cpu' | 'gpu';
+    similarity_threshold: number;
+    burst_window_seconds: number;
+    default_keep_strategy: string;
+    target_move_folder: string;
+    auto_scan_on_sync: boolean;
+  }>({
+    default_engine: 'auto',
+    similarity_threshold: 0.90,
+    burst_window_seconds: 3.0,
+    default_keep_strategy: 'highest_resolution',
+    target_move_folder: '',
+    auto_scan_on_sync: false,
+  });
+
+  useEffect(() => {
+    fetch('/api/duplicates/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          setDupConfig({
+            default_engine: data.default_engine || 'auto',
+            similarity_threshold: data.similarity_threshold || 0.90,
+            burst_window_seconds: data.burst_window_seconds || 3.0,
+            default_keep_strategy: data.default_keep_strategy || 'highest_resolution',
+            target_move_folder: data.target_move_folder || '',
+            auto_scan_on_sync: Boolean(data.auto_scan_on_sync),
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Connection validation state
   const [validatingConnection, setValidatingConnection] = useState(false);
@@ -221,6 +304,15 @@ export default function SystemSettings({
       if (onSaveUiSettings) {
         onSaveUiSettings(localUiSettings);
       }
+
+      // Save duplicate configuration
+      try {
+        await fetch('/api/duplicates/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dupConfig),
+        });
+      } catch {}
 
       if (success) {
         setSaveStatus({ type: 'success', message: t('settingsSavedSuccess') });
@@ -426,6 +518,15 @@ export default function SystemSettings({
         >
           <span>🖼️</span>
           <span>{t('tabPreferences')}</span>
+        </button>
+        <button
+          type="button"
+          className={`settings-nav-btn ${activeTab === 'duplicates' ? 'active' : ''}`}
+          onClick={() => handleSelectTab('duplicates')}
+          id="tab-settings-duplicates"
+        >
+          <span>🗂️</span>
+          <span>{t('tabDuplicates' as any) || 'Duplicates & Similarity'}</span>
         </button>
       </nav>
 
@@ -639,6 +740,60 @@ export default function SystemSettings({
                 />
                 {t('preserveStructure')}
               </label>
+            </div>
+
+            {/* Indexing & Series Management Action Card */}
+            <div
+              className="card"
+              style={{
+                marginTop: '1.5rem',
+                borderTop: '1px solid var(--border-color)',
+                paddingTop: '1.25rem',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                border: '1px solid var(--border-color)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>⚡</span>
+                <strong style={{ fontSize: '1rem' }}>{t('indexingAndSeriesActions')}</strong>
+              </div>
+              <p className="description" style={{ marginBottom: '1rem' }}>
+                {t('indexingAndSeriesDesc')}
+              </p>
+
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={isReindexing || scanProgress?.is_scanning}
+                  onClick={handleReindexFolders}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span>{isReindexing || scanProgress?.is_scanning ? '⏳' : '🔄'}</span>
+                  <span>{isReindexing || scanProgress?.is_scanning ? t('reindexingInProgress') : t('reindexFolders')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={isRescanningSeries}
+                  onClick={handleRescanSeries}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span>{isRescanningSeries ? '⏳' : '🗂️'}</span>
+                  <span>{isRescanningSeries ? t('rescanningInProgress') : t('rescanSeries')}</span>
+                </button>
+              </div>
+
+              {(reindexMessage || scanProgress?.is_scanning) && (
+                <div style={{ marginTop: '0.85rem', fontSize: '0.85rem', color: 'var(--accent-color)' }}>
+                  {scanProgress?.is_scanning
+                    ? `Indexing: ${scanProgress.current_filename || scanProgress.current_file || 'reading folders...'} (${scanProgress.scanned_count || 0} files)`
+                    : reindexMessage}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1156,6 +1311,125 @@ export default function SystemSettings({
                     }))
                   }
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 6: Duplicates & Similarity Detection Settings */}
+        {activeTab === 'duplicates' && (
+          <div className="settings-section-card" id="settings-pane-duplicates">
+            <div className="settings-card-header">
+              <h3>🗂️ {t('tabDuplicates' as any) || 'Duplicate & Similarity Detection'}</h3>
+            </div>
+
+            <div className="form-group">
+              <label>{t('duplicateEngine' as any) || 'Default Processing Engine'}</label>
+              <p className="description">
+                Choose between low-memory CPU processing (Zimaboard/low-power safe) or hardware-accelerated GPU tensor processing.
+              </p>
+              <select
+                className="input-control"
+                value={dupConfig.default_engine}
+                onChange={(e) =>
+                  setDupConfig((prev) => ({ ...prev, default_engine: e.target.value as any }))
+                }
+              >
+                <option value="auto">Auto-Detect (GPU with CPU Fallback)</option>
+                <option value="cpu">CPU Engine (Zimaboard Low-Memory Safe)</option>
+                <option value="gpu">GPU AI Engine (RTX 4080 Accelerated)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>
+                {t('similarityThreshold' as any) || 'Default Similarity Threshold'}: {Math.round(dupConfig.similarity_threshold * 100)}%
+              </label>
+              <p className="description">
+                Perceptual hash threshold for visual similarity grouping (70% - 100%).
+              </p>
+              <input
+                type="range"
+                className="input-control"
+                min="0.70"
+                max="1.00"
+                step="0.01"
+                value={dupConfig.similarity_threshold}
+                onChange={(e) =>
+                  setDupConfig((prev) => ({ ...prev, similarity_threshold: parseFloat(e.target.value) }))
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                {t('burstWindow' as any) || 'Burst Series Time Window'}: {dupConfig.burst_window_seconds}s
+              </label>
+              <p className="description">
+                Maximum time delta in seconds between sequential photos to group them as burst shots.
+              </p>
+              <input
+                type="range"
+                className="input-control"
+                min="1"
+                max="30"
+                step="1"
+                value={dupConfig.burst_window_seconds}
+                onChange={(e) =>
+                  setDupConfig((prev) => ({ ...prev, burst_window_seconds: parseInt(e.target.value, 10) }))
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label>{t('defaultKeepStrategy' as any) || 'Smart Auto-Keep Recommendation Strategy'}</label>
+              <p className="description">
+                Heuristic used to designate the recommended primary file in each duplicate group. Deletion is never automatic.
+              </p>
+              <select
+                className="input-control"
+                value={dupConfig.default_keep_strategy}
+                onChange={(e) =>
+                  setDupConfig((prev) => ({ ...prev, default_keep_strategy: e.target.value }))
+                }
+              >
+                <option value="highest_resolution">Highest Resolution (Megapixels & Dimensions)</option>
+                <option value="largest_file_size">Largest File Size (Highest Quality/Bitrate)</option>
+                <option value="newest">Newest Capture Date</option>
+                <option value="oldest">Oldest / Original Date</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>{t('targetArchiveFolder' as any) || 'Default Archive Folder for Moved Duplicates'}</label>
+              <p className="description">
+                Default directory where user-moved duplicate files will be relocated.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  className="input-control"
+                  placeholder="e.g. Z:\duplicates_archive"
+                  value={dupConfig.target_move_folder || ''}
+                  onChange={(e) =>
+                    setDupConfig((prev) => ({ ...prev, target_move_folder: e.target.value }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setBrowserModal({
+                      isOpen: true,
+                      title: 'Select Duplicate Archive Folder',
+                      initialPath: dupConfig.target_move_folder || '',
+                      mode: 'folder',
+                      targetType: 'output',
+                    })
+                  }
+                >
+                  📁 Browse
+                </button>
               </div>
             </div>
           </div>

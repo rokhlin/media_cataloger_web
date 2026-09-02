@@ -262,8 +262,6 @@ describe('MediaService', () => {
   });
 
   it('should get single media file info with latest metadata, sidecar, and faces', async () => {
-    const vacationPath = path.join(inputDir, 'vacation.jpg');
-    
     // Create sidecar JSON
     const sidecarPath = path.join(tmpDir, 'vacation.jpg.json');
     fs.writeFileSync(sidecarPath, JSON.stringify({
