@@ -131,8 +131,12 @@ export const PersonDetailDrawer = ({
 
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to delete ${fullName} from the family tree?`)) {
-      await onDeletePerson(person.id);
-      closeDrawer();
+      try {
+        await onDeletePerson(person.id);
+        closeDrawer();
+      } catch (err: any) {
+        window.alert(err?.message || 'Failed to delete person.');
+      }
     }
   };
 

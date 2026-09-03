@@ -78,7 +78,9 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to delete person');
+      // NestJS wraps message as string or string[]
+      const msg = Array.isArray(err.message) ? err.message.join('; ') : (err.message || 'Failed to delete person');
+      throw new Error(msg);
     }
     await fetchGraph();
   };

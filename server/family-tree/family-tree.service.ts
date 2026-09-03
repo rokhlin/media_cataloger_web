@@ -334,6 +334,29 @@ export class FamilyTreeService {
     const db = this.dbService.getDb();
     const person = this.getPersonById(id);
 
+    // Guard: prevent deletion of non-leaf nodes to preserve graph connectivity.
+    // A non-leaf person is one who has both parents (they appear in ft_child_relations)
+    // AND children (they are a partner in a union that has child records).
+    const isChild = db
+      .prepare('SELECT COUNT(*) as cnt FROM ft_child_relations WHERE person_id = ?')
+      .get(id) as { cnt: number };
+
+    const hasChildren = db
+      .prepare(`
+        SELECT COUNT(*) as cnt
+        FROM ft_child_relations cr
+        INNER JOIN ft_union_partners up ON up.union_id = cr.union_id
+        WHERE up.person_id = ?
+      `)
+      .get(id) as { cnt: number };
+
+    if (isChild.cnt > 0 && hasChildren.cnt > 0) {
+      throw new BadRequestException(
+        `Cannot delete "${person.first_name}${person.last_name ? ' ' + person.last_name : ''}" because they connect parents and children in the tree. ` +
+        `Remove their children or unlink their parents first.`,
+      );
+    }
+
     this.eventsService.removeChildBornEvents(id);
     db.prepare('DELETE FROM ft_persons WHERE id = ?').run(id);
 
