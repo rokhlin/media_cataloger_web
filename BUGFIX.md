@@ -31,7 +31,18 @@ Each bug is categorized by component and marked with its current status.
 
 ## 🖼️ UI / UX & Visual Features
 
-*(No known issues)*
+- [x] 🔴 **Duplicates Manager checkbox/image click closing window**: Clicking on a duplicate file checkbox or image card immediately closed the Duplicates Manager window and redirected to the Media gallery tab. Caused by missing `e.stopPropagation()` on the checkbox `onClick` event which bubbled to the preview wrapper's `onOpenViewer` handler, coupled with a disruptive `setActiveTab('main')` redirect in `App.tsx`. Fixed by stopping click event bubbling on checkboxes, toggling selection directly on card/image clicks, removing the tab redirect in `App.tsx`, and adding an in-place lightbox preview modal with zoom button (`dup-item-zoom-btn`).
+  - **Affected version**: v0.3.x, v0.4.0
+  - **Fixed in**: v0.4.0 (Unreleased)
+  - **References**: Issue *Duplicates Manager - unable to mark duplicate file for further deletion*
+
+- [x] 🔴 **Video file preview not working**: Previewing video files (`.mp4`, `.mov`, etc.) failed in both the main gallery lightbox (`MediaViewerModal`) and Duplicates Manager (`DuplicatesManagerTab`). Caused by two critical issues:
+  1. Backend `streamFileSafely` in `server/media/media.controller.ts` lacked HTTP Range request support (`Range: bytes=start-end`), always returning `200 OK` with full Content-Length instead of `206 Partial Content` with `Content-Range` and `Accept-Ranges: bytes`. Modern browsers require HTTP byte ranges to buffer, seek, and parse metadata atoms (`moov`). Furthermore, `.mov` MIME type was served as `video/quicktime` instead of web-demuxer-compatible `video/mp4`.
+  2. Frontend Duplicates Manager preview lightbox modal and side-by-side comparator unconditionally rendered `<img>` tags for all items, breaking preview for video files. `MediaViewerModal` lacked video `poster` frame extraction, `playsInline`, `preload="metadata"`, and had no error recovery fallback when browsers could not decode specific codecs (e.g. Apple QuickTime HEVC in `.mov`).
+  - Fixed by implementing full HTTP 206 Range request streaming in `media.controller.ts`, serving `.mov` as `video/mp4`, adding `<video>` player support to Duplicates Manager preview modal and comparator, adding first-frame extracted WebP posters, and adding a friendly fallback overlay with direct video download button for unsupported codecs.
+  - **Affected version**: v0.3.x, v0.4.0
+  - **Fixed in**: v0.4.0 (Unreleased)
+  - **References**: User issue *Preview for video files is not working*
 
 ---
 

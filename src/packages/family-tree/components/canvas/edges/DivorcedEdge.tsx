@@ -25,7 +25,7 @@ export const DivorcedEdge = memo(({
       path={edgePath}
       markerEnd={markerEnd}
       style={{
-        stroke: '#f43f5e',
+        stroke: '#454045ff',
         strokeWidth: 2,
         strokeDasharray: '6,6',
         opacity: 0.85,

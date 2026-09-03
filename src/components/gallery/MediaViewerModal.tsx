@@ -94,6 +94,11 @@ export default function MediaViewerModal({
     }
   }, [mediaFile, seriesGroupFiles]);
 
+  const [videoPlaybackError, setVideoPlaybackError] = useState(false);
+  useEffect(() => {
+    setVideoPlaybackError(false);
+  }, [selectedMedia?.file_path, selectedMedia?.filename]);
+
   // Derived effective group files for the carousel
   const effectiveGroupFiles = useMemo(() => {
     if (selectedMedia?.similar_group_files && selectedMedia.similar_group_files.length > 1) {
@@ -555,12 +560,47 @@ export default function MediaViewerModal({
             <div className="media-lightbox-preview">
               <div className="media-preview-content">
                 {selectedMedia.is_video ? (
-                  <video
-                    src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                    controls
-                    autoPlay
-                    className="media-lightbox-video"
-                  />
+                  <div className="media-lightbox-video-wrap">
+                    {!videoPlaybackError ? (
+                      <video
+                        key={selectedMedia.file_path || selectedMedia.filename}
+                        src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
+                        poster={`/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`}
+                        controls
+                        autoPlay
+                        playsInline
+                        preload="metadata"
+                        className="media-lightbox-video"
+                        onError={() => setVideoPlaybackError(true)}
+                      />
+                    ) : (
+                      <div className="media-lightbox-video-fallback">
+                        <img
+                          src={`/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`}
+                          alt="Video thumbnail preview"
+                          className="media-lightbox-video-fallback-img"
+                        />
+                        <div className="media-lightbox-video-fallback-overlay">
+                          <span style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎥</span>
+                          <p style={{ margin: '0 0 0.4rem', fontWeight: 600, color: '#f8fafc', fontSize: '1rem' }}>
+                            {selectedMedia.filename}
+                          </p>
+                          <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: '#94a3b8', maxWidth: '420px', lineHeight: 1.4 }}>
+                            {t('videoCodecNotice' as any) ||
+                              'This video format (.MOV / HEVC) cannot be played directly by the browser. You can download or play it with your local media player.'}
+                          </p>
+                          <a
+                            href={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&download=true`}
+                            download={selectedMedia.filename}
+                            className="btn btn-primary"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}
+                          >
+                            ⬇️ {t('downloadVideo' as any) || 'Download Original Video'}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <img

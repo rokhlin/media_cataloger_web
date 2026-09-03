@@ -40,8 +40,8 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         height: 36,
         borderRadius: '50%',
         backgroundColor: 'var(--card-bg-solid)',
-        border: isDivorced ? '2px dashed #f43f5e' : '2px solid var(--border-color-hover)',
-        boxShadow: isDivorced ? '0 0 12px rgba(244, 63, 94, 0.35)' : 'var(--shadow-card)',
+        border: isDivorced ? '2px dashed #454045ff' : '2px solid var(--border-color-hover)',
+        boxShadow: isDivorced ? '0 0 12px rgba(69, 65, 69, 0.35)' : 'var(--shadow-card)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -57,15 +57,15 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         type="target"
         position={Position.Top}
         style={{
-          background: isDivorced ? '#f43f5e' : 'var(--primary-color, #6366f1)',
+          background: isDivorced ? '#454045ff' : 'var(--primary-color, #6366f1)',
           width: 6,
           height: 6,
           border: '1px solid var(--card-bg-solid)',
           top: -3,
         }}
       />
-      
-      <span>{icon}</span>
+
+      {isDivorced ? <span style={{ filter: 'grayscale(100%)', opacity: isDivorced ? 1 : 0 }}>{icon}</span> : <span>{icon}</span>}
 
       {/* Collapse/Expand badge for Divorced Union */}
       {isDivorced && (
@@ -79,9 +79,9 @@ export const UnionNode = memo(({ data }: NodeProps) => {
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: isFolded ? '#f43f5e' : 'var(--card-bg-solid)',
-            color: isFolded ? '#ffffff' : '#f43f5e',
-            border: '1px solid #f43f5e',
+            background: isFolded ? '#454045ff' : 'var(--card-bg-solid)',
+            color: isFolded ? '#ffffff' : '#454045ff',
+            border: '1px solid #454045ff',
             fontSize: 8,
             fontWeight: 800,
             display: 'flex',
@@ -93,7 +93,7 @@ export const UnionNode = memo(({ data }: NodeProps) => {
           }}
           title={isFolded ? 'Expand divorced spouse subtree' : 'Collapse divorced spouse subtree'}
         >
-          {isFolded ? '+' : '−'}
+          {isFolded ? ' + ' : ' − '}
         </button>
       )}
 

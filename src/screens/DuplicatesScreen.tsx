@@ -3,7 +3,7 @@ import DuplicatesManagerTab from '../components/duplicates';
 export interface DuplicatesScreenProps {
   onRefreshMedia: (force?: boolean) => void | Promise<void>;
   activeInputFolders: string[];
-  onOpenViewer: (filePath: string) => void;
+  onOpenViewer?: (filePath: string) => void;
 }
 
 export default function DuplicatesScreen({
