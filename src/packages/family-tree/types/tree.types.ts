@@ -43,6 +43,7 @@ export interface CelebrationBadgeConfig {
   badgeStyle: 'pill' | 'glow' | 'ribbon';
   badgeColor: string;
   customIcon?: string;
+  contentDisplay?: 'icon_only' | 'icon_and_text';
 }
 
 export interface TreeRecord {

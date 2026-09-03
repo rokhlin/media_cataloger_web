@@ -83,6 +83,7 @@ export const FamilyTreeTab = () => {
   return (
     <ReactFlowProvider>
       <div
+        className="family-tree-view-wrapper"
         style={{
           width: '100%',
           height: '100%',
@@ -90,22 +91,13 @@ export const FamilyTreeTab = () => {
           display: 'flex',
           flexDirection: 'column',
           background: 'transparent',
-          overflow: 'hidden',
+          gap: '12px',
         }}
       >
-        {/* Subtab Header Bar */}
+        {/* Subtab Header Bar / Tabs Container */}
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 16px',
-            background: 'var(--card-bg)',
-            borderBottom: '1px solid var(--border-color)',
-            backdropFilter: 'blur(12px)',
-            zIndex: 25,
-            flexShrink: 0,
-          }}
+          className="family-tree-tabs-container"
+          id="family-tree-tabs-container"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
@@ -165,7 +157,10 @@ export const FamilyTreeTab = () => {
         </div>
 
         {/* Subtab Content Viewport */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', height: 'calc(100% - 48px)', overflow: 'hidden' }}>
+        <div
+          className="family-tree-content-viewport"
+          id="family-tree-content-viewport"
+        >
           {activeSubTab === 'settings' ? (
             <TreeSettingsTab
               graphData={graphData}

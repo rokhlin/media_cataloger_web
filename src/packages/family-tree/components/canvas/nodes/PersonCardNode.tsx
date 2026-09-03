@@ -84,6 +84,9 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
 
     const bg = celebrationConfig.badgeColor || '#ec4899';
     const icon = celebrationConfig.customIcon || celebration.icon;
+    const isIconOnly = celebrationConfig.contentDisplay === 'icon_only';
+    const showText = !compact && !isIconOnly;
+    const detailedTooltip = `${celebration.title} (${celebration.isToday ? 'Today!' : `${celebration.daysRemaining} days remaining`})`;
 
     if (celebrationConfig.badgeStyle === 'ribbon') {
       return (
@@ -96,7 +99,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             color: '#ffffff',
             fontSize: 9,
             fontWeight: 800,
-            padding: '2px 8px',
+            padding: showText ? '2px 8px' : '3px 6px',
             borderRadius: '4px',
             boxShadow: `0 2px 8px ${bg}80`,
             zIndex: 12,
@@ -104,11 +107,12 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             alignItems: 'center',
             gap: 4,
             textTransform: 'uppercase',
+            cursor: 'help',
           }}
-          title={celebration.title}
+          title={detailedTooltip}
         >
           <span>{icon}</span>
-          {!compact && <span>{celebration.isToday ? 'Today!' : `${celebration.daysRemaining}d`}</span>}
+          {showText && <span>{celebration.isToday ? 'Today!' : `${celebration.daysRemaining}d`}</span>}
         </div>
       );
     }
@@ -124,7 +128,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           color: '#ffffff',
           fontSize: 10,
           fontWeight: 700,
-          padding: '2px 8px',
+          padding: showText ? '2px 8px' : '3px 6px',
           borderRadius: 12,
           boxShadow: celebrationConfig.badgeStyle === 'glow' ? `0 0 14px ${bg}` : `0 2px 8px ${bg}80`,
           zIndex: 12,
@@ -132,11 +136,12 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           alignItems: 'center',
           gap: 4,
           animation: celebration.isToday ? 'pulse 1.5s infinite' : undefined,
+          cursor: 'help',
         }}
-        title={celebration.title}
+        title={detailedTooltip}
       >
         <span>{icon}</span>
-        {!compact && <span>{celebration.isToday ? 'Today' : `${celebration.daysRemaining}d`}</span>}
+        {showText && <span>{celebration.isToday ? 'Today' : `${celebration.daysRemaining}d`}</span>}
       </div>
     );
   };

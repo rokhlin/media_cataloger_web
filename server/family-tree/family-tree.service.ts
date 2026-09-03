@@ -291,27 +291,54 @@ export class FamilyTreeService {
     return updated;
   }
 
+  public cleanUpOrphanedUnions(treeId?: string): void {
+    const db = this.dbService.getDb();
+    const tId = treeId || this.getOrCreateDefaultTree().id;
+
+    // Find all unions where:
+    // 1. partner_count = 0 and child_count <= 1 (no parents, and <= 1 child -> orphaned ring)
+    // 2. partner_count <= 1 and child_count = 0 (single person with no spouse and no children -> orphaned ring)
+    // 3. partner_count = 0 and child_count = 0 (completely empty union)
+    const orphanedUnions = db
+      .prepare(`
+        SELECT u.id
+        FROM ft_unions u
+        LEFT JOIN (
+          SELECT union_id, COUNT(*) as partner_count
+          FROM ft_union_partners
+          GROUP BY union_id
+        ) up ON u.id = up.union_id
+        LEFT JOIN (
+          SELECT union_id, COUNT(*) as child_count
+          FROM ft_child_relations
+          GROUP BY union_id
+        ) cr ON u.id = cr.union_id
+        WHERE u.tree_id = ? AND (
+          (COALESCE(up.partner_count, 0) = 0 AND COALESCE(cr.child_count, 0) <= 1)
+          OR
+          (COALESCE(up.partner_count, 0) <= 1 AND COALESCE(cr.child_count, 0) = 0)
+        )
+      `)
+      .all(tId) as Array<{ id: string }>;
+
+    for (const ou of orphanedUnions) {
+      try {
+        this.deleteUnion(ou.id);
+      } catch {
+        // ignore if already removed
+      }
+    }
+  }
+
   public deletePerson(id: string): void {
     const db = this.dbService.getDb();
-    this.getPersonById(id);
+    const person = this.getPersonById(id);
 
     this.eventsService.removeChildBornEvents(id);
     db.prepare('DELETE FROM ft_persons WHERE id = ?').run(id);
 
-    // Clean up any unions that now have zero partners and zero children
-    const emptyUnions = db
-      .prepare(`
-        SELECT u.id
-        FROM ft_unions u
-        LEFT JOIN ft_union_partners up ON u.id = up.union_id
-        LEFT JOIN ft_child_relations cr ON u.id = cr.union_id
-        WHERE up.id IS NULL AND cr.id IS NULL
-      `)
-      .all() as Array<{ id: string }>;
-
-    for (const eu of emptyUnions) {
-      this.deleteUnion(eu.id);
-    }
+    // Automatically purge all orphaned/empty unions
+    this.cleanUpOrphanedUnions(person.tree_id);
   }
 
   public listPersons(treeId?: string, query?: string): PersonRecord[] {
@@ -598,9 +625,10 @@ export class FamilyTreeService {
 
   public removePartnerFromUnion(unionId: string, personId: string): void {
     const db = this.dbService.getDb();
-    db.prepare('DELETE FROM ft_union_partners WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     const union = this.getUnionById(unionId);
+    db.prepare('DELETE FROM ft_union_partners WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     this.eventsService.propagateUnionEvents(union);
+    this.cleanUpOrphanedUnions(union.tree_id);
   }
 
   // ---------------------------------------------------------------------------
@@ -628,8 +656,10 @@ export class FamilyTreeService {
 
   public removeChildFromUnion(unionId: string, personId: string): void {
     const db = this.dbService.getDb();
+    const union = this.getUnionById(unionId);
     db.prepare('DELETE FROM ft_child_relations WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     this.eventsService.removeChildBornEvents(personId, unionId);
+    this.cleanUpOrphanedUnions(union.tree_id);
   }
 
   public updateChildRelation(unionId: string, personId: string, dto: UpdateChildRelationDto): void {
@@ -733,6 +763,9 @@ export class FamilyTreeService {
   public getTreeGraph(treeId?: string): TreeGraphData {
     const db = this.dbService.getDb();
     const tree = treeId ? this.getTreeById(treeId) : this.getOrCreateDefaultTree();
+
+    // Ensure database has no dangling / orphaned unions
+    this.cleanUpOrphanedUnions(tree.id);
 
     const persons = db
       .prepare('SELECT * FROM ft_persons WHERE tree_id = ? ORDER BY created_at ASC')

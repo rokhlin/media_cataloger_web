@@ -70,4 +70,17 @@ describe('Family Tree Theme Adaptability', () => {
     assert.ok(content.includes('var(--text-primary)'), 'PersonDetailDrawer should use var(--text-primary)');
     assert.ok(!content.includes('rgba(15, 23, 42, 0.95)'), 'PersonDetailDrawer should not hardcode dark slate background');
   });
+
+  it('should verify Family Tree tabs container has rounded corner and header shadow', () => {
+    const cssPath = path.join(componentsDir, 'family-tree.css');
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+    assert.ok(cssContent.includes('.family-tree-tabs-container'), 'family-tree.css should contain .family-tree-tabs-container');
+    assert.ok(cssContent.includes('border-radius: 16px'), 'tabs container should have 16px border-radius like in header');
+    assert.ok(cssContent.includes('box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25)'), 'tabs container should have shadow like in header');
+
+    const tabPath = path.join(componentsDir, 'FamilyTreeTab.tsx');
+    const tabContent = fs.readFileSync(tabPath, 'utf8');
+    assert.ok(tabContent.includes('family-tree-tabs-container'), 'FamilyTreeTab.tsx should apply family-tree-tabs-container class');
+  });
 });

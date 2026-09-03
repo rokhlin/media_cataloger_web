@@ -50,8 +50,20 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   const [importStats, setImportStats] = useState<{ personsCount: number; unionsCount: number; errors: string[] } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
-  const [importStatusType, setImportStatusType] = useState<'success' | 'error' | 'info'>('info');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Expandable sections state
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    viewStyles: true,
+    celebrations: true,
+    dateFormats: true,
+    lifeFacts: true,
+    csvBackup: true,
+  });
+
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // ---------------------------------------------------------------------------
   // CSV Handlers
@@ -203,12 +215,22 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
     background: 'var(--card-bg-solid)',
     border: '1px solid var(--border-color)',
     borderRadius: 14,
-    padding: 22,
+    padding: 20,
     boxShadow: 'var(--shadow-card)',
     backdropFilter: 'blur(10px)',
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
+    transition: 'all 0.2s ease',
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    cursor: 'pointer',
+    userSelect: 'none',
+    gap: 12,
   };
 
   const sectionTitleStyle: React.CSSProperties = {
@@ -218,12 +240,16 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+    margin: 0,
+    lineHeight: 1.3,
   };
 
   const sectionSubtextStyle: React.CSSProperties = {
-    fontSize: 12,
+    fontSize: 12.5,
     color: 'var(--text-secondary)',
-    marginTop: -8,
+    marginTop: 6,
+    marginBottom: 0,
+    lineHeight: 1.4,
   };
 
   return (
@@ -252,188 +278,245 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onBackToCanvas}
-          style={{
-            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 10,
-            padding: '10px 20px',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
-          }}
-        >
-          ← Back to Interactive Canvas
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            id="toggle-all-sections-btn"
+            onClick={() => {
+              const allOpen = Object.values(expandedSections).every(Boolean);
+              setExpandedSections({
+                viewStyles: !allOpen,
+                celebrations: !allOpen,
+                dateFormats: !allOpen,
+                lifeFacts: !allOpen,
+                csvBackup: !allOpen,
+              });
+            }}
+            style={{
+              background: 'var(--nav-tab-bg)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 10,
+              padding: '10px 16px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>{Object.values(expandedSections).every(Boolean) ? '📁 Collapse All' : '📂 Expand All'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onBackToCanvas}
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 10,
+              padding: '10px 20px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+            }}
+          >
+            ← Back to Interactive Canvas
+          </button>
+        </div>
       </div>
 
       {/* --------------------------------------------------------------------- */}
       {/* 1. Tree View Styles */}
       {/* --------------------------------------------------------------------- */}
       <div style={cardStyle}>
-        <div>
-          <div style={sectionTitleStyle}>
-            <span>🎨</span> Tree Node View Style
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('viewStyles')}
+          id="section-header-view-styles"
+        >
+          <div>
+            <div style={sectionTitleStyle}>
+              <span>🎨</span> Tree Node View Style
+            </div>
+            <div style={sectionSubtextStyle}>
+              Select how persons are rendered on the tree canvas. ELK layout dimensions adjust automatically.
+            </div>
           </div>
-          <div style={sectionSubtextStyle}>
-            Select how persons are rendered on the tree canvas. ELK layout dimensions adjust automatically.
-          </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              transform: expandedSections.viewStyles ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s ease',
+              display: 'inline-block',
+              marginLeft: 12,
+            }}
+          >
+            ▼
+          </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-          {/* Style 1: Default */}
-          <div
-            onClick={() => setNodeViewStyle('default')}
-            style={{
-              border: nodeViewStyle === 'default' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-              background: nodeViewStyle === 'default' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                1. Default Style
-              </span>
-              <input type="radio" checked={nodeViewStyle === 'default'} readOnly />
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Full detailed card with avatar portrait, name, maiden name, lifespan, birthplace, and quick-add actions.
-            </div>
-            {/* Visual Mini Mockup */}
+        {expandedSections.viewStyles && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            {/* Style 1: Default */}
             <div
+              onClick={() => setNodeViewStyle('default')}
               style={{
-                height: 70,
-                background: 'var(--card-bg-solid)',
-                borderRadius: 8,
-                border: '1px solid var(--border-color)',
-                padding: '8px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
-                JD
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>1954 – 2018 • 📍 Boston</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Style 2: Circle */}
-          <div
-            onClick={() => setNodeViewStyle('circle')}
-            style={{
-              border: nodeViewStyle === 'circle' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-              background: nodeViewStyle === 'circle' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                2. Circle Style
-              </span>
-              <input type="radio" checked={nodeViewStyle === 'circle'} readOnly />
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Ultra-compact circular avatar showing only image and person name. Ideal for large dense genealogical trees.
-            </div>
-            {/* Visual Mini Mockup */}
-            <div
-              style={{
-                height: 70,
-                background: 'var(--card-bg-solid)',
-                borderRadius: 8,
-                border: '1px solid var(--border-color)',
+                border: nodeViewStyle === 'default' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                background: nodeViewStyle === 'default' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                borderRadius: 12,
+                padding: 16,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-              }}
-            >
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#a855f7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
-                JD
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
-            </div>
-          </div>
-
-          {/* Style 3: Square */}
-          <div
-            onClick={() => setNodeViewStyle('square')}
-            style={{
-              border: nodeViewStyle === 'square' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-              background: nodeViewStyle === 'square' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                3. Square Style
-              </span>
-              <input type="radio" checked={nodeViewStyle === 'square'} readOnly />
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Balanced card featuring a modern square portrait, full person name, and formatted birth date.
-            </div>
-            {/* Visual Mini Mockup */}
-            <div
-              style={{
-                height: 70,
-                background: 'var(--card-bg-solid)',
-                borderRadius: 8,
-                border: '1px solid var(--border-color)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 gap: 10,
               }}
             >
-              <div style={{ width: 36, height: 36, borderRadius: 6, background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
-                JD
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                  1. Default Style
+                </span>
+                <input type="radio" checked={nodeViewStyle === 'default'} readOnly />
               </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
-                <div style={{ fontSize: 10, color: '#10b981' }}>b. May 14, 1980</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Full detailed card with avatar portrait, name, maiden name, lifespan, birthplace, and quick-add actions.
+              </div>
+              {/* Visual Mini Mockup */}
+              <div
+                style={{
+                  height: 70,
+                  background: 'var(--card-bg-solid)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-color)',
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                  JD
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>1954 – 2018 • 📍 Boston</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Style 2: Circle */}
+            <div
+              onClick={() => setNodeViewStyle('circle')}
+              style={{
+                border: nodeViewStyle === 'circle' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                background: nodeViewStyle === 'circle' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                borderRadius: 12,
+                padding: 16,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                  2. Circle Style
+                </span>
+                <input type="radio" checked={nodeViewStyle === 'circle'} readOnly />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Ultra-compact circular avatar showing only image and person name. Ideal for large dense genealogical trees.
+              </div>
+              {/* Visual Mini Mockup */}
+              <div
+                style={{
+                  height: 70,
+                  background: 'var(--card-bg-solid)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                }}
+              >
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#a855f7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                  JD
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
+              </div>
+            </div>
+
+            {/* Style 3: Square */}
+            <div
+              onClick={() => setNodeViewStyle('square')}
+              style={{
+                border: nodeViewStyle === 'square' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                background: nodeViewStyle === 'square' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                borderRadius: 12,
+                padding: 16,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                  3. Square Style
+                </span>
+                <input type="radio" checked={nodeViewStyle === 'square'} readOnly />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Balanced card featuring a modern square portrait, full person name, and formatted birth date.
+              </div>
+              {/* Visual Mini Mockup */}
+              <div
+                style={{
+                  height: 70,
+                  background: 'var(--card-bg-solid)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 6, background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                  JD
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Johnathan Doe</div>
+                  <div style={{ fontSize: 10, color: '#10b981' }}>b. May 14, 1980</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------------- */}
       {/* 2. Celebration Badges */}
       {/* --------------------------------------------------------------------- */}
       <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('celebrations')}
+          id="section-header-celebrations"
+        >
           <div>
             <div style={sectionTitleStyle}>
               <span>🎂</span> Celebration & Milestone Badges
@@ -443,19 +526,37 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             </div>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
-            <input
-              type="checkbox"
-              checked={celebrationConfig.enabled}
-              onChange={(e) => setCelebrationConfig({ enabled: e.target.checked })}
-              style={{ width: 16, height: 16 }}
-            />
-            Enable Badges
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={celebrationConfig.enabled}
+                onChange={(e) => setCelebrationConfig({ enabled: e.target.checked })}
+                style={{ width: 16, height: 16 }}
+              />
+              Enable Badges
+            </label>
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--text-muted)',
+                transform: expandedSections.celebrations ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.2s ease',
+                display: 'inline-block',
+                cursor: 'pointer',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSection('celebrations');
+              }}
+            >
+              ▼
+            </span>
+          </div>
         </div>
 
-        {celebrationConfig.enabled && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+        {expandedSections.celebrations && celebrationConfig.enabled && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
             {/* Event Types */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
@@ -491,7 +592,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               </div>
             </div>
 
-            {/* Threshold & Style */}
+            {/* Threshold & Presentation Style */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
@@ -539,6 +640,66 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            {/* Badge Content Display Mode: Icon Only vs Icon and Text */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
+                Badge Content Mode
+              </label>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  id="celebration-mode-icon-and-text"
+                  onClick={() => setCelebrationConfig({ contentDisplay: 'icon_and_text' })}
+                  style={{
+                    flex: 1,
+                    minWidth: 180,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: celebrationConfig.contentDisplay !== 'icon_only' ? 'var(--primary-color, #6366f1)' : 'var(--nav-tab-bg)',
+                    color: celebrationConfig.contentDisplay !== 'icon_only' ? '#ffffff' : 'var(--text-primary)',
+                    border: celebrationConfig.contentDisplay !== 'icon_only' ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{celebrationConfig.customIcon || '🎂'} Birthday in 3d</span>
+                  <span style={{ fontSize: 11, opacity: 0.85 }}>(Icon & text)</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="celebration-mode-icon-only"
+                  onClick={() => setCelebrationConfig({ contentDisplay: 'icon_only' })}
+                  style={{
+                    flex: 1,
+                    minWidth: 180,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: celebrationConfig.contentDisplay === 'icon_only' ? 'var(--primary-color, #6366f1)' : 'var(--nav-tab-bg)',
+                    color: celebrationConfig.contentDisplay === 'icon_only' ? '#ffffff' : 'var(--text-primary)',
+                    border: celebrationConfig.contentDisplay === 'icon_only' ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{celebrationConfig.customIcon || '🎂'}</span>
+                  <span style={{ fontSize: 11, opacity: 0.85 }}>(Icon only • hover for details)</span>
+                </button>
               </div>
             </div>
 
@@ -628,17 +789,22 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   color: '#ffffff',
                   fontSize: 11,
                   fontWeight: 700,
-                  padding: '4px 10px',
+                  padding: celebrationConfig.contentDisplay === 'icon_only' ? '4px 8px' : '4px 10px',
                   borderRadius: celebrationConfig.badgeStyle === 'ribbon' ? 4 : 12,
                   boxShadow: celebrationConfig.badgeStyle === 'glow' ? `0 0 12px ${celebrationConfig.badgeColor || '#ec4899'}` : '0 2px 6px rgba(0,0,0,0.2)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
+                  cursor: celebrationConfig.contentDisplay === 'icon_only' ? 'help' : 'default',
                 }}
+                title={celebrationConfig.contentDisplay === 'icon_only' ? 'Birthday in 3 days (Hover to view details)' : undefined}
               >
                 <span>{celebrationConfig.customIcon || '🎂'}</span>
-                <span>Birthday in 3 days</span>
+                {celebrationConfig.contentDisplay !== 'icon_only' && <span>Birthday in 3 days</span>}
               </div>
+              {celebrationConfig.contentDisplay === 'icon_only' && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(Hover over badge to preview tooltip)</span>
+              )}
             </div>
           </div>
         )}
@@ -648,350 +814,414 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
       {/* 3. Date Formats & Display */}
       {/* --------------------------------------------------------------------- */}
       <div style={cardStyle}>
-        <div>
-          <div style={sectionTitleStyle}>
-            <span>📅</span> Date Formats & Date Picker Configuration
-          </div>
-          <div style={sectionSubtextStyle}>
-            Choose how dates are formatted on nodes, cards, and drawers. All common input formats are automatically recognized and converted.
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'center' }}>
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('dateFormats')}
+          id="section-header-date-formats"
+        >
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-              Screen Display Format
-            </label>
-            <select
-              value={dateFormatStyle}
-              onChange={(e) => setDateFormatStyle(e.target.value as DateFormatStyle)}
-              style={{
-                width: '100%',
-                background: 'var(--input-bg)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                color: 'var(--text-primary)',
-                fontSize: 13,
-                outline: 'none',
-              }}
-            >
-              <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 1985-04-12, ISO Standard)</option>
-              <option value="DD Month YYYY">DD Month YYYY (e.g. 12 April 1985, Written)</option>
-              <option value="DD.MM.YYYY">DD.MM.YYYY (e.g. 12.04.1985, European)</option>
-              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 04/12/1985, US)</option>
-            </select>
-          </div>
-
-          {/* Sample Format Preview */}
-          <div style={{ background: 'var(--nav-tab-bg)', padding: '12px 18px', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Example output on cards:</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary-color, #6366f1)' }}>
-              Birth: {formatTreeDate('1985-04-12', dateFormatStyle)}
+            <div style={sectionTitleStyle}>
+              <span>📅</span> Date Formats & Date Picker Configuration
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2 }}>
-              Marriage: {formatTreeDate('2010-09-25', dateFormatStyle)}
+            <div style={sectionSubtextStyle}>
+              Choose how dates are formatted on nodes, cards, and drawers. All common input formats are automatically recognized and converted.
             </div>
           </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              transform: expandedSections.dateFormats ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s ease',
+              display: 'inline-block',
+              marginLeft: 12,
+            }}
+          >
+            ▼
+          </span>
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(99, 102, 241, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-          💡 <strong>Smart Parser:</strong> When typing in the Date Picker, you can enter dates in <code>YYYY-MM-DD</code>, <code>YYYY-MM</code>, <code>YYYY</code>, <code>DD.MM.YYYY</code>, <code>DD.MM</code>, <code>DD</code>, <code>MM.YYYY</code>, <code>MM/DD/YYYY</code>, or <code>MM/DD</code>. The system detects the format on the fly and standardizes it automatically.
-        </div>
+        {expandedSections.dateFormats && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'center' }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
+                  Screen Display Format
+                </label>
+                <select
+                  value={dateFormatStyle}
+                  onChange={(e) => setDateFormatStyle(e.target.value as DateFormatStyle)}
+                  style={{
+                    width: '100%',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 8,
+                    padding: '10px 14px',
+                    color: 'var(--text-primary)',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                >
+                  <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 1985-04-12, ISO Standard)</option>
+                  <option value="DD Month YYYY">DD Month YYYY (e.g. 12 April 1985, Written)</option>
+                  <option value="DD.MM.YYYY">DD.MM.YYYY (e.g. 12.04.1985, European)</option>
+                  <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 04/12/1985, US)</option>
+                </select>
+              </div>
+
+              {/* Sample Format Preview */}
+              <div style={{ background: 'var(--nav-tab-bg)', padding: '12px 18px', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Example output on cards:</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary-color, #6366f1)' }}>
+                  Birth: {formatTreeDate('1985-04-12', dateFormatStyle)}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2 }}>
+                  Marriage: {formatTreeDate('2010-09-25', dateFormatStyle)}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(99, 102, 241, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+              💡 <strong>Smart Parser:</strong> When typing in the Date Picker, you can enter dates in <code>YYYY-MM-DD</code>, <code>YYYY-MM</code>, <code>YYYY</code>, <code>DD.MM.YYYY</code>, <code>DD.MM</code>, <code>DD</code>, <code>MM.YYYY</code>, <code>MM/DD/YYYY</code>, or <code>MM/DD</code>. The system detects the format on the fly and standardizes it automatically.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------------- */}
       {/* 4. Life Facts & Relatives Configuration */}
       {/* --------------------------------------------------------------------- */}
       <div style={cardStyle}>
-        <div>
-          <div style={sectionTitleStyle}>
-            <span>📜</span> Person Life Facts & Relatives Filtering
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('lifeFacts')}
+          id="section-header-life-facts"
+        >
+          <div>
+            <div style={sectionTitleStyle}>
+              <span>📜</span> Person Life Facts & Relatives Filtering
+            </div>
+            <div style={sectionSubtextStyle}>
+              Configure what facts and whose milestones appear when exploring a person's life timeline.
+            </div>
           </div>
-          <div style={sectionSubtextStyle}>
-            Configure what facts and whose milestones appear when exploring a person's life timeline.
-          </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              transform: expandedSections.lifeFacts ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s ease',
+              display: 'inline-block',
+              marginLeft: 12,
+            }}
+          >
+            ▼
+          </span>
         </div>
 
-        {/* Checkbox Group 1: Whose facts to show */}
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>
-            1. Whose Life Facts to Display in Person Timeline
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showOwnFacts}
-                onChange={(e) => setLifeFactsConfig({ showOwnFacts: e.target.checked })}
-              />
-              <span>👤 Person's Own Facts</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showParentsFacts}
-                onChange={(e) => setLifeFactsConfig({ showParentsFacts: e.target.checked })}
-              />
-              <span>👨‍👩‍👧 Parents' Facts</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showSiblingsFacts}
-                onChange={(e) => setLifeFactsConfig({ showSiblingsFacts: e.target.checked })}
-              />
-              <span>👫 Siblings' Facts</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showChildrenFacts}
-                onChange={(e) => setLifeFactsConfig({ showChildrenFacts: e.target.checked })}
-              />
-              <span>👶 Children's Facts</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showGrandparentsFacts}
-                onChange={(e) => setLifeFactsConfig({ showGrandparentsFacts: e.target.checked })}
-              />
-              <span>👴 Grandparents' Facts</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={lifeFactsConfig.showSpousesFacts}
-                onChange={(e) => setLifeFactsConfig({ showSpousesFacts: e.target.checked })}
-              />
-              <span>💍 Spouses & Partners</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Checkbox Group 2: Categories to include */}
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>
-            2. Fact Categories to Include
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            {[
-              { type: 'BIRTH', label: '👶 Births & Milestones' },
-              { type: 'DEATH', label: '🕯️ Memorials / Passings' },
-              { type: 'MARRIAGE', label: '💍 Marriages' },
-              { type: 'DIVORCE', label: '💔 Divorces' },
-              { type: 'RELATIONSHIP', label: '💞 Relationships' },
-              { type: 'GRADUATION', label: '🎓 Education' },
-              { type: 'CAREER', label: '💼 Career & Jobs' },
-              { type: 'RELOCATION', label: '📍 Relocations' },
-              { type: 'TRAVEL', label: '✈️ Journeys & Travels' },
-              { type: 'MILITARY', label: '🎖️ Military Service' },
-              { type: 'CUSTOM', label: '📝 Custom Stories' },
-            ].map((cat) => {
-              const isChecked = lifeFactsConfig.includedFactTypes?.includes(cat.type as any);
-              return (
-                <label key={cat.type} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-primary)', cursor: 'pointer' }}>
+        {expandedSections.lifeFacts && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+            {/* Checkbox Group 1: Whose facts to show */}
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>
+                1. Whose Life Facts to Display in Person Timeline
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
-                    checked={isChecked}
-                    onChange={(e) => {
-                      const current = lifeFactsConfig.includedFactTypes || [];
-                      const next = e.target.checked
-                        ? [...current, cat.type as any]
-                        : current.filter((t) => t !== cat.type);
-                      setLifeFactsConfig({ includedFactTypes: next });
-                    }}
+                    checked={lifeFactsConfig.showOwnFacts}
+                    onChange={(e) => setLifeFactsConfig({ showOwnFacts: e.target.checked })}
                   />
-                  <span>{cat.label}</span>
+                  <span>👤 Person's Own Facts</span>
                 </label>
-              );
-            })}
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={lifeFactsConfig.showParentsFacts}
+                    onChange={(e) => setLifeFactsConfig({ showParentsFacts: e.target.checked })}
+                  />
+                  <span>👨‍👩‍👧 Parents' Facts</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={lifeFactsConfig.showSiblingsFacts}
+                    onChange={(e) => setLifeFactsConfig({ showSiblingsFacts: e.target.checked })}
+                  />
+                  <span>👫 Siblings' Facts</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={lifeFactsConfig.showChildrenFacts}
+                    onChange={(e) => setLifeFactsConfig({ showChildrenFacts: e.target.checked })}
+                  />
+                  <span>👶 Children's Facts</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={lifeFactsConfig.showGrandparentsFacts}
+                    onChange={(e) => setLifeFactsConfig({ showGrandparentsFacts: e.target.checked })}
+                  />
+                  <span>👴 Grandparents' Facts</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={lifeFactsConfig.showSpousesFacts}
+                    onChange={(e) => setLifeFactsConfig({ showSpousesFacts: e.target.checked })}
+                  />
+                  <span>💍 Spouses & Partners</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Checkbox Group 2: Categories to include */}
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>
+                2. Fact Categories to Include
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                {[
+                  { type: 'BIRTH', label: '👶 Births & Milestones' },
+                  { type: 'DEATH', label: '🕯️ Memorials / Passings' },
+                  { type: 'MARRIAGE', label: '💍 Marriages' },
+                  { type: 'DIVORCE', label: '💔 Divorces' },
+                  { type: 'RELATIONSHIP', label: '💞 Relationships' },
+                  { type: 'GRADUATION', label: '🎓 Education' },
+                  { type: 'CAREER', label: '💼 Career & Jobs' },
+                  { type: 'RELOCATION', label: '📍 Relocations' },
+                  { type: 'TRAVEL', label: '✈️ Journeys & Travels' },
+                  { type: 'MILITARY', label: '🎖️ Military Service' },
+                  { type: 'CUSTOM', label: '📝 Custom Stories' },
+                ].map((cat) => {
+                  const isChecked = lifeFactsConfig.includedFactTypes?.includes(cat.type as any);
+                  return (
+                    <label key={cat.type} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const current = lifeFactsConfig.includedFactTypes || [];
+                          const next = e.target.checked
+                            ? [...current, cat.type as any]
+                            : current.filter((t) => t !== cat.type);
+                          setLifeFactsConfig({ includedFactTypes: next });
+                        }}
+                      />
+                      <span>{cat.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------------- */}
       {/* 5. Export / Import Tree (CSV) */}
       {/* --------------------------------------------------------------------- */}
       <div style={cardStyle}>
-        <div>
-          <div style={sectionTitleStyle}>
-            <span>📁</span> Export & Import Family Tree (.csv)
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('csvBackup')}
+          id="section-header-csv-backup"
+        >
+          <div>
+            <div style={sectionTitleStyle}>
+              <span>📁</span> Export & Import Family Tree (.csv)
+            </div>
+            <div style={sectionSubtextStyle}>
+              Backup your genealogical tree or restore persons, unions, and child relationships from a standardized CSV spreadsheet.
+            </div>
           </div>
-          <div style={sectionSubtextStyle}>
-            Backup your genealogical tree or restore persons, unions, and child relationships from a standardized CSV spreadsheet.
-          </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              transform: expandedSections.csvBackup ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s ease',
+              display: 'inline-block',
+              marginLeft: 12,
+            }}
+          >
+            ▼
+          </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          {/* Export Section */}
-          <div
-            style={{
-              background: 'var(--nav-tab-bg)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 12,
-              padding: 18,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-              📤 Export Current Tree
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Download all <strong>{graphData?.persons?.length || 0} persons</strong> and <strong>{graphData?.unions?.length || 0} family unions</strong> as a comma-separated CSV file.
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
-                }}
-              >
-                📥 Export Tree to CSV
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownloadSample}
-                style={{
-                  background: 'var(--card-bg-solid)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  borderRadius: 8,
-                  padding: '10px 14px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-                title="Download sample template CSV"
-              >
-                📄 Sample CSV
-              </button>
-            </div>
-          </div>
-
-          {/* Import Section */}
-          <div
-            style={{
-              background: 'var(--nav-tab-bg)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 12,
-              padding: 18,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-              📥 Import Tree from CSV
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Select a <code>.csv</code> file or paste CSV content below to import members and unions into this tree.
-            </div>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".csv,text/csv"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  background: 'var(--card-bg-solid)',
-                  border: '1px dashed var(--primary-color, #6366f1)',
-                  color: 'var(--text-primary)',
-                  borderRadius: 8,
-                  padding: '8px 14px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                }}
-              >
-                📂 Choose .CSV File
-              </button>
-            </div>
-
-            {/* Import Status / Preview */}
-            {importStatusMessage && (
-              <div
-                style={{
-                  fontSize: 12,
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  background:
-                    importStatusType === 'success'
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : importStatusType === 'error'
-                      ? 'rgba(239, 68, 68, 0.15)'
-                      : 'rgba(99, 102, 241, 0.15)',
-                  color:
-                    importStatusType === 'success'
-                      ? '#10b981'
-                      : importStatusType === 'error'
-                      ? '#ef4444'
-                      : 'var(--text-primary)',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                {importStatusMessage}
+        {expandedSections.csvBackup && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, paddingTop: 4 }}>
+            {/* Export Section */}
+            <div
+              style={{
+                background: 'var(--nav-tab-bg)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 12,
+                padding: 18,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                📤 Export Current Tree
               </div>
-            )}
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Download all <strong>{graphData?.persons?.length || 0} persons</strong> and <strong>{graphData?.unions?.length || 0} family unions</strong> as a comma-separated CSV file.
+              </div>
 
-            {importStats && importStats.personsCount > 0 && (
-              <button
-                type="button"
-                disabled={isImporting}
-                onClick={handleExecuteImport}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  marginTop: 'auto',
-                }}
-              >
-                {isImporting ? 'Importing...' : `Confirm Import (${importStats.personsCount} persons, ${importStats.unionsCount} unions)`}
-              </button>
-            )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px 16px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  }}
+                >
+                  📥 Export Tree to CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadSample}
+                  style={{
+                    background: 'var(--card-bg-solid)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    borderRadius: 8,
+                    padding: '10px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title="Download sample template CSV"
+                >
+                  📄 Sample CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Import Section */}
+            <div
+              style={{
+                background: 'var(--nav-tab-bg)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 12,
+                padding: 18,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                📥 Import Tree from CSV
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Select a <code>.csv</code> file or paste CSV content below to import members and unions into this tree.
+              </div>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv,text/csv"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+              />
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    background: 'var(--card-bg-solid)',
+                    border: '1px dashed var(--primary-color, #6366f1)',
+                    color: 'var(--text-primary)',
+                    borderRadius: 8,
+                    padding: '8px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  📂 Choose .CSV File
+                </button>
+              </div>
+
+              {/* Import Status / Preview */}
+              {importStatusMessage && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    background:
+                      importStatusType === 'success'
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : importStatusType === 'error'
+                        ? 'rgba(239, 68, 68, 0.15)'
+                        : 'rgba(99, 102, 241, 0.15)',
+                    color:
+                      importStatusType === 'success'
+                        ? '#10b981'
+                        : importStatusType === 'error'
+                        ? '#ef4444'
+                        : 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  {importStatusMessage}
+                </div>
+              )}
+
+              {importStats && importStats.personsCount > 0 && (
+                <button
+                  type="button"
+                  disabled={isImporting}
+                  onClick={handleExecuteImport}
+                  style={{
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px 16px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    marginTop: 'auto',
+                  }}
+                >
+                  {isImporting ? 'Importing...' : `Confirm Import (${importStats.personsCount} persons, ${importStats.unionsCount} unions)`}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

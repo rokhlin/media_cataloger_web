@@ -90,4 +90,53 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(content.includes('showParentsFacts'), 'PersonTimelineView should check showParentsFacts');
     assert.ok(content.includes('showChildrenFacts'), 'PersonTimelineView should check showChildrenFacts');
   });
+
+  it('should verify TreeSettingsTab.tsx has expandable sections and correct subtext margins (Issue 12)', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    // Expandable sections check
+    assert.ok(content.includes('expandedSections'), 'TreeSettingsTab should maintain expandedSections state');
+    assert.ok(content.includes('toggleSection'), 'TreeSettingsTab should provide toggleSection handler');
+    assert.ok(content.includes('toggle-all-sections-btn'), 'TreeSettingsTab should have Collapse/Expand All button');
+
+    // Section headers clickable
+    assert.ok(content.includes('section-header-view-styles'), 'View styles section should have clickable header');
+    assert.ok(content.includes('section-header-celebrations'), 'Celebrations section should have clickable header');
+    assert.ok(content.includes('section-header-date-formats'), 'Date formats section should have clickable header');
+    assert.ok(content.includes('section-header-life-facts'), 'Life facts section should have clickable header');
+    assert.ok(content.includes('section-header-csv-backup'), 'CSV backup section should have clickable header');
+
+    // Issue 12: Subtext margins should NOT overlap title (no negative marginTop)
+    assert.ok(!content.includes('marginTop: -8'), 'sectionSubtextStyle should NOT have negative marginTop causing overlap');
+    assert.ok(content.includes('marginTop: 6'), 'sectionSubtextStyle should have positive marginTop for clean spacing');
+  });
+
+  it('should verify Celebration & Milestone Badges support icon-only mode with hover details', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    assert.ok(content.includes('celebration-mode-icon-and-text'), 'Settings should have Icon & Text selector');
+    assert.ok(content.includes('celebration-mode-icon-only'), 'Settings should have Icon only selector');
+    assert.ok(content.includes('contentDisplay: \'icon_only\''), 'Settings should allow setting contentDisplay to icon_only');
+
+    const nodePath = path.join(componentsDir, 'canvas', 'nodes', 'PersonCardNode.tsx');
+    const nodeContent = fs.readFileSync(nodePath, 'utf8');
+    assert.ok(nodeContent.includes('isIconOnly = celebrationConfig.contentDisplay === \'icon_only\''), 'PersonCardNode should check icon_only');
+    assert.ok(nodeContent.includes('title={detailedTooltip}'), 'PersonCardNode should set detailed hover tooltip');
+  });
+
+  it('should verify ELK layout worker engine and service filter out empty/orphaned unions (Issue 13)', () => {
+    const workerPath = path.join(componentsDir, '..', 'workers', 'elk-layout.worker.ts');
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+
+    // ELK worker should ensure only valid unions with partners or multiple children are rendered
+    assert.ok(workerContent.includes('validPartners.length >= 2'), 'Should allow valid partner unions');
+    assert.ok(workerContent.includes('validPartners.length >= 1 && validChildren.length >= 1'), 'Should allow single parent unions');
+    assert.ok(workerContent.includes('validPartners.length === 0 && validChildren.length >= 2'), 'Should allow sibling unions');
+
+    const servicePath = path.resolve(componentsDir, '..', '..', '..', '..', 'server', 'family-tree', 'family-tree.service.ts');
+    const serviceContent = fs.readFileSync(servicePath, 'utf8');
+    assert.ok(serviceContent.includes('cleanUpOrphanedUnions'), 'FamilyTreeService should have cleanUpOrphanedUnions');
+  });
 });
