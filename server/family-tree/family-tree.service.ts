@@ -432,25 +432,59 @@ export class FamilyTreeService {
       }
 
       case 'CHILD': {
-        // Find existing primary spouse union or create single-parent union for target
         const db = this.dbService.getDb();
-        const existingUnion = db
-          .prepare(`
-            SELECT union_id
-            FROM ft_union_partners
-            WHERE person_id = ?
-            LIMIT 1
-          `)
-          .get(target.id) as { union_id: string } | undefined;
+        const otherParentId = dto.other_parent_id?.trim();
 
-        if (existingUnion) {
-          union = this.getUnionById(existingUnion.union_id);
+        if (otherParentId && otherParentId !== 'unknown') {
+          // Verify that otherParent exists in the tree
+          this.getPersonById(otherParentId);
+
+          // Find an existing union between target and otherParent
+          const existingUnion = db
+            .prepare(`
+              SELECT u.id
+              FROM ft_unions u
+              JOIN ft_union_partners up1 ON u.id = up1.union_id AND up1.person_id = ?
+              JOIN ft_union_partners up2 ON u.id = up2.union_id AND up2.person_id = ?
+              WHERE u.tree_id = ?
+              LIMIT 1
+            `)
+            .get(target.id, otherParentId, target.tree_id) as { id: string } | undefined;
+
+          if (existingUnion) {
+            union = this.getUnionById(existingUnion.id);
+          } else {
+            union = this.createUnion({
+              tree_id: target.tree_id,
+              partner_ids: [target.id, otherParentId],
+              union_type: 'MARRIAGE',
+            });
+          }
         } else {
-          union = this.createUnion({
-            tree_id: target.tree_id,
-            partner_ids: [target.id],
-            union_type: 'MARRIAGE',
-          });
+          // Unknown second parent -> keep the child's second parent empty
+          const singleParentUnion = db
+            .prepare(`
+              SELECT u.id
+              FROM ft_unions u
+              JOIN ft_union_partners up ON u.id = up.union_id
+              WHERE u.tree_id = ? AND u.id IN (
+                SELECT union_id FROM ft_union_partners WHERE person_id = ?
+              )
+              GROUP BY u.id
+              HAVING COUNT(up.person_id) = 1
+              LIMIT 1
+            `)
+            .get(target.tree_id, target.id) as { id: string } | undefined;
+
+          if (singleParentUnion) {
+            union = this.getUnionById(singleParentUnion.id);
+          } else {
+            union = this.createUnion({
+              tree_id: target.tree_id,
+              partner_ids: [target.id],
+              union_type: 'MARRIAGE',
+            });
+          }
         }
 
         this.addChildToUnion(union.id, {

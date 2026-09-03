@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { Gender, FiliationType } from '../../types/tree.types.js';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import type { Gender, FiliationType, TreeGraphData } from '../../types/tree.types.js';
 
 interface QuickAddRelativeModalProps {
   isOpen: boolean;
@@ -7,9 +7,11 @@ interface QuickAddRelativeModalProps {
   targetPersonId: string | null;
   targetPersonName?: string;
   initialRelationship?: 'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING';
+  graphData?: TreeGraphData | null;
   onAddRelative: (data: {
     relationship: 'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING';
     target_person_id: string;
+    other_parent_id?: string;
     person: Record<string, any>;
     filiation?: FiliationType;
   }) => Promise<void>;
@@ -21,6 +23,7 @@ export const QuickAddRelativeModal = ({
   targetPersonId,
   targetPersonName,
   initialRelationship = 'CHILD',
+  graphData,
   onAddRelative,
 }: QuickAddRelativeModalProps) => {
   const [relationship, setRelationship] = useState<'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING'>(initialRelationship);
@@ -29,12 +32,50 @@ export const QuickAddRelativeModal = ({
   const [lastName, setLastName] = useState('');
   const [maidenName, setMaidenName] = useState('');
   const [gender, setGender] = useState<Gender>('UNKNOWN');
+  // Selected spouse ID (or empty string for unknown / single parent) when adding a child
+  const [otherParentId, setOtherParentId] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [birthPlace, setBirthPlace] = useState('');
   const [isLiving, setIsLiving] = useState(true);
   const [deathDate, setDeathDate] = useState('');
   const [filiation, setFiliation] = useState<FiliationType>('BIOLOGICAL');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Compute all spouses/partners of targetPersonId from graphData
+  const spouses = useMemo(() => {
+    if (!graphData || !targetPersonId) return [];
+    const spouseMap = new Map<string, { id: string; name: string }>();
+
+    const userUnions = (graphData.unions || []).filter((u) => u.partner_ids.includes(targetPersonId));
+    for (const u of userUnions) {
+      for (const pid of u.partner_ids) {
+        if (pid !== targetPersonId && !spouseMap.has(pid)) {
+          const person = (graphData.persons || []).find((p) => p.id === pid);
+          const name = person?.full_name || [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Unknown Person';
+          const unionStatus = u.union_type === 'DIVORCED' ? ' (Divorced)' : u.union_type === 'SEPARATED' ? ' (Separated)' : '';
+          spouseMap.set(pid, {
+            id: pid,
+            name: `${name}${unionStatus}`,
+          });
+        }
+      }
+    }
+    return Array.from(spouseMap.values());
+  }, [graphData, targetPersonId]);
+
+  // When modal opens, initialize relationship and default spouse if exactly 1 spouse
+  const prevOpenRef = useRef(false);
+  useEffect(() => {
+    if (isOpen && !prevOpenRef.current) {
+      setRelationship(initialRelationship);
+      if (initialRelationship === 'CHILD' && spouses.length === 1) {
+        setOtherParentId(spouses[0].id);
+      } else {
+        setOtherParentId('');
+      }
+    }
+    prevOpenRef.current = isOpen;
+  }, [isOpen, initialRelationship, spouses]);
 
   if (!isOpen || !targetPersonId) return null;
 
@@ -46,6 +87,8 @@ export const QuickAddRelativeModal = ({
     try {
       await onAddRelative({
         relationship,
+        // Include other_parent_id only if a spouse was selected (not empty / unknown)
+        ...(relationship === 'CHILD' && otherParentId.trim() ? { other_parent_id: otherParentId.trim() } : {}),
         target_person_id: targetPersonId,
         person: {
           first_name: firstName.trim(),
@@ -70,6 +113,7 @@ export const QuickAddRelativeModal = ({
       setBirthPlace('');
       setDeathDate('');
       setIsLiving(true);
+      setOtherParentId('');
     } catch {
       // ignore
     } finally {
@@ -192,7 +236,12 @@ export const QuickAddRelativeModal = ({
                       alignItems: 'center',
                       gap: 8,
                     }}
-                    onClick={() => setRelationship(rel.id as any)}
+                    onClick={() => {
+                      setRelationship(rel.id as any);
+                      if (rel.id === 'CHILD' && spouses.length === 1 && !otherParentId) {
+                        setOtherParentId(spouses[0].id);
+                      }
+                    }}
                   >
                     <span>{rel.icon}</span>
                     <span>{rel.label}</span>
@@ -200,6 +249,31 @@ export const QuickAddRelativeModal = ({
                 );
               })}
             </div>
+            {/* If adding a child, allow specifying other parent from spouse list or unknown */}
+            {relationship === 'CHILD' && (
+              <div style={{ marginTop: 10 }}>
+                <label style={labelStyle}>Other Parent</label>
+                <select
+                  value={otherParentId}
+                  onChange={(e) => setOtherParentId(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Unknown</option>
+                  {spouses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  {otherParentId
+                    ? 'Child will be linked to this spouse as second parent.'
+                    : spouses.length === 0
+                    ? 'No spouse on record. Child\'s second parent will remain empty.'
+                    : 'Selecting "Unknown" keeps the child\'s second parent empty.'}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Names */}

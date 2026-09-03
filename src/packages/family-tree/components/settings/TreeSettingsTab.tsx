@@ -50,6 +50,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   const [importStats, setImportStats] = useState<{ personsCount: number; unionsCount: number; errors: string[] } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
+  const [importStatusType, setImportStatusType] = useState<'info' | 'success' | 'error'>('info');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Expandable sections state

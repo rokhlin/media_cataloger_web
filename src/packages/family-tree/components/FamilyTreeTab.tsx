@@ -245,6 +245,7 @@ export const FamilyTreeTab = () => {
           targetPersonId={quickAddTargetPersonId}
           targetPersonName={quickAddTargetPerson?.full_name || quickAddTargetPerson?.first_name}
           initialRelationship={quickAddInitialRelation}
+          graphData={graphData}
           onAddRelative={quickAddRelative}
         />
 

@@ -416,6 +416,10 @@ export class QuickAddRelativeDto {
   @IsString()
   target_person_id: string;
 
+  @IsOptional()
+  @IsString()
+  other_parent_id?: string;
+
   @ValidateNested()
   @Type(() => CreatePersonDto)
   person: CreatePersonDto;

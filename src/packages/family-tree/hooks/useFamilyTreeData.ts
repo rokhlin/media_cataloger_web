@@ -88,6 +88,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
   const quickAddRelative = async (data: {
     relationship: 'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING';
     target_person_id: string;
+    other_parent_id?: string;
     person: Record<string, any>;
     filiation?: string;
   }) => {

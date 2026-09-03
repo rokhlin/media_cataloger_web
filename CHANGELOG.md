@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automated Kinship Calculation Engine (`KinshipEngineService`) resolving complex multi-generation biological and non-biological family relationships.
   - Life Events & Timeline system (`FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`) with gallery photo attachment picker.
   - Graph integrity & cycle detection service (`GraphIntegrityService`) preventing circular parentage anomalies.
-  - Interactive modals: `PersonDetailDrawer`, `QuickAddRelativeModal`, and `FaceLinkModal` linking recognized media faces to tree persons.
+  - Interactive modals: `PersonDetailDrawer`, `FaceLinkModal`, and `QuickAddRelativeModal` (with spouse dropdown and unknown second parent options for child addition).
 - **Metadata Editing & In-Viewer Editor (`MetadataEditorModal`)**:
   - Full support for viewing, modifying, and persisting metadata (summaries EN/RU, descriptions EN/RU, environment, lighting, weather, time of day, location, capture date, camera make/model/lens, OCR text, audio transcriptions, and tag chips).
   - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
