@@ -52,6 +52,9 @@ export const PersonDetailDrawer = ({
   const [bio, setBio] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Spouse Union Editing State
   const [editingUnion, setEditingUnion] = useState<TreeGraphUnion | null>(null);
@@ -83,6 +86,8 @@ export const PersonDetailDrawer = ({
       setDeathPlace(person.death_place || '');
       setBio(person.bio || '');
       setIsEditingBio(false);
+      setShowDeleteConfirm(false);
+      setDeleteError(null);
 
       // Load full person context (relatives)
       getPersonContext({ personId: person.id }).then((ctx) => {
@@ -129,14 +134,17 @@ export const PersonDetailDrawer = ({
     });
   };
 
-  const handleDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${fullName} from the family tree?`)) {
-      try {
-        await onDeletePerson(person.id);
-        closeDrawer();
-      } catch (err: any) {
-        window.alert(err?.message || 'Failed to delete person.');
-      }
+  const handleDeleteConfirmed = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDeletePerson(person.id);
+      setShowDeleteConfirm(false);
+      closeDrawer();
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to delete person.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -381,7 +389,7 @@ export const PersonDetailDrawer = ({
         <button
           type="button"
           style={{
-            background: 'rgba(239, 68, 68, 0.15)',
+            background: showDeleteConfirm ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.15)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             color: 'var(--error-color, #ef4444)',
             borderRadius: 6,
@@ -391,11 +399,78 @@ export const PersonDetailDrawer = ({
             cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
-          onClick={handleDelete}
+          onClick={() => {
+            setShowDeleteConfirm((v) => !v);
+            setDeleteError(null);
+          }}
         >
           🗑️ Delete
         </button>
       </div>
+
+      {/* Inline Delete Confirmation Bar */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            margin: '0 20px 0',
+            padding: '10px 14px',
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--error-color, #ef4444)', fontWeight: 600, flex: 1 }}>
+            ⚠️ Permanently delete <strong>{fullName}</strong>? This cannot be undone.
+          </span>
+          {deleteError && (
+            <span style={{ fontSize: 11, color: 'var(--error-color, #ef4444)', width: '100%', marginTop: 2 }}>
+              {deleteError}
+            </span>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                borderRadius: 6,
+                padding: '4px 12px',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{
+                background: 'rgba(239, 68, 68, 0.85)',
+                border: 'none',
+                color: '#ffffff',
+                borderRadius: 6,
+                padding: '4px 12px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.7 : 1,
+              }}
+              onClick={handleDeleteConfirmed}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting…' : 'Confirm Delete'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div
