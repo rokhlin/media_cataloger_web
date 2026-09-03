@@ -89,6 +89,8 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(content.includes('relativeEvents'), 'PersonTimelineView should track relativeEvents');
     assert.ok(content.includes('showParentsFacts'), 'PersonTimelineView should check showParentsFacts');
     assert.ok(content.includes('showChildrenFacts'), 'PersonTimelineView should check showChildrenFacts');
+    assert.ok(content.includes('filterRelativeEvents'), 'PersonTimelineView should filter relative events');
+    assert.ok(content.includes('deduplicateTimelineEvents'), 'PersonTimelineView should deduplicate timeline events');
   });
 
   it('should verify TreeSettingsTab.tsx has expandable sections and correct subtext margins (Issue 12)', () => {

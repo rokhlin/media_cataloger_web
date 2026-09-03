@@ -31,6 +31,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `.agents/rules/database_migrations.md`: Comprehensive SQLite schema evolution, migration, and persistence rules.
 
 ### Fixed
+- **Family Tree Life Story Facts Deduplication**:
+  - Resolved duplicated facts appearing on a person's timeline when exploring with relatives enabled (spouses, parents, siblings, children).
+  - Prevented reciprocal `MARRIAGE` and `DIVORCE` events from spouses from duplicating the person's own union records.
+  - Filtered out a spouse's marriages to third parties (different spouses) and children with other spouses from being wrongly rendered on the person's life story.
+  - Eliminated duplicate child birth facts where parent's `CHILD_BORN` event and the child's `BIRTH` event were both rendered simultaneously.
+  - Preserved single display of parents' marriage and divorce on child timelines.
+  - Added unit test suite `timelineDeduplication.test.ts` verifying exact lifecycle event filtering.
 - **Duplicates Manager Card & Checkbox Selection**:
   - Fixed issue where clicking a duplicate item checkbox or thumbnail image immediately closed Duplicates Manager and returned to the Media gallery tab.
   - Added `e.stopPropagation()` on checkbox click to prevent event bubbling to parent click handlers.

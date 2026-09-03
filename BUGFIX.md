@@ -26,7 +26,7 @@ Each bug is categorized by component and marked with its current status.
   - **Affected version**: v0.3.x
   - **Fixed in**: v0.4.0 (Unreleased)
   - **References**: Conversation `3710b459` – *Troubleshooting Child Delete Button*
-
+- [ ] 🟠 **Filter facts on Family Tree** - The filter facts on the Family Tree showing in a list that should scroll horizontally. this is not a good user experience. fit in width of screen, add multiline support. And show only filter for facts existing for this person. 
 ---
 
 ## 🖼️ UI / UX & Visual Features

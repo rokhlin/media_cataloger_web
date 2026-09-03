@@ -5,6 +5,7 @@ import type { PersonEventRecord } from '../../types/event.types.js';
 import { FactCard } from './FactCard.js';
 import { AddEditFactModal } from './AddEditFactModal.js';
 import { GalleryPhotoPicker } from './GalleryPhotoPicker.js';
+import { filterRelativeEvents, deduplicateTimelineEvents } from '../../utils/timelineDeduplication.js';
 
 interface PersonTimelineViewProps {
   personId: string;
@@ -79,29 +80,25 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
           relativesToFetch.push(...ctx.immediateFamily.spouses);
         }
 
-        // Build a set of child person IDs that the current person already has
-        // their own CHILD_BORN records for. Used to skip duplicates from relatives
-        // while preserving unique children (e.g. spouse's kids from a prior relationship).
-        const ownChildBornIds = new Set(
-          events
-            .filter((e) => e.event_type === 'CHILD_BORN' && e.source_node_id)
-            .map((e) => e.source_node_id as string),
-        );
+        const seenUnionEventKeys = new Set<string>();
+        const seenChildBornIds = new Set<string>();
+        const seenBirthPersonIds = new Set<string>();
 
         const allFetched: PersonEventRecord[] = [];
         for (const rel of relativesToFetch) {
           const res = await fetch(`/api/family-tree/persons/${rel.id}/timeline`);
           if (res.ok) {
             const evts: PersonEventRecord[] = await res.json();
-            for (const ev of evts) {
-              // Skip CHILD_BORN events about the current person themselves
-              // (e.g. "Daughter Liliya was born" on mother's timeline → Liliya's own BIRTH covers it)
-              if (ev.event_type === 'CHILD_BORN' && ev.source_node_id === personId) continue;
-              // Skip CHILD_BORN for children the current person already has their own record for
-              // (shared children like Yan who appear on both Liliya's and Anton's timelines)
-              // BUT allow through if the child is NOT in the current person's own set
-              // (e.g. Anton's child from a prior relationship → unique to his story)
-              if (ev.event_type === 'CHILD_BORN' && ev.source_node_id && ownChildBornIds.has(ev.source_node_id)) continue;
+            const filtered = filterRelativeEvents(evts, rel, {
+              currentPersonId: personId,
+              currentPersonName: personName,
+              ownEvents: events,
+              seenUnionEventKeys,
+              seenChildBornIds,
+              seenBirthPersonIds,
+            });
+
+            for (const ev of filtered) {
               allFetched.push({
                 ...ev,
                 id: `rel_${ev.id}`,
@@ -125,6 +122,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     };
   }, [
     personId,
+    personName,
     events,
     lifeFactsConfig.showParentsFacts,
     lifeFactsConfig.showSiblingsFacts,
@@ -133,15 +131,8 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
   ]);
 
   const filteredEvents = useMemo(() => {
-    let result: PersonEventRecord[] = [];
-
-    if (lifeFactsConfig.showOwnFacts !== false) {
-      result = [...result, ...events];
-    }
-
-    if (relativeEvents.length > 0) {
-      result = [...result, ...relativeEvents];
-    }
+    const ownPart = lifeFactsConfig.showOwnFacts !== false ? events : [];
+    let result = deduplicateTimelineEvents(ownPart, relativeEvents, personId);
 
     // Filter by lifeFactsConfig
     if (lifeFactsConfig?.includedFactTypes && lifeFactsConfig.includedFactTypes.length > 0) {
