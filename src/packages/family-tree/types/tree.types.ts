@@ -16,6 +16,35 @@ export type KinshipCategory =
   | 'DISTANT'
   | 'UNKNOWN';
 
+export type NodeViewStyle = 'default' | 'circle' | 'square';
+
+export type DateFormatStyle =
+  | 'YYYY-MM-DD'
+  | 'DD Month YYYY'
+  | 'DD.MM.YYYY'
+  | 'MM/DD/YYYY';
+
+export interface LifeFactsFilterConfig {
+  showOwnFacts: boolean;
+  showParentsFacts: boolean;
+  showSiblingsFacts: boolean;
+  showChildrenFacts: boolean;
+  showGrandparentsFacts: boolean;
+  showSpousesFacts: boolean;
+  includedFactTypes: string[];
+}
+
+export interface CelebrationBadgeConfig {
+  enabled: boolean;
+  daysThreshold: number;
+  showBirthday: boolean;
+  showAnniversary: boolean;
+  showMemorial: boolean;
+  badgeStyle: 'pill' | 'glow' | 'ribbon';
+  badgeColor: string;
+  customIcon?: string;
+}
+
 export interface TreeRecord {
   id: string;
   name: string;

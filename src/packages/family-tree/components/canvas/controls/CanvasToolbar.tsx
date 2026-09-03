@@ -11,7 +11,7 @@ interface CanvasToolbarProps {
 
 export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout }: CanvasToolbarProps) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
-  const { layoutDirection, setLayoutDirection, selectPerson } = useFamilyTreeStore();
+  const { layoutDirection, setLayoutDirection, selectPerson, setActiveSubTab } = useFamilyTreeStore();
 
   const handleFocusRoot = () => {
     if (!graphData?.root_person_id) return;
@@ -90,6 +90,16 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
 
       <button type="button" style={buttonStyle} onClick={onRecalculateLayout} title="Rearrange Layout">
         🔄 Re-layout
+      </button>
+
+      <button
+        type="button"
+        id="toolbar-tree-settings-btn"
+        style={buttonStyle}
+        onClick={() => setActiveSubTab('settings')}
+        title="Open Tree Settings, Styles, Badges & CSV Backup"
+      >
+        ⚙️ Settings
       </button>
 
       <button

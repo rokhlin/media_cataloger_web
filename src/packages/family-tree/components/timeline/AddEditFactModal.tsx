@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { PersonEventRecord, EventType } from '../../types/event.types.js';
 import { GalleryPhotoPicker } from './GalleryPhotoPicker.js';
+import { CustomDatePicker } from '../common/CustomDatePicker.js';
 
 interface AddEditFactModalProps {
   isOpen: boolean;
@@ -10,10 +11,15 @@ interface AddEditFactModalProps {
     title: string;
     description?: string;
     event_date?: string;
+    end_date?: string;
     date_is_approximate?: boolean;
     location_name?: string;
     latitude?: number;
     longitude?: number;
+    relationship_target_type?: 'PERSON' | 'FAMILY' | 'EXTERNAL_PERSON' | 'FAMILY_TO_FAMILY';
+    relationship_target_name?: string;
+    relationship_target_id?: string;
+    relationship_status?: string;
     pinned_media?: Array<{ media_id?: string; media_file_path: string; caption?: string }>;
   }) => Promise<void>;
   factToEdit?: PersonEventRecord | null;
@@ -21,12 +27,15 @@ interface AddEditFactModalProps {
 }
 
 const CATEGORIES: Array<{ type: EventType; label: string; icon: string }> = [
-  { type: 'GRADUATION', label: 'Education & Graduation', icon: '🎓' },
-  { type: 'RELOCATION', label: 'Relocation & Living Place', icon: '📍' },
-  { type: 'TRAVEL', label: 'Travel & Expeditions', icon: '✈️' },
-  { type: 'CAREER', label: 'Career & Achievements', icon: '💼' },
-  { type: 'MILITARY', label: 'Military Service', icon: '🎖️' },
-  { type: 'CUSTOM', label: 'Custom Life Event / Story', icon: '📝' },
+  { type: 'GRADUATION', label: '🎓 Education', icon: '🎓' },
+  { type: 'CAREER', label: '💼 Career', icon: '💼' },
+  { type: 'RELOCATION', label: '📍 Relocation', icon: '📍' },
+  { type: 'TRAVEL', label: '✈️ Travel', icon: '✈️' },
+  { type: 'MARRIAGE', label: '💍 Marriage', icon: '💍' },
+  { type: 'DIVORCE', label: '💔 Divorce', icon: '💔' },
+  { type: 'RELATIONSHIP', label: '💞 Relationship', icon: '💞' },
+  { type: 'MILITARY', label: '🎖️ Military', icon: '🎖️' },
+  { type: 'CUSTOM', label: '📝 Custom Story', icon: '📝' },
 ];
 
 export const AddEditFactModal = ({
@@ -40,8 +49,12 @@ export const AddEditFactModal = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [dateApprox, setDateApprox] = useState(false);
   const [locationName, setLocationName] = useState('');
+  const [relTargetType, setRelTargetType] = useState<'PERSON' | 'FAMILY' | 'EXTERNAL_PERSON' | 'FAMILY_TO_FAMILY'>('EXTERNAL_PERSON');
+  const [relTargetName, setRelTargetName] = useState('');
+  const [relStatus, setRelStatus] = useState('dating');
   const [pinnedPhotos, setPinnedPhotos] = useState<Array<{ media_file_path: string; caption?: string }>>([]);
   const [isPhotoPickerOpen, setIsPhotoPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,16 +67,24 @@ export const AddEditFactModal = ({
       setTitle(factToEdit.title);
       setDescription(factToEdit.description || '');
       setEventDate(factToEdit.event_date || '');
+      setEndDate(factToEdit.end_date || '');
       setDateApprox(factToEdit.date_is_approximate === 1);
       setLocationName(factToEdit.location_name || '');
+      setRelTargetType(factToEdit.relationship_target_type || 'EXTERNAL_PERSON');
+      setRelTargetName(factToEdit.relationship_target_name || '');
+      setRelStatus(factToEdit.relationship_status || 'dating');
       setPinnedPhotos(factToEdit.pinned_media?.map((p: any) => ({ media_file_path: p.media_file_path, caption: p.caption || undefined })) || []);
     } else {
       setEventType('GRADUATION');
       setTitle('');
       setDescription('');
       setEventDate('');
+      setEndDate('');
       setDateApprox(false);
       setLocationName('');
+      setRelTargetType('EXTERNAL_PERSON');
+      setRelTargetName('');
+      setRelStatus('dating');
       setPinnedPhotos([]);
     }
   }, [isOpen, factToEdit]);
@@ -81,8 +102,12 @@ export const AddEditFactModal = ({
         title: title.trim(),
         description: description.trim() || undefined,
         event_date: eventDate.trim() || undefined,
+        end_date: endDate.trim() || undefined,
         date_is_approximate: dateApprox,
         location_name: locationName.trim() || undefined,
+        relationship_target_type: ['RELATIONSHIP', 'MARRIAGE', 'DIVORCE'].includes(eventType) ? relTargetType : undefined,
+        relationship_target_name: ['RELATIONSHIP', 'MARRIAGE', 'DIVORCE'].includes(eventType) ? relTargetName.trim() || undefined : undefined,
+        relationship_status: ['RELATIONSHIP', 'MARRIAGE', 'DIVORCE'].includes(eventType) ? relStatus : undefined,
         pinned_media: pinnedPhotos,
       });
       onClose();
@@ -112,6 +137,8 @@ export const AddEditFactModal = ({
     color: 'var(--text-secondary)',
     marginBottom: 4,
   };
+
+  const isRelationshipEvent = ['RELATIONSHIP', 'MARRIAGE', 'DIVORCE'].includes(eventType);
 
   return (
     <>
@@ -156,11 +183,13 @@ export const AddEditFactModal = ({
           >
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                {factToEdit ? 'Edit Life Fact' : 'Add Life Fact or Milestone'}
+                {factToEdit ? 'Edit Life Fact' : 'Add Life Fact / Milestone'}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                {personName ? `Documenting life story for ${personName}` : 'Add a milestone to timeline'}
-              </div>
+              {personName && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Recording event for {personName}
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -222,42 +251,91 @@ export const AddEditFactModal = ({
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Master's Degree in Computer Science from MIT"
+                placeholder={isRelationshipEvent ? 'e.g. Started dating, Wedding in Rome, Amicable separation' : 'e.g. Master\'s Degree in Computer Science from MIT'}
                 style={inputStyle}
               />
             </div>
 
-            {/* Date and Approximate check */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+            {/* Relationship Target Configuration */}
+            {isRelationshipEvent && (
+              <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  💞 Relationship & Partner Details
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={labelStyle}>Relationship Type</label>
+                    <select value={relStatus} onChange={(e) => setRelStatus(e.target.value)} style={inputStyle}>
+                      <option value="dating">Started Dating</option>
+                      <option value="engaged">Engaged</option>
+                      <option value="married">Married</option>
+                      <option value="divorced">Divorced</option>
+                      <option value="separated">Separated</option>
+                      <option value="partner">Life Partnership</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Connect With</label>
+                    <select value={relTargetType} onChange={(e) => setRelTargetType(e.target.value as any)} style={inputStyle}>
+                      <option value="EXTERNAL_PERSON">External Person (Name only)</option>
+                      <option value="PERSON">Family Member in Tree</option>
+                      <option value="FAMILY">Family Branch</option>
+                      <option value="FAMILY_TO_FAMILY">Two Families</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>
+                    {relTargetType === 'FAMILY' || relTargetType === 'FAMILY_TO_FAMILY' ? 'Family Name(s)' : 'Partner / Person Name'}
+                  </label>
+                  <input
+                    type="text"
+                    value={relTargetName}
+                    onChange={(e) => setRelTargetName(e.target.value)}
+                    placeholder="e.g. Jordan Miller or The Johnson Family"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Dates: Start & End */}
+            <div style={{ display: 'grid', gridTemplateColumns: isRelationshipEvent ? '1fr 1fr' : '1fr auto', gap: 12, alignItems: 'flex-start' }}>
               <div>
-                <label style={labelStyle}>Date (YYYY, YYYY-MM, or YYYY-MM-DD)</label>
-                <input
-                  type="text"
-                  value={eventDate}
-                  onChange={(e) => setEventDate(e.target.value)}
-                  placeholder="e.g. 2018-06-15"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>
+                  {isRelationshipEvent ? 'Start Date' : 'Event Date'}
+                </label>
+                <CustomDatePicker value={eventDate} onChange={setEventDate} placeholder="e.g. 2018-06-15, 15.06.2018" />
               </div>
 
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 12,
-                  color: '#cbd5e1',
-                  cursor: 'pointer',
-                  marginTop: 20,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={dateApprox}
-                  onChange={(e) => setDateApprox(e.target.checked)}
-                />
-                <span>Approximate / Circa</span>
-              </label>
+              {isRelationshipEvent ? (
+                <div>
+                  <label style={labelStyle}>End Date (if ended / divorced)</label>
+                  <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="e.g. 2022-08-10, 10.08.2022" />
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    marginTop: 26,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={dateApprox}
+                    onChange={(e) => setDateApprox(e.target.checked)}
+                  />
+                  <span>Approximate / Circa</span>
+                </label>
+              )}
             </div>
 
             {/* Location */}

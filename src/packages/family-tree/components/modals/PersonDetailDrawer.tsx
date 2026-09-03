@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import { useKinship } from '../../hooks/useKinship.js';
-import type { TreeGraphPerson, TreeGraphData, Gender } from '../../types/tree.types.js';
+import type { TreeGraphPerson, TreeGraphData, Gender, UnionType, TreeGraphUnion } from '../../types/tree.types.js';
 import { PersonTimelineView } from '../timeline/PersonTimelineView.js';
+import { CustomDatePicker } from '../common/CustomDatePicker.js';
+import { formatTreeDate } from '../../utils/dateUtils.js';
 
 interface PersonDetailDrawerProps {
   person: TreeGraphPerson | null;
@@ -31,6 +33,7 @@ export const PersonDetailDrawer = ({
     selectPerson,
     openDrawer,
     activeTreeId,
+    dateFormatStyle,
   } = useFamilyTreeStore();
 
   const { fitView } = useReactFlow();
@@ -49,6 +52,16 @@ export const PersonDetailDrawer = ({
   const [bio, setBio] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
+
+  // Spouse Union Editing State
+  const [editingUnion, setEditingUnion] = useState<TreeGraphUnion | null>(null);
+  const [editingSpouseName, setEditingSpouseName] = useState('');
+  const [unionType, setUnionType] = useState<UnionType>('MARRIAGE');
+  const [unionStartDate, setUnionStartDate] = useState('');
+  const [unionEndDate, setUnionEndDate] = useState('');
+  const [unionStartPlace, setUnionStartPlace] = useState('');
+  const [unionNotes, setUnionNotes] = useState('');
+  const [isSavingUnion, setIsSavingUnion] = useState(false);
 
   const rootPersonId = graphData?.root_person_id;
   const isRoot = person?.id === rootPersonId;
@@ -472,7 +485,7 @@ export const PersonDetailDrawer = ({
                 <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Birth Information</div>
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {person.birth_date || 'Date unknown'} {person.birth_place ? `• ${person.birth_place}` : ''}
+                    {person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle) : 'Date unknown'} {person.birth_place ? `• ${person.birth_place}` : ''}
                   </div>
                 </div>
 
@@ -480,7 +493,7 @@ export const PersonDetailDrawer = ({
                   <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Passing Information</div>
                     <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {person.death_date || 'Date unknown'} {person.death_place ? `• ${person.death_place}` : ''}
+                      {person.death_date ? formatTreeDate(person.death_date, dateFormatStyle) : 'Date unknown'} {person.death_place ? `• ${person.death_place}` : ''}
                     </div>
                   </div>
                 )}
@@ -536,7 +549,7 @@ export const PersonDetailDrawer = ({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={labelStyle}>Birth Date</label>
-                    <input type="text" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={inputStyle} />
+                    <CustomDatePicker value={birthDate} onChange={setBirthDate} placeholder="e.g. 1985-04-12, 12.04.1985..." />
                   </div>
                   <div>
                     <label style={labelStyle}>Birth Place</label>
@@ -555,7 +568,7 @@ export const PersonDetailDrawer = ({
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div>
                       <label style={labelStyle}>Death Date</label>
-                      <input type="text" value={deathDate} onChange={(e) => setDeathDate(e.target.value)} style={inputStyle} />
+                      <CustomDatePicker value={deathDate} onChange={setDeathDate} placeholder="e.g. 2020-05-10, 10.05.2020..." />
                     </div>
                     <div>
                       <label style={labelStyle}>Death Place</label>
@@ -625,7 +638,7 @@ export const PersonDetailDrawer = ({
               </div>
             </div>
 
-            {/* Spouses */}
+            {/* Spouses & Partners */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -641,21 +654,242 @@ export const PersonDetailDrawer = ({
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {personContext?.immediateFamily?.spouses?.map((s: any) => (
-                  <div
-                    key={s.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
-                    onClick={() => selectPerson(s.id, true)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>💍</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.name}</span>
+                {personContext?.immediateFamily?.spouses?.map((s: any) => {
+                  const u = graphData?.unions?.find(
+                    (unionItem) => unionItem.partner_ids.includes(person.id) && unionItem.partner_ids.includes(s.id)
+                  );
+                  const isDivorced = u?.union_type === 'DIVORCED';
+                  const uIcon = isDivorced ? '💔' : u?.union_type === 'MARRIAGE' ? '💍' : '💞';
+                  const statusLabel = isDivorced
+                    ? 'Divorced'
+                    : u?.union_type === 'MARRIAGE'
+                      ? 'Married'
+                      : u?.union_type === 'SEPARATED'
+                        ? 'Separated'
+                        : (u?.union_type || s.relation);
+
+                  const dateDetails = [
+                    u?.start_date ? `Since ${formatTreeDate(u.start_date, dateFormatStyle)}` : null,
+                    u?.end_date ? `Ended ${formatTreeDate(u.end_date, dateFormatStyle)}` : null,
+                  ].filter(Boolean).join(' • ');
+
+                  return (
+                    <div
+                      key={s.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'var(--card-bg)',
+                        border: isDivorced ? '1px dashed #f43f5e' : '1px solid var(--border-color)',
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        gap: 6,
+                      }}
+                    >
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                        onClick={() => selectPerson(s.id, true)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{uIcon}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: isDivorced ? '#f43f5e' : '#f472b6',
+                              fontWeight: 700,
+                              background: isDivorced ? 'rgba(244, 63, 94, 0.15)' : 'rgba(244, 114, 182, 0.15)',
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                            }}
+                          >
+                            {statusLabel}
+                          </span>
+                          {u && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingUnion(u);
+                                setEditingSpouseName(s.name);
+                                setUnionType(u.union_type);
+                                setUnionStartDate(u.start_date || '');
+                                setUnionEndDate(u.end_date || '');
+                                setUnionStartPlace(u.start_place || '');
+                                setUnionNotes(u.notes || '');
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 4,
+                                color: 'var(--text-secondary)',
+                                padding: '2px 6px',
+                                fontSize: 11,
+                                cursor: 'pointer',
+                              }}
+                              title="Edit spouse union details"
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {dateDetails && (
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', paddingLeft: 24 }}>
+                          {dateDetails}
+                        </div>
+                      )}
                     </div>
-                    <span style={{ fontSize: 11, color: '#f472b6', fontWeight: 600 }}>{s.relation}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+
+            {/* Spouse Union Editing Modal */}
+            {editingUnion && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 200,
+                  background: 'rgba(0,0,0,0.65)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 20,
+                  backdropFilter: 'blur(8px)',
+                }}
+                onClick={() => setEditingUnion(null)}
+              >
+                <div
+                  style={{
+                    background: 'var(--modal-bg)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 16,
+                    width: '100%',
+                    maxWidth: 480,
+                    padding: 24,
+                    boxShadow: 'var(--shadow-modal)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    Spouse & Union Details
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                    Relationship between {person.first_name} and {editingSpouseName}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>Union Status</label>
+                      <select value={unionType} onChange={(e) => setUnionType(e.target.value as UnionType)} style={inputStyle}>
+                        <option value="MARRIAGE">💍 Marriage</option>
+                        <option value="DIVORCED">💔 Divorced</option>
+                        <option value="SEPARATED">⚡ Separated</option>
+                        <option value="PARTNERSHIP">💞 Partnership</option>
+                        <option value="CIVIL_UNION">📜 Civil Union</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Marriage / Start Date</label>
+                      <CustomDatePicker value={unionStartDate} onChange={setUnionStartDate} placeholder="e.g. 1980-06-21, 21.06.1980..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>
+                        {unionType === 'DIVORCED' ? 'Divorce Date' : 'End Date (if applicable)'}
+                      </label>
+                      <CustomDatePicker value={unionEndDate} onChange={setUnionEndDate} placeholder="e.g. 1995-11-04, 04.11.1995..." />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Marriage / Union Location</label>
+                      <input
+                        type="text"
+                        value={unionStartPlace}
+                        onChange={(e) => setUnionStartPlace(e.target.value)}
+                        style={inputStyle}
+                        placeholder="City, State, Country"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Notes & Details</label>
+                      <textarea
+                        value={unionNotes}
+                        onChange={(e) => setUnionNotes(e.target.value)}
+                        rows={2}
+                        style={{ ...inputStyle, resize: 'vertical' }}
+                        placeholder="Optional details or memories..."
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                      <button
+                        type="button"
+                        style={{
+                          background: 'var(--nav-tab-bg)',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 8,
+                          padding: '8px 16px',
+                          fontSize: 13,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setEditingUnion(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingUnion}
+                        style={{
+                          background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 8,
+                          padding: '8px 20px',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={async () => {
+                          if (!editingUnion) return;
+                          setIsSavingUnion(true);
+                          try {
+                            const res = await fetch(`/api/family-tree/unions/${editingUnion.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                union_type: unionType,
+                                start_date: unionStartDate.trim() || undefined,
+                                end_date: unionEndDate.trim() || undefined,
+                                start_place: unionStartPlace.trim() || undefined,
+                                notes: unionNotes.trim() || undefined,
+                              }),
+                            });
+                            if (res.ok) {
+                              setEditingUnion(null);
+                              getPersonContext({ personId: person.id }).then((ctx) => setPersonContext(ctx));
+                              await onUpdatePerson(person.id, {});
+                            }
+                          } finally {
+                            setIsSavingUnion(false);
+                          }
+                        }}
+                      >
+                        {isSavingUnion ? 'Saving...' : 'Save Union'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Siblings */}
             <div>

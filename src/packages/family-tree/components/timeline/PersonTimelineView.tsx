@@ -1,5 +1,6 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect } from 'react';
 import { usePersonTimeline } from '../../hooks/usePersonTimeline.js';
+import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import type { PersonEventRecord } from '../../types/event.types.js';
 import { FactCard } from './FactCard.js';
 import { AddEditFactModal } from './AddEditFactModal.js';
@@ -12,7 +13,8 @@ interface PersonTimelineViewProps {
 
 const CATEGORY_FILTERS = [
   { id: 'ALL', label: 'All Events' },
-  { id: 'MILESTONES', label: 'Milestones (Birth/Marriage)' },
+  { id: 'MILESTONES', label: '💍 Milestones' },
+  { id: 'RELATIONSHIP', label: '💞 Relationships' },
   { id: 'GRADUATION', label: '🎓 Education' },
   { id: 'RELOCATION', label: '📍 Relocation' },
   { id: 'TRAVEL', label: '✈️ Travel' },
@@ -21,6 +23,7 @@ const CATEGORY_FILTERS = [
 ];
 
 export const PersonTimelineView = memo(({ personId, personName }: PersonTimelineViewProps) => {
+  const { lifeFactsConfig } = useFamilyTreeStore();
   const {
     events,
     isLoading,
@@ -32,19 +35,117 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
   } = usePersonTimeline(personId);
 
   const [activeCategory, setActiveCategory] = useState('ALL');
+  const [relativeEvents, setRelativeEvents] = useState<PersonEventRecord[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [factToEdit, setFactToEdit] = useState<PersonEventRecord | null>(null);
   const [pinTargetEventId, setPinTargetEventId] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!personId) {
+      setRelativeEvents([]);
+      return;
+    }
+
+    const hasAnyRelativesEnabled =
+      lifeFactsConfig.showParentsFacts ||
+      lifeFactsConfig.showSiblingsFacts ||
+      lifeFactsConfig.showChildrenFacts ||
+      lifeFactsConfig.showSpousesFacts;
+
+    if (!hasAnyRelativesEnabled) {
+      setRelativeEvents([]);
+      return;
+    }
+
+    async function loadRelativeEvents() {
+      try {
+        const ctxRes = await fetch(`/api/family-tree/public/person-context?personId=${encodeURIComponent(personId)}`);
+        if (!ctxRes.ok) return;
+        const ctx = await ctxRes.json();
+        if (cancelled || !ctx?.immediateFamily) return;
+
+        const relativesToFetch: Array<{ id: string; name: string; relation: string }> = [];
+        if (lifeFactsConfig.showParentsFacts && ctx.immediateFamily.parents) {
+          relativesToFetch.push(...ctx.immediateFamily.parents);
+        }
+        if (lifeFactsConfig.showSiblingsFacts && ctx.immediateFamily.siblings) {
+          relativesToFetch.push(...ctx.immediateFamily.siblings);
+        }
+        if (lifeFactsConfig.showChildrenFacts && ctx.immediateFamily.children) {
+          relativesToFetch.push(...ctx.immediateFamily.children);
+        }
+        if (lifeFactsConfig.showSpousesFacts && ctx.immediateFamily.spouses) {
+          relativesToFetch.push(...ctx.immediateFamily.spouses);
+        }
+
+        const allFetched: PersonEventRecord[] = [];
+        for (const rel of relativesToFetch) {
+          const res = await fetch(`/api/family-tree/persons/${rel.id}/timeline`);
+          if (res.ok) {
+            const evts: PersonEventRecord[] = await res.json();
+            for (const ev of evts) {
+              allFetched.push({
+                ...ev,
+                id: `rel_${ev.id}`,
+                is_system_generated: 1,
+                ...({ relativeName: rel.name, relativeRelation: rel.relation } as any),
+              });
+            }
+          }
+        }
+        if (!cancelled) {
+          setRelativeEvents(allFetched);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    loadRelativeEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    personId,
+    lifeFactsConfig.showParentsFacts,
+    lifeFactsConfig.showSiblingsFacts,
+    lifeFactsConfig.showChildrenFacts,
+    lifeFactsConfig.showSpousesFacts,
+  ]);
+
   const filteredEvents = useMemo(() => {
-    if (activeCategory === 'ALL') return events;
+    let result: PersonEventRecord[] = [];
+
+    if (lifeFactsConfig.showOwnFacts !== false) {
+      result = [...result, ...events];
+    }
+
+    if (relativeEvents.length > 0) {
+      result = [...result, ...relativeEvents];
+    }
+
+    // Filter by lifeFactsConfig
+    if (lifeFactsConfig?.includedFactTypes && lifeFactsConfig.includedFactTypes.length > 0) {
+      result = result.filter((e) => lifeFactsConfig.includedFactTypes.includes(e.event_type));
+    }
+
+    // Sort chronologically
+    result.sort((a, b) => {
+      const d1 = a.event_date || '9999-99-99';
+      const d2 = b.event_date || '9999-99-99';
+      return d1.localeCompare(d2);
+    });
+
+    // Filter by tab category
+    if (activeCategory === 'ALL') return result;
     if (activeCategory === 'MILESTONES') {
-      return events.filter((e: PersonEventRecord) =>
+      return result.filter((e: PersonEventRecord) =>
         ['BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN'].includes(e.event_type),
       );
     }
-    return events.filter((e: PersonEventRecord) => e.event_type === activeCategory);
-  }, [events, activeCategory]);
+    return result.filter((e: PersonEventRecord) => e.event_type === activeCategory);
+  }, [events, relativeEvents, activeCategory, lifeFactsConfig, personId]);
 
   const handleOpenAdd = () => {
     setFactToEdit(null);

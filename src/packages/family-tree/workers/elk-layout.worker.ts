@@ -1,5 +1,5 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
-import type { TreeGraphData } from '../types/tree.types.js';
+import type { TreeGraphData, NodeViewStyle } from '../types/tree.types.js';
 
 export interface LayoutRequestMessage {
   type: 'LAYOUT_REQUEST';
@@ -7,6 +7,8 @@ export interface LayoutRequestMessage {
   graphData: TreeGraphData;
   direction: 'TB' | 'LR';
   foldedNodeIds: string[];
+  foldedDivorcedUnionIds?: string[];
+  nodeViewStyle?: NodeViewStyle;
 }
 
 export interface LayoutSuccessMessage {
@@ -22,7 +24,7 @@ export interface LayoutSuccessMessage {
     id: string;
     source: string;
     target: string;
-    type: 'biological' | 'non_biological';
+    type: 'biological' | 'non_biological' | 'divorced';
     data?: Record<string, any>;
   }>;
 }
@@ -43,24 +45,27 @@ function getElk() {
   return elkInstance;
 }
 
-const PERSON_WIDTH = 250;
-const PERSON_HEIGHT = 140;
 const UNION_SIZE = 36;
 
 export async function computeElkLayout(
   graphData: TreeGraphData,
   direction: 'TB' | 'LR',
   foldedNodeIds: Set<string>,
+  nodeViewStyle: NodeViewStyle = 'default',
+  foldedDivorcedUnionIds: Set<string> = new Set(),
 ): Promise<{
   nodes: Array<{ id: string; type: 'person' | 'union'; position: { x: number; y: number }; data: Record<string, any> }>;
-  edges: Array<{ id: string; source: string; target: string; type: 'biological' | 'non_biological'; data?: Record<string, any> }>;
+  edges: Array<{ id: string; source: string; target: string; type: 'biological' | 'non_biological' | 'divorced'; data?: Record<string, any> }>;
 }> {
   const isHorizontal = direction === 'LR';
   const elkDirection = isHorizontal ? 'RIGHT' : 'DOWN';
 
+  const personWidth = nodeViewStyle === 'circle' ? 110 : nodeViewStyle === 'square' ? 130 : 250;
+  const personHeight = nodeViewStyle === 'circle' ? 120 : nodeViewStyle === 'square' ? 140 : 140;
+
   // 1. Filter out folded descendant subtrees
   const hiddenPersonIds = new Set<string>();
-  if (foldedNodeIds.size > 0) {
+  if (foldedNodeIds && foldedNodeIds.size > 0) {
     const queue = Array.from(foldedNodeIds);
     while (queue.length > 0) {
       const pId = queue.shift()!;
@@ -73,6 +78,22 @@ export async function computeElkLayout(
             queue.push(ch.person_id);
           }
         }
+      }
+    }
+  }
+
+  // 1b. Filter out folded divorced spouses (hide divorced partner and their separate branch, preserve mutual children)
+  if (foldedDivorcedUnionIds && foldedDivorcedUnionIds.size > 0) {
+    for (const unionId of foldedDivorcedUnionIds) {
+      const u = graphData.unions.find((un) => un.id === unionId);
+      if (u && u.union_type === 'DIVORCED' && u.partner_ids.length >= 2) {
+        // Find which partner is the divorced spouse to hide:
+        // Prioritize preserving the root person or the partner with other connections
+        const p0 = u.partner_ids[0];
+        const p1 = u.partner_ids[1];
+        const rootId = graphData.root_person_id;
+        const spouseToHide = p0 === rootId ? p1 : (p1 === rootId ? p0 : p1);
+        hiddenPersonIds.add(spouseToHide);
       }
     }
   }
@@ -95,8 +116,8 @@ export async function computeElkLayout(
   for (const p of visiblePersons) {
     elkNodes.push({
       id: `p_${p.id}`,
-      width: PERSON_WIDTH,
-      height: PERSON_HEIGHT,
+      width: personWidth,
+      height: personHeight,
       layoutOptions: {
         'elk.padding': '[top=10,left=10,bottom=10,right=10]',
       },
@@ -113,6 +134,8 @@ export async function computeElkLayout(
       },
     });
 
+    const isDivorcedUnion = u.union_type === 'DIVORCED';
+
     // Edges: Partners -> Union
     u.partner_ids.forEach((partnerId, idx) => {
       if (visiblePersonIds.has(partnerId)) {
@@ -127,7 +150,7 @@ export async function computeElkLayout(
           id: edgeId,
           source: `p_${partnerId}`,
           target: `u_${u.id}`,
-          type: 'biological',
+          type: isDivorcedUnion ? 'divorced' : 'biological',
           data: { unionId: u.id, partnerId },
         });
       }
@@ -183,6 +206,20 @@ export async function computeElkLayout(
   // Build final React Flow Nodes
   for (const p of visiblePersons) {
     const pos = nodeMap.get(`p_${p.id}`) || { x: 0, y: 0 };
+    const personUnions = graphData.unions.filter((u) => u.partner_ids.includes(p.id));
+    const spouses = personUnions.map((u) => {
+      const spouseId = u.partner_ids.find((id) => id !== p.id);
+      const spousePerson = spouseId ? graphData.persons.find((sp) => sp.id === spouseId) : null;
+      return {
+        unionId: u.id,
+        unionType: u.union_type,
+        spouseId,
+        spouseName: spousePerson ? (spousePerson.full_name || `${spousePerson.first_name} ${spousePerson.last_name || ''}`.trim()) : 'Spouse',
+        startDate: u.start_date,
+        endDate: u.end_date,
+      };
+    });
+
     reactFlowNodes.push({
       id: `p_${p.id}`,
       type: 'person',
@@ -191,6 +228,7 @@ export async function computeElkLayout(
         person: p,
         isRoot: p.id === graphData.root_person_id,
         isFolded: foldedNodeIds.has(p.id),
+        spouses,
       },
     });
   }
@@ -216,10 +254,16 @@ export async function computeElkLayout(
 // Web Worker message dispatcher (if run in worker context)
 if (typeof self !== 'undefined' && typeof window === 'undefined') {
   self.onmessage = async (e: MessageEvent<LayoutRequestMessage>) => {
-    const { type, requestId, graphData, direction, foldedNodeIds } = e.data;
+    const { type, requestId, graphData, direction, foldedNodeIds, foldedDivorcedUnionIds, nodeViewStyle } = e.data;
     if (type === 'LAYOUT_REQUEST') {
       try {
-        const result = await computeElkLayout(graphData, direction, new Set(foldedNodeIds || []));
+        const result = await computeElkLayout(
+          graphData,
+          direction,
+          new Set(foldedNodeIds || []),
+          nodeViewStyle || 'default',
+          new Set(foldedDivorcedUnionIds || []),
+        );
         const res: LayoutSuccessMessage = {
           type: 'LAYOUT_SUCCESS',
           requestId,

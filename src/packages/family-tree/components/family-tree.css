@@ -24,8 +24,25 @@
 }
 
 .react-flow__minimap {
+  position: absolute !important;
+  right: auto !important;
+  left: 24px !important;
+  bottom: 24px !important;
+  width: 200px !important;
+  height: 150px !important;
+  max-width: 200px !important;
+  max-height: 150px !important;
   background: var(--card-bg-solid) !important;
   border: 1px solid var(--border-color) !important;
   border-radius: 8px !important;
   box-shadow: var(--shadow-card) !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+.react-flow__minimap-svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 7px;
 }

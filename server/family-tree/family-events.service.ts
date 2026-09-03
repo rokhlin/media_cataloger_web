@@ -251,9 +251,10 @@ export class FamilyEventsService {
 
     const stmt = db.prepare(`
       INSERT INTO ft_person_events (
-        id, person_id, event_type, title, description, event_date, date_is_approximate,
-        location_name, latitude, longitude, is_system_generated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        id, person_id, event_type, title, description, event_date, end_date, date_is_approximate,
+        location_name, latitude, longitude, is_system_generated,
+        relationship_target_type, relationship_target_name, relationship_target_id, relationship_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -263,10 +264,15 @@ export class FamilyEventsService {
       dto.title,
       dto.description || null,
       dto.event_date || null,
+      dto.end_date || null,
       dateApprox,
       dto.location_name || null,
       dto.latitude ?? null,
       dto.longitude ?? null,
+      dto.relationship_target_type || null,
+      dto.relationship_target_name || null,
+      dto.relationship_target_id || null,
+      dto.relationship_status || null,
     );
 
     // If initial pinned media provided
@@ -307,6 +313,10 @@ export class FamilyEventsService {
       fields.push('event_date = ?');
       values.push(dto.event_date);
     }
+    if (dto.end_date !== undefined) {
+      fields.push('end_date = ?');
+      values.push(dto.end_date);
+    }
     if (dto.date_is_approximate !== undefined) {
       fields.push('date_is_approximate = ?');
       values.push(dto.date_is_approximate ? 1 : 0);
@@ -322,6 +332,22 @@ export class FamilyEventsService {
     if (dto.longitude !== undefined) {
       fields.push('longitude = ?');
       values.push(dto.longitude);
+    }
+    if (dto.relationship_target_type !== undefined) {
+      fields.push('relationship_target_type = ?');
+      values.push(dto.relationship_target_type);
+    }
+    if (dto.relationship_target_name !== undefined) {
+      fields.push('relationship_target_name = ?');
+      values.push(dto.relationship_target_name);
+    }
+    if (dto.relationship_target_id !== undefined) {
+      fields.push('relationship_target_id = ?');
+      values.push(dto.relationship_target_id);
+    }
+    if (dto.relationship_status !== undefined) {
+      fields.push('relationship_status = ?');
+      values.push(dto.relationship_status);
     }
 
     fields.push("updated_at = datetime('now', 'localtime')");

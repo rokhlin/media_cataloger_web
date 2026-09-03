@@ -79,6 +79,30 @@
     - Make sure that all components are split by features and are self-contained.
     - Avoid circular dependencies. Use hooks to share logic between components. 
 Do the same for all components. Do not change functionality. Add tests.
+
+### Family Tree 
+- [x] **Represent Divorced person**: If couple is divorced, then show connection as striped line and connection icon should reflect the status. add a mechanism to expand and collapse the subtree of the divorced spounse. Only theyr own children. Don't show the subtree of the current partner.
+- [x] **Live facts: Sponse**: Add to life facts option to define maritage and divocing dates and show spounse. In person card if the person has spounse need to add an ability to view and edit spounse ditails: add start and end date if divorced.
+- [x] **Live facts: Relationship**: Add to life facts option to define if user started a new relationship (started dating, got married, divorced, etc) with a person and show it on the graph. The relationship can be defined between two persons and can have a start and end date. The relationship can be defined between a person and a family. The relationship can be defined between two families. In person card if the person has spounse need to add an ability to view and edit spounse ditails: add start and end date if divorced. For relationship you cannot add person to the tree but you can add the name of the person.
+- [x] **Live facts: Configuration**: Add to Tree settings a configuration for Live facts. User should be able to define the following: 
+    1. What to show in Person Life facts: All own facts, Farts of close relatives (Parents, Siblings, Children, Grandparents, etc), configure in a checkbox style.
+    2. Also which facts to include: Not applicable like a relationship of other peopele. I need to be able to define it in the settings.
+- [x] **Export Import Tree**: Add a feature to export and import the family tree to a .csv file. Add a subtab Tree Settings and place there that logic
+- [x] **Tree view styles**: Add support to define and change node Item styles. Add to Tree Settings change node style. Initially add 3 styles:
+    1. Default - the current style
+    2. Circle - node with circle image: only Image and Name
+    3. Square - node with square image: image, Name and birth date.
+- [x] **Add Celebration Badge**: Add relevant badge on Tree node if that person has a birthday, anniversary, mariage, etc on that day. Provide a configuration to define what celebration should be displayed. Configure how many days before the event the badge should be displayed, Badge style, Picture/Icon, color
+- [x] **Date formats and date picker**: 
+    - Add support of the different input date formats: YYYY-MM-DD, YYYY-MM, YYYY, DD.MM.YYYY, DD.MM, DD, MM.YYYY, MM/DD/YYYY, MM/DD. Define format automatically and save in one style.
+    - Date picker should support all formats. Put the Date picker in a separate component.
+    - Add to Tree settings a configuration for date formats. User should be able to select the format to show dates on screens. Add those options as a drop down menu:
+    Example:
+        - YYYY-MM-DD, YYYY-MM, YYYY
+        - DD Month YYYY, DD Month
+        - DD.MM.YYYY, MM.YYYY
+        - MM/DD/YYYY, MM/YYYY
+        
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.
 - [x] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels. Admin can give specific permissions to users. For example: view-only mode for some users. Admin can manage user accounts (create, edit, delete).

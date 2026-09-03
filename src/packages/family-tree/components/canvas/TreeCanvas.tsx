@@ -15,6 +15,7 @@ import { PersonCardNode } from './nodes/PersonCardNode.js';
 import { UnionNode } from './nodes/UnionNode.js';
 import { BiologicalEdge } from './edges/BiologicalEdge.js';
 import { NonBiologicalEdge } from './edges/NonBiologicalEdge.js';
+import { DivorcedEdge } from './edges/DivorcedEdge.js';
 import { CanvasToolbar } from './controls/CanvasToolbar.js';
 import { KinshipHUD } from './controls/KinshipHUD.js';
 import { TreeSearchBar } from './controls/TreeSearchBar.js';
@@ -37,10 +38,17 @@ const nodeTypes: NodeTypes = {
 const edgeTypes: EdgeTypes = {
   biological: BiologicalEdge,
   non_biological: NonBiologicalEdge,
+  divorced: DivorcedEdge,
 };
 
 export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanvasProps) => {
-  const { layoutDirection, foldedNodeIds, selectPerson } = useFamilyTreeStore();
+  const {
+    layoutDirection,
+    foldedNodeIds,
+    foldedDivorcedUnionIds,
+    nodeViewStyle,
+    selectPerson,
+  } = useFamilyTreeStore();
   const { fitView } = useReactFlow();
   const { themeMode } = useTheme();
   const isDark = themeMode === 'dark';
@@ -52,7 +60,7 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
     onEdgesChange,
     isCalculating,
     recalculateLayout,
-  } = useTreeLayoutWorker(graphData, layoutDirection, foldedNodeIds) as any;
+  } = useTreeLayoutWorker(graphData, layoutDirection, foldedNodeIds, nodeViewStyle, foldedDivorcedUnionIds) as any;
 
   // Auto fit on initial load
   useEffect(() => {
@@ -183,14 +191,19 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
           }}
         />
         <MiniMap
+          position="bottom-left"
           nodeColor={(n: Node) => (n.type === 'person' ? 'var(--primary-color, #6366f1)' : 'var(--accent-color, #a855f7)')}
           maskColor={isDark ? 'rgba(11, 15, 25, 0.75)' : 'rgba(240, 243, 248, 0.75)'}
           style={{
+            width: 200,
+            height: 150,
             background: 'var(--card-bg-solid)',
             border: '1px solid var(--border-color)',
             borderRadius: 8,
             bottom: 24,
             left: 24,
+            right: 'auto',
+            margin: 0,
             boxShadow: 'var(--shadow-card)',
           }}
           zoomable

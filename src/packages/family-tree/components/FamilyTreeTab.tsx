@@ -6,11 +6,14 @@ import { TreeCanvas } from './canvas/TreeCanvas.js';
 import { PersonDetailDrawer } from './modals/PersonDetailDrawer.js';
 import { QuickAddRelativeModal } from './modals/QuickAddRelativeModal.js';
 import { FaceLinkModal } from './modals/FaceLinkModal.js';
+import { TreeSettingsTab } from './settings/TreeSettingsTab.js';
 import './family-tree.css';
 
 export const FamilyTreeTab = () => {
   const {
     activeTreeId,
+    activeSubTab,
+    setActiveSubTab,
     selectedPersonId,
     isQuickAddModalOpen,
     quickAddTargetPersonId,
@@ -32,6 +35,8 @@ export const FamilyTreeTab = () => {
     updatePerson,
     deletePerson,
     quickAddRelative,
+    createUnion,
+    addChildToUnion,
     linkFace,
     unlinkFace,
     setRootPerson,
@@ -88,20 +93,102 @@ export const FamilyTreeTab = () => {
           overflow: 'hidden',
         }}
       >
-        {/* Main Canvas Viewport */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-          <TreeCanvas
-            graphData={graphData}
-            isLoading={isLoading}
-            onAddMember={() => {
-              if (graphData?.persons && graphData.persons.length > 0) {
-                const targetId = selectedPersonId || graphData.root_person_id || graphData.persons[0].id;
-                openQuickAdd(targetId, 'CHILD');
-              } else {
-                setIsCreatePersonOpen(true);
-              }
-            }}
-          />
+        {/* Subtab Header Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 16px',
+            background: 'var(--card-bg)',
+            borderBottom: '1px solid var(--border-color)',
+            backdropFilter: 'blur(12px)',
+            zIndex: 25,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              id="subtab-family-tree-canvas"
+              onClick={() => setActiveSubTab('canvas')}
+              style={{
+                background: activeSubTab === 'canvas' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                color: activeSubTab === 'canvas' ? '#ffffff' : 'var(--text-primary)',
+                border: activeSubTab === 'canvas' ? 'none' : '1px solid var(--border-color)',
+                borderRadius: 8,
+                padding: '7px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: activeSubTab === 'canvas' ? '0 2px 8px rgba(99, 102, 241, 0.35)' : undefined,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>🌳</span>
+              <span>Interactive Tree</span>
+            </button>
+
+            <button
+              type="button"
+              id="subtab-family-tree-settings"
+              onClick={() => setActiveSubTab('settings')}
+              style={{
+                background: activeSubTab === 'settings' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                color: activeSubTab === 'settings' ? '#ffffff' : 'var(--text-primary)',
+                border: activeSubTab === 'settings' ? 'none' : '1px solid var(--border-color)',
+                borderRadius: 8,
+                padding: '7px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: activeSubTab === 'settings' ? '0 2px 8px rgba(99, 102, 241, 0.35)' : undefined,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>⚙️</span>
+              <span>Tree Settings</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span>
+              {graphData?.persons?.length || 0} Persons • {graphData?.unions?.length || 0} Unions
+            </span>
+          </div>
+        </div>
+
+        {/* Subtab Content Viewport */}
+        <div style={{ flex: 1, position: 'relative', width: '100%', height: 'calc(100% - 48px)', overflow: 'hidden' }}>
+          {activeSubTab === 'settings' ? (
+            <TreeSettingsTab
+              graphData={graphData}
+              refreshGraph={refreshGraph}
+              createPerson={createPerson}
+              createUnion={createUnion}
+              addChildToUnion={addChildToUnion}
+              onBackToCanvas={() => setActiveSubTab('canvas')}
+            />
+          ) : (
+            <TreeCanvas
+              graphData={graphData}
+              isLoading={isLoading}
+              onAddMember={() => {
+                if (graphData?.persons && graphData.persons.length > 0) {
+                  const targetId = selectedPersonId || graphData.root_person_id || graphData.persons[0].id;
+                  openQuickAdd(targetId, 'CHILD');
+                } else {
+                  setIsCreatePersonOpen(true);
+                }
+              }}
+            />
+          )}
 
           {/* Error Banner */}
           {error && !isLoading && (

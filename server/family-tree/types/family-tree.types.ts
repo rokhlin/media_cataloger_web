@@ -17,6 +17,7 @@ export type EventType =
   | 'TRAVEL'
   | 'CAREER'
   | 'MILITARY'
+  | 'RELATIONSHIP'
   | 'CUSTOM';
 
 export type KinshipCategory =
@@ -104,6 +105,7 @@ export interface PersonEventRecord {
   title: string;
   description?: string | null;
   event_date?: string | null;
+  end_date?: string | null;
   date_is_approximate: number; // 1 or 0
   location_name?: string | null;
   latitude?: number | null;
@@ -111,6 +113,10 @@ export interface PersonEventRecord {
   is_system_generated: number; // 1 or 0
   source_node_id?: string | null;
   source_event_id?: string | null;
+  relationship_target_type?: 'PERSON' | 'FAMILY' | 'EXTERNAL_PERSON' | null;
+  relationship_target_name?: string | null;
+  relationship_target_id?: string | null;
+  relationship_status?: string | null;
   created_at: string;
   updated_at: string;
   pinned_media?: EventMediaPinRecord[];

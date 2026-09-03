@@ -262,6 +262,10 @@ export class CreateEventDto {
   event_date?: string;
 
   @IsOptional()
+  @IsString()
+  end_date?: string;
+
+  @IsOptional()
   date_is_approximate?: boolean | number;
 
   @IsOptional()
@@ -275,6 +279,22 @@ export class CreateEventDto {
   @IsOptional()
   @IsNumber()
   longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  relationship_target_type?: 'PERSON' | 'FAMILY' | 'EXTERNAL_PERSON';
+
+  @IsOptional()
+  @IsString()
+  relationship_target_name?: string;
+
+  @IsOptional()
+  @IsString()
+  relationship_target_id?: string;
+
+  @IsOptional()
+  @IsString()
+  relationship_status?: string;
 
   @IsOptional()
   @IsArray()
@@ -305,6 +325,10 @@ export class UpdateEventDto {
   event_date?: string;
 
   @IsOptional()
+  @IsString()
+  end_date?: string;
+
+  @IsOptional()
   date_is_approximate?: boolean | number;
 
   @IsOptional()
@@ -318,6 +342,22 @@ export class UpdateEventDto {
   @IsOptional()
   @IsNumber()
   longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  relationship_target_type?: 'PERSON' | 'FAMILY' | 'EXTERNAL_PERSON';
+
+  @IsOptional()
+  @IsString()
+  relationship_target_name?: string;
+
+  @IsOptional()
+  @IsString()
+  relationship_target_id?: string;
+
+  @IsOptional()
+  @IsString()
+  relationship_status?: string;
 }
 
 export class PinMediaDto {

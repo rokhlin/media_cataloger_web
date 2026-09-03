@@ -200,6 +200,20 @@ export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy 
       CREATE INDEX IF NOT EXISTS idx_ft_event_media_pins_event ON ft_event_media_pins(event_id);
       CREATE INDEX IF NOT EXISTS idx_ft_event_media_pins_filepath ON ft_event_media_pins(media_file_path);
     `);
+
+    const safeAddColumn = (table: string, column: string, type: string) => {
+      try {
+        this.db!.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      } catch {
+        // Column already exists
+      }
+    };
+
+    safeAddColumn('ft_person_events', 'end_date', 'TEXT');
+    safeAddColumn('ft_person_events', 'relationship_target_type', 'TEXT');
+    safeAddColumn('ft_person_events', 'relationship_target_name', 'TEXT');
+    safeAddColumn('ft_person_events', 'relationship_target_id', 'TEXT');
+    safeAddColumn('ft_person_events', 'relationship_status', 'TEXT');
   }
 
   private ensureDefaultTree(): void {

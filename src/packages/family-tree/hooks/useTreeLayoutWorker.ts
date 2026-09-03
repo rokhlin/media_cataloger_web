@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import type { TreeGraphData } from '../types/tree.types.js';
+import type { TreeGraphData, NodeViewStyle } from '../types/tree.types.js';
 import { computeElkLayout } from '../workers/elk-layout.worker.js';
 
 export function useTreeLayoutWorker(
   graphData: TreeGraphData | null,
   direction: 'TB' | 'LR',
   foldedNodeIds: Set<string>,
+  nodeViewStyle: NodeViewStyle = 'default',
+  foldedDivorcedUnionIds: Set<string> = new Set(),
 ) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -26,7 +28,7 @@ export function useTreeLayoutWorker(
     pendingRequestId.current = reqId;
 
     try {
-      const res = await computeElkLayout(graphData, direction, foldedNodeIds);
+      const res = await computeElkLayout(graphData, direction, foldedNodeIds, nodeViewStyle, foldedDivorcedUnionIds);
       if (pendingRequestId.current === reqId) {
         setNodes(res.nodes as Node[]);
         setEdges(res.edges as Edge[]);
@@ -53,7 +55,7 @@ export function useTreeLayoutWorker(
         setIsCalculating(false);
       }
     }
-  }, [graphData, direction, foldedNodeIds]);
+  }, [graphData, direction, foldedNodeIds, nodeViewStyle, foldedDivorcedUnionIds]);
 
   useEffect(() => {
     recalculateLayout();

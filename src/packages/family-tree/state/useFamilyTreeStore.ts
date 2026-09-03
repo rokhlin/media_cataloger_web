@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PersonEventRecord } from '../types/event.types.js';
+import type {
+  NodeViewStyle,
+  DateFormatStyle,
+  LifeFactsFilterConfig,
+  CelebrationBadgeConfig,
+} from '../types/tree.types.js';
 
 export interface FamilyTreeState {
   selectedPersonId: string | null;
@@ -17,10 +23,50 @@ export interface FamilyTreeState {
   isGalleryPickerOpen: boolean;
   layoutDirection: 'TB' | 'LR';
   foldedNodeIds: Set<string>;
+  foldedDivorcedUnionIds: Set<string>;
   searchQuery: string;
   highlightedPersonId: string | null;
   activeTimelineCategory: string;
   activeTreeId: string;
+  activeSubTab: 'canvas' | 'settings';
+  nodeViewStyle: NodeViewStyle;
+  dateFormatStyle: DateFormatStyle;
+  lifeFactsConfig: LifeFactsFilterConfig;
+  celebrationConfig: CelebrationBadgeConfig;
+}
+
+const DEFAULT_LIFE_FACTS_CONFIG: LifeFactsFilterConfig = {
+  showOwnFacts: true,
+  showParentsFacts: true,
+  showSiblingsFacts: true,
+  showChildrenFacts: true,
+  showGrandparentsFacts: true,
+  showSpousesFacts: true,
+  includedFactTypes: [
+    'BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN',
+    'GRADUATION', 'RELOCATION', 'TRAVEL', 'CAREER', 'MILITARY', 'RELATIONSHIP', 'CUSTOM'
+  ],
+};
+
+const DEFAULT_CELEBRATION_CONFIG: CelebrationBadgeConfig = {
+  enabled: true,
+  daysThreshold: 7,
+  showBirthday: true,
+  showAnniversary: true,
+  showMemorial: true,
+  badgeStyle: 'pill',
+  badgeColor: '#ec4899',
+  customIcon: '🎂',
+};
+
+function loadStoredJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 let globalState: FamilyTreeState = {
@@ -39,10 +85,16 @@ let globalState: FamilyTreeState = {
   isGalleryPickerOpen: false,
   layoutDirection: 'TB',
   foldedNodeIds: new Set<string>(),
+  foldedDivorcedUnionIds: new Set<string>(),
   searchQuery: '',
   highlightedPersonId: null,
   activeTimelineCategory: 'ALL',
   activeTreeId: 'default_tree',
+  activeSubTab: 'canvas',
+  nodeViewStyle: (typeof window !== 'undefined' && localStorage.getItem('ft_nodeViewStyle') as NodeViewStyle) || 'default',
+  dateFormatStyle: (typeof window !== 'undefined' && localStorage.getItem('ft_dateFormatStyle') as DateFormatStyle) || 'YYYY-MM-DD',
+  lifeFactsConfig: loadStoredJson('ft_lifeFactsConfig', DEFAULT_LIFE_FACTS_CONFIG),
+  celebrationConfig: loadStoredJson('ft_celebrationConfig', DEFAULT_CELEBRATION_CONFIG),
 };
 
 const listeners = new Set<(state: FamilyTreeState) => void>();
@@ -149,8 +201,66 @@ export function useFamilyTreeStore() {
     setTreeStore({ activeTimelineCategory: category });
   }, []);
 
-  const setActiveTreeId = useCallback((treeId: string) => {
-    setTreeStore({ activeTreeId: treeId });
+  const toggleFoldDivorcedUnion = useCallback((unionId: string) => {
+    setTreeStore((prev) => {
+      const nextSet = new Set(prev.foldedDivorcedUnionIds);
+      if (nextSet.has(unionId)) {
+        nextSet.delete(unionId);
+      } else {
+        nextSet.add(unionId);
+      }
+      return { foldedDivorcedUnionIds: nextSet };
+    });
+  }, []);
+
+  const setActiveTreeId = useCallback((id: string) => {
+    setTreeStore({ activeTreeId: id });
+  }, []);
+
+  const setActiveSubTab = useCallback((tab: 'canvas' | 'settings') => {
+    setTreeStore({ activeSubTab: tab });
+  }, []);
+
+  const setNodeViewStyle = useCallback((style: NodeViewStyle) => {
+    try {
+      localStorage.setItem('ft_nodeViewStyle', style);
+    } catch {
+      // ignore
+    }
+    setTreeStore({ nodeViewStyle: style });
+  }, []);
+
+  const setDateFormatStyle = useCallback((style: DateFormatStyle) => {
+    try {
+      localStorage.setItem('ft_dateFormatStyle', style);
+    } catch {
+      // ignore
+    }
+    setTreeStore({ dateFormatStyle: style });
+  }, []);
+
+  const setLifeFactsConfig = useCallback((config: Partial<LifeFactsFilterConfig> | ((prev: LifeFactsFilterConfig) => LifeFactsFilterConfig)) => {
+    setTreeStore((prev) => {
+      const nextConfig = typeof config === 'function' ? config(prev.lifeFactsConfig) : { ...prev.lifeFactsConfig, ...config };
+      try {
+        localStorage.setItem('ft_lifeFactsConfig', JSON.stringify(nextConfig));
+      } catch {
+        // ignore
+      }
+      return { lifeFactsConfig: nextConfig };
+    });
+  }, []);
+
+  const setCelebrationConfig = useCallback((config: Partial<CelebrationBadgeConfig> | ((prev: CelebrationBadgeConfig) => CelebrationBadgeConfig)) => {
+    setTreeStore((prev) => {
+      const nextConfig = typeof config === 'function' ? config(prev.celebrationConfig) : { ...prev.celebrationConfig, ...config };
+      try {
+        localStorage.setItem('ft_celebrationConfig', JSON.stringify(nextConfig));
+      } catch {
+        // ignore
+      }
+      return { celebrationConfig: nextConfig };
+    });
   }, []);
 
   return {
@@ -165,11 +275,17 @@ export function useFamilyTreeStore() {
     openAddFact,
     closeAddFact,
     toggleFoldBranch,
+    toggleFoldDivorcedUnion,
     setLayoutDirection,
     setSearchQuery,
     setHighlightedPersonId,
     setActiveTimelineCategory,
     setActiveTreeId,
+    setActiveSubTab,
+    setNodeViewStyle,
+    setDateFormatStyle,
+    setLifeFactsConfig,
+    setCelebrationConfig,
     setTreeStore,
   };
 }

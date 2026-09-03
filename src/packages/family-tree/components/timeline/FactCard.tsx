@@ -1,5 +1,7 @@
 import { memo, useState } from 'react';
 import type { PersonEventRecord, EventMediaPinRecord } from '../../types/event.types.js';
+import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
+import { formatTreeDate } from '../../utils/dateUtils.js';
 
 interface FactCardProps {
   event: PersonEventRecord;
@@ -14,6 +16,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   DEATH: '🕊️',
   MARRIAGE: '💍',
   DIVORCE: '💔',
+  RELATIONSHIP: '💞',
   CHILD_BORN: '🍼',
   GRADUATION: '🎓',
   RELOCATION: '📍',
@@ -28,6 +31,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   DEATH: '#94a3b8',
   MARRIAGE: '#ec4899',
   DIVORCE: '#f43f5e',
+  RELATIONSHIP: '#f43f5e',
   CHILD_BORN: '#38bdf8',
   GRADUATION: '#f59e0b',
   RELOCATION: '#8b5cf6',
@@ -38,12 +42,17 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedia }: FactCardProps) => {
+  const { dateFormatStyle } = useFamilyTreeStore();
   const [selectedPin, setSelectedPin] = useState<EventMediaPinRecord | null>(null);
 
   const icon = CATEGORY_ICONS[event.event_type] || '📌';
   const color = CATEGORY_COLORS[event.event_type] || '#6366f1';
   const datePrefix = event.date_is_approximate ? 'circa ' : '';
-  const dateDisplay = event.event_date ? `${datePrefix}${event.event_date}` : 'Date unrecorded';
+  const formattedStart = event.event_date ? formatTreeDate(event.event_date, dateFormatStyle) : null;
+  const formattedEnd = event.end_date ? formatTreeDate(event.end_date, dateFormatStyle) : null;
+  const dateDisplay = formattedStart
+    ? `${datePrefix}${formattedStart}${formattedEnd ? ` – ${formattedEnd}` : ''}`
+    : 'Date unrecorded';
 
   return (
     <div
@@ -82,6 +91,22 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
           <span style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>
             {dateDisplay}
           </span>
+
+          {(event as any).relativeRelation && (
+            <span
+              style={{
+                background: 'rgba(168, 85, 247, 0.15)',
+                color: 'var(--accent-color, #a855f7)',
+                border: '1px solid rgba(168, 85, 247, 0.3)',
+                borderRadius: 6,
+                padding: '2px 8px',
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            >
+              👤 {(event as any).relativeRelation}: {(event as any).relativeName}
+            </span>
+          )}
         </div>
 
         {/* Action Buttons for non-system events */}
@@ -147,6 +172,27 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
         {event.title}
       </div>
+
+      {/* Relationship Partner Details */}
+      {(event.relationship_target_name || event.relationship_status) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <span
+            style={{
+              background: 'rgba(236, 72, 153, 0.15)',
+              color: '#f472b6',
+              border: '1px solid rgba(236, 72, 153, 0.3)',
+              borderRadius: 6,
+              padding: '2px 8px',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            💞 {event.relationship_status ? `${event.relationship_status.toUpperCase()}: ` : ''}
+            {event.relationship_target_name || 'External'}
+            {event.relationship_target_type ? ` (${event.relationship_target_type.replace('_', ' ')})` : ''}
+          </span>
+        </div>
+      )}
 
       {/* Description */}
       {event.description && (
