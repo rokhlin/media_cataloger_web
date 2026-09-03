@@ -1,25 +1,30 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Header from './components/Header';
-import ExecutionControls from './components/ExecutionControls';
-import InputSourcesGallery, { type GalleryMediaFile } from './components/MediaGallery.js';
-import FaceRegistry, {
-  type FaceRegistryFace,
-  type FaceRegistryPerson,
-  type FaceRegistryGroup,
-} from './components/FaceRegistry';
-import PipelineLogs from './components/PipelineLogs';
-import SystemSettings, { type SettingsTab } from './components/SystemSettings';
-import { FamilyTreeTab, setTreeStore } from './packages/family-tree/index.js';
+import Header from './components/header/Header';
+import HeaderNavTabs from './components/header/HeaderNavTabs';
+import {
+  GalleryScreen,
+  DuplicatesScreen,
+  VaultScreen,
+  MediaLibraryScreen,
+  FamilyTreeScreen,
+  SettingsScreen,
+  AdminScreen,
+} from './screens';
+import { PipelineLogs } from './components/logs';
+import { LoginModal, VaultModal } from './components/modals';
+import type { GalleryMediaFile } from './components/gallery';
+import type {
+  FaceRegistryFace,
+  FaceRegistryPerson,
+  FaceRegistryGroup,
+} from './components/faces';
+import type { SettingsTab } from './components/settings';
+import { setTreeStore } from './packages/family-tree/index.js';
 import type { StatusInfo, SettingsData, UISettings } from './models';
 import { errorInterceptor } from './utils/errorInterceptor';
 import { mediaCacheService } from './services/mediaCacheService';
-import HeaderNavTabs from './components/HeaderNavTabs';
-import AdminPanel from './components/AdminPanel';
-import DuplicatesManagerTab from './components/DuplicatesManagerTab';
 import { AuthProvider, useAuth } from './services/authContext';
 import { VaultProvider, useVault } from './services/vaultContext';
-import LoginModal from './components/LoginModal';
-import VaultModal from './components/VaultModal';
 import './App.css';
 
 function AppMain() {
@@ -872,237 +877,150 @@ function AppMain() {
 
         <main className="app-main-content">
           {activeTab === 'main' && (
-            <div className="tab-pane active" id="pane-main">
-              <InputSourcesGallery
-                mediaFiles={mediaFiles}
-                isLoading={isMediaLoading}
-                isBackgroundLoading={isBackgroundLoading}
-                totalKnownFiles={totalKnownFiles}
-                onRefresh={loadMediaFiles}
-                onFetchMore={fetchMoreMediaFiles}
-                onStartSingleAnalysis={handleStartSingleAnalysis}
-                onSwitchToControls={() => setActiveTab('media_library')}
-                persons={persons}
-                uiSettings={uiSettings}
-                disabled={isRunning || isPaused}
-                onReloadFaces={loadFaces}
-                onViewInFamilyTree={handleViewInFamilyTree}
-                currentLoadingFile={
-                  scanProgress?.current_file ||
-                  statusInfo.progress?.current_file ||
-                  (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
-                    ? statusInfo.queue.in_flight_files[0]
-                    : null)
-                }
-                currentLoadingFilename={
-                  scanProgress?.current_filename ||
-                  (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
-                }
-                scannedFilesCount={scanProgress?.scanned_count || 0}
-                activeInputFolders={settings?.input_folders || []}
-                isEngineConnected={Boolean(statusInfo.connected)}
-              />
-            </div>
+            <GalleryScreen
+              mediaFiles={mediaFiles}
+              isLoading={isMediaLoading}
+              isBackgroundLoading={isBackgroundLoading}
+              totalKnownFiles={totalKnownFiles}
+              onRefresh={loadMediaFiles}
+              onFetchMore={fetchMoreMediaFiles}
+              onStartSingleAnalysis={handleStartSingleAnalysis}
+              onSwitchToControls={() => setActiveTab('media_library')}
+              persons={persons}
+              uiSettings={uiSettings}
+              disabled={isRunning || isPaused}
+              onReloadFaces={loadFaces}
+              onViewInFamilyTree={handleViewInFamilyTree}
+              currentLoadingFile={
+                scanProgress?.current_file ||
+                statusInfo.progress?.current_file ||
+                (statusInfo.queue?.in_flight_files && statusInfo.queue.in_flight_files.length > 0
+                  ? statusInfo.queue.in_flight_files[0]
+                  : null)
+              }
+              currentLoadingFilename={
+                scanProgress?.current_filename ||
+                (scanProgress?.current_file ? scanProgress.current_file.split(/[/\\]/).pop() : null)
+              }
+              scannedFilesCount={scanProgress?.scanned_count || 0}
+              activeInputFolders={settings?.input_folders || []}
+              isEngineConnected={Boolean(statusInfo.connected)}
+            />
           )}
 
           {activeTab === 'duplicates' && (
-            <div className="tab-pane active" id="pane-duplicates">
-              <DuplicatesManagerTab
-                onRefreshMedia={() => loadMediaFiles(true)}
-                activeInputFolders={settings?.input_folders || []}
-                onOpenViewer={(filePath) => {
-                  const match = mediaFiles.find((m) => m.file_path === filePath || m.filename === filePath);
-                  if (match) {
-                    // Switch to main gallery tab with viewer open or handle directly
-                    setActiveTab('main');
-                  }
-                }}
-              />
-            </div>
+            <DuplicatesScreen
+              onRefreshMedia={() => loadMediaFiles(true)}
+              activeInputFolders={settings?.input_folders || []}
+              onOpenViewer={(filePath) => {
+                const match = mediaFiles.find((m) => m.file_path === filePath || m.filename === filePath);
+                if (match) {
+                  // Switch to main gallery tab with viewer open or handle directly
+                  setActiveTab('main');
+                }
+              }}
+            />
           )}
 
           {activeTab === 'vault' && (
-            <div className="tab-pane active" id="pane-vault">
-              {!isUnlocked ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '60vh',
-                    gap: '1.25rem',
-                    textAlign: 'center',
-                    background: 'rgba(0, 0, 0, 0.25)',
-                    borderRadius: '16px',
-                    border: '1px dashed rgba(255, 255, 255, 0.15)',
-                    padding: '2rem',
-                  }}
-                >
-                  <span style={{ fontSize: '3.5rem' }}>🔒</span>
-                  <div>
-                    <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Secret Vault is Locked</h2>
-                    <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
-                      Private media files in the secret vault are isolated and hidden. Enter your PIN or Master Passphrase to view and manage vault items.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setIsVaultOpen(true)}
-                    style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
-                    id="btn-unlock-vault-pane"
-                  >
-                    🔓 {isConfigured ? 'Unlock Secret Vault' : 'Setup Master PIN'}
-                  </button>
-                </div>
-              ) : (
-                <InputSourcesGallery
-                  mediaFiles={mediaFiles.filter((m) => m.is_vault)}
-                  isLoading={isMediaLoading}
-                  isBackgroundLoading={isBackgroundLoading}
-                  totalKnownFiles={mediaFiles.filter((m) => m.is_vault).length}
-                  onRefresh={loadMediaFiles}
-                  onFetchMore={fetchMoreMediaFiles}
-                  onStartSingleAnalysis={handleStartSingleAnalysis}
-                  onSwitchToControls={() => setActiveTab('media_library')}
-                  persons={persons}
-                  uiSettings={uiSettings}
-                  disabled={isRunning || isPaused}
-                  onReloadFaces={loadFaces}
-                  onViewInFamilyTree={handleViewInFamilyTree}
-                  scannedFilesCount={scanProgress?.scanned_count || 0}
-                  activeInputFolders={settings?.input_folders || []}
-                />
-              )}
-            </div>
+            <VaultScreen
+              isUnlocked={isUnlocked}
+              isConfigured={isConfigured}
+              onOpenVaultModal={() => setIsVaultOpen(true)}
+              mediaFiles={mediaFiles}
+              isLoading={isMediaLoading}
+              isBackgroundLoading={isBackgroundLoading}
+              onRefresh={loadMediaFiles}
+              onFetchMore={fetchMoreMediaFiles}
+              onStartSingleAnalysis={handleStartSingleAnalysis}
+              onSwitchToControls={() => setActiveTab('media_library')}
+              persons={persons}
+              uiSettings={uiSettings}
+              disabled={isRunning || isPaused}
+              onReloadFaces={loadFaces}
+              onViewInFamilyTree={handleViewInFamilyTree}
+              scannedFilesCount={scanProgress?.scanned_count || 0}
+              activeInputFolders={settings?.input_folders || []}
+            />
           )}
 
           {activeTab === 'media_library' && (
-            <div className="tab-pane active media-library-layout" id="pane-media-library">
-              <FaceRegistry
-                faces={faces}
-                persons={persons}
-                unrecognizedFaces={unrecognizedFaces}
-                unrecognizedGroups={unrecognizedGroups}
-                isLoading={facesLoading}
-                error={facesError}
-                onRenameFace={handleRenameFace}
-                onAssignFace={handleAssignFace}
-                onAssignGroup={handleAssignGroup}
-                onResetFace={handleResetFace}
-                onResetFacesByFilename={handleResetFacesByFilename}
-                onDeleteFace={handleDeleteFace}
-                onDeleteFacesBatch={handleDeleteFacesBatch}
-                disabled={isRunning || isPaused || !canManageFaces}
-                uiSettings={uiSettings}
-                onViewInFamilyTree={handleViewInFamilyTree}
-              />
-
-              <ExecutionControls
-                isRunning={isRunning}
-                isPaused={isPaused}
-                currentTask={statusInfo.current_task}
-                onStartSync={handleStartSync}
-                onPauseSync={handlePauseSync}
-                onResumeSync={handleResumeSync}
-                onStopSync={handleStopSync}
-                onStartSingleAnalysis={handleStartSingleAnalysis}
-                onPickSingleFile={handlePickFile}
-                pickerPending={pickerPending}
-              />
-            </div>
+            <MediaLibraryScreen
+              faces={faces}
+              persons={persons}
+              unrecognizedFaces={unrecognizedFaces}
+              unrecognizedGroups={unrecognizedGroups}
+              isLoading={facesLoading}
+              error={facesError}
+              onRenameFace={handleRenameFace}
+              onAssignFace={handleAssignFace}
+              onAssignGroup={handleAssignGroup}
+              onResetFace={handleResetFace}
+              onResetFacesByFilename={handleResetFacesByFilename}
+              onDeleteFace={handleDeleteFace}
+              onDeleteFacesBatch={handleDeleteFacesBatch}
+              disabled={isRunning || isPaused || !canManageFaces}
+              uiSettings={uiSettings}
+              onViewInFamilyTree={handleViewInFamilyTree}
+              isRunning={isRunning}
+              isPaused={isPaused}
+              currentTask={statusInfo.current_task}
+              onStartSync={handleStartSync}
+              onPauseSync={handlePauseSync}
+              onResumeSync={handleResumeSync}
+              onStopSync={handleStopSync}
+              onStartSingleAnalysis={handleStartSingleAnalysis}
+              onPickSingleFile={handlePickFile}
+              pickerPending={pickerPending}
+            />
           )}
 
           {activeTab === 'family_tree' && (
-            <div
-              className="tab-pane active"
-              id="pane-family-tree"
-              style={{ width: '100%', height: 'calc(100vh - 120px)', minHeight: 650, position: 'relative' }}
-            >
-              <FamilyTreeTab />
-            </div>
+            <FamilyTreeScreen />
           )}
 
           {activeTab === 'settings' && (
-            <div className="tab-pane active" id="pane-settings">
-              <SystemSettings
-                settings={settings}
-                onSaveSettings={handleSaveSettings}
-                onPickFolder={handlePickFolder}
-                isRunning={isRunning}
-                isPaused={isPaused}
-                currentTask={statusInfo.current_task}
-                onStartSync={handleStartSync}
-                onPauseSync={handlePauseSync}
-                onResumeSync={handleResumeSync}
-                onStopSync={handleStopSync}
-                onStartSingleAnalysis={handleStartSingleAnalysis}
-                onPickSingleFile={handlePickFile}
-                pickerPending={pickerPending}
-                uiSettings={uiSettings}
-                onSaveUiSettings={handleSaveUiSettings}
-                initialTab={settingsTab}
-                onTabChange={(tab) => setSettingsTab(tab)}
-                onRefreshMedia={() => loadMediaFiles(true)}
-                onRescanSeries={async () => {
-                  await mediaCacheService.clear();
-                  await loadMediaFiles(true);
-                }}
-                scanProgress={scanProgress}
-              />
-            </div>
+            <SettingsScreen
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              onPickFolder={handlePickFolder}
+              isRunning={isRunning}
+              isPaused={isPaused}
+              currentTask={statusInfo.current_task}
+              onStartSync={handleStartSync}
+              onPauseSync={handlePauseSync}
+              onResumeSync={handleResumeSync}
+              onStopSync={handleStopSync}
+              onStartSingleAnalysis={handleStartSingleAnalysis}
+              onPickSingleFile={handlePickFile}
+              pickerPending={pickerPending}
+              uiSettings={uiSettings}
+              onSaveUiSettings={handleSaveUiSettings}
+              initialTab={settingsTab}
+              onTabChange={(tab) => setSettingsTab(tab)}
+              onRefreshMedia={() => loadMediaFiles(true)}
+              onRescanSeries={async () => {
+                await mediaCacheService.clear();
+                await loadMediaFiles(true);
+              }}
+              scanProgress={scanProgress}
+            />
           )}
 
           {activeTab === 'admin' && (
-            <div className="tab-pane active" id="pane-admin">
-              {!canAccessAdmin ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '60vh',
-                    gap: '1.25rem',
-                    textAlign: 'center',
-                    background: 'rgba(0, 0, 0, 0.25)',
-                    borderRadius: '16px',
-                    border: '1px dashed rgba(239, 68, 68, 0.3)',
-                    padding: '2rem',
-                  }}
-                >
-                  <span style={{ fontSize: '3.5rem' }}>🛡️</span>
-                  <div>
-                    <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Administrator Privileges Required</h2>
-                    <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
-                      You need to sign in with an Administrator account to configure feature flags, system parameters, and manage users.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setIsLoginOpen(true)}
-                    style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
-                    id="btn-admin-signin"
-                  >
-                    🔑 Sign In as Admin
-                  </button>
-                </div>
-              ) : (
-                <AdminPanel
-                  statusInfo={statusInfo}
-                  mediaFilesCount={mediaFiles.length}
-                  facesCount={faces.length}
-                  mediaFiles={mediaFiles}
-                  onRefreshMedia={() => loadMediaFiles(true)}
-                  onStartSingleAnalysis={handleStartSingleAnalysis}
-                  uiSettings={uiSettings}
-                  onReloadFaces={loadFaces}
-                  onViewInFamilyTree={handleViewInFamilyTree}
-                />
-              )}
-            </div>
+            <AdminScreen
+              canAccessAdmin={canAccessAdmin}
+              onOpenLogin={() => setIsLoginOpen(true)}
+              statusInfo={statusInfo}
+              mediaFilesCount={mediaFiles.length}
+              facesCount={faces.length}
+              mediaFiles={mediaFiles}
+              onRefreshMedia={() => loadMediaFiles(true)}
+              onStartSingleAnalysis={handleStartSingleAnalysis}
+              uiSettings={uiSettings}
+              onReloadFaces={loadFaces}
+              onViewInFamilyTree={handleViewInFamilyTree}
+            />
           )}
         </main>
       </div>

@@ -5,8 +5,8 @@ import path from 'node:path';
 
 describe('ViewSwitcherButtonGroup Component & Dropdown Feature Flag', () => {
   it('should have dedicated ViewSwitcherButtonGroup component exported', () => {
-    const componentPath = path.resolve('src/components/ViewSwitcherButtonGroup.tsx');
-    assert.ok(fs.existsSync(componentPath), 'ViewSwitcherButtonGroup.tsx should exist');
+    const componentPath = path.resolve('src/components/gallery/ViewSwitcherButtonGroup.tsx');
+    assert.ok(fs.existsSync(componentPath), 'ViewSwitcherButtonGroup.tsx should exist in gallery folder');
 
     const content = fs.readFileSync(componentPath, 'utf8');
     assert.ok(
@@ -26,7 +26,7 @@ describe('ViewSwitcherButtonGroup Component & Dropdown Feature Flag', () => {
   });
 
   it('should define VIEW_OPTIONS covering all gallery view modes', () => {
-    const componentPath = path.resolve('src/components/ViewSwitcherButtonGroup.tsx');
+    const componentPath = path.resolve('src/components/gallery/ViewSwitcherButtonGroup.tsx');
     const content = fs.readFileSync(componentPath, 'utf8');
 
     assert.ok(content.includes("'gallery'"), 'Should support gallery view mode');
@@ -37,8 +37,8 @@ describe('ViewSwitcherButtonGroup Component & Dropdown Feature Flag', () => {
   });
 
   it('should have dedicated ViewSwitcherButtonGroup.css with theme variables and dropdown styles', () => {
-    const cssPath = path.resolve('src/components/ViewSwitcherButtonGroup.css');
-    assert.ok(fs.existsSync(cssPath), 'ViewSwitcherButtonGroup.css should exist');
+    const cssPath = path.resolve('src/components/gallery/ViewSwitcherButtonGroup.css');
+    assert.ok(fs.existsSync(cssPath), 'ViewSwitcherButtonGroup.css should exist in gallery folder');
 
     const cssContent = fs.readFileSync(cssPath, 'utf8');
     assert.ok(
@@ -54,7 +54,7 @@ describe('ViewSwitcherButtonGroup Component & Dropdown Feature Flag', () => {
   });
 
   it('should verify MediaGallery utilizes ViewSwitcherButtonGroup and does not inline buttons', () => {
-    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryPath = path.resolve('src/components/gallery/MediaGallery.tsx');
     const galleryContent = fs.readFileSync(galleryPath, 'utf8');
 
     assert.ok(

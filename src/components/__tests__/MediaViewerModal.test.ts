@@ -5,8 +5,8 @@ import path from 'node:path';
 
 describe('MediaViewerModal & Theme Adaptability', () => {
   it('should have dedicated MediaViewerModal component exported', async () => {
-    const componentPath = path.resolve('src/components/MediaViewerModal.tsx');
-    assert.ok(fs.existsSync(componentPath), 'MediaViewerModal.tsx should exist');
+    const componentPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
+    assert.ok(fs.existsSync(componentPath), 'MediaViewerModal.tsx should exist in gallery folder');
 
     const content = fs.readFileSync(componentPath, 'utf8');
     assert.ok(content.includes('export default function MediaViewerModal'), 'Must export MediaViewerModal component');
@@ -17,8 +17,8 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should have dedicated MediaViewerModal.css utilizing CSS theme variables', () => {
-    const cssPath = path.resolve('src/components/MediaViewerModal.css');
-    assert.ok(fs.existsSync(cssPath), 'MediaViewerModal.css should exist');
+    const cssPath = path.resolve('src/components/gallery/MediaViewerModal.css');
+    assert.ok(fs.existsSync(cssPath), 'MediaViewerModal.css should exist in gallery folder');
 
     const cssContent = fs.readFileSync(cssPath, 'utf8');
     // Ensure it uses theme variables for background, text, and borders
@@ -34,7 +34,7 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should verify MediaGallery utilizes MediaViewerModal and does not duplicate modal JSX', () => {
-    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryPath = path.resolve('src/components/gallery/MediaGallery.tsx');
     const galleryContent = fs.readFileSync(galleryPath, 'utf8');
 
     assert.ok(galleryContent.includes('import MediaViewerModal from \'./MediaViewerModal\';'), 'MediaGallery must import MediaViewerModal');
@@ -43,7 +43,7 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should verify MediaViewerModal restricts btnEditMetadata to PROCESSED media and canEdit', () => {
-    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const modalPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
     const content = fs.readFileSync(modalPath, 'utf8');
 
     assert.ok(
@@ -53,7 +53,7 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should verify MediaViewerModal restricts vault actions strictly to admin users', () => {
-    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const modalPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
     const content = fs.readFileSync(modalPath, 'utf8');
 
     assert.ok(
@@ -67,7 +67,7 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should verify MediaViewerModal disables btnAnalyzeFile when AI Engine is offline', () => {
-    const modalPath = path.resolve('src/components/MediaViewerModal.tsx');
+    const modalPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
     const content = fs.readFileSync(modalPath, 'utf8');
 
     assert.ok(content.includes('isEngineConnected'), 'MediaViewerModal must declare isEngineConnected prop');
@@ -82,7 +82,7 @@ describe('MediaViewerModal & Theme Adaptability', () => {
   });
 
   it('should verify MetadataEditorModal uses active overlay and authFetch', () => {
-    const editorPath = path.resolve('src/components/MetadataEditorModal.tsx');
+    const editorPath = path.resolve('src/components/gallery/MetadataEditorModal.tsx');
     const content = fs.readFileSync(editorPath, 'utf8');
 
     assert.ok(

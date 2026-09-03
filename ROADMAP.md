@@ -69,7 +69,16 @@
 - [x] **View Switcher Button Group**  refactoring. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. 
 - [x] **Filter, Sort and Search Bar** Refactor the search bar. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. Dropdown menu should be at the same line with `View Switcher Button Group` dropdown
 - [x] **Face Registry UI** Refactor the face registry UI. Export to a dedicated component. Create a duplicate of the menu as dropdown. Add the feature flag show list if flag is active and as buttons if flag is not active. Dropdown menu should be at the same line with `Filter, Sort and Search Bar` dropdown
-
+- [x] **UI refactoring** Refactor the UI. Put all screens in a dedicated folder `screens`. Keep under components UI components groupped by features. Create `common` folder for common UI components. 
+    Example: 
+    - `Header component` in `components/header` folder, All nested components like header-settings, header-theme, header-profile, etc should be in `components/header` folder.
+    -  in `components/common` create generic component `button` to cover all buttons with the same style like button With Icon and text.
+    -  in `components/common` create generic component `toggle` to cover all toggles with the same style.
+    -  in `components/common` create generic component `image-view` to cover all image views.
+    -  in `components/common` create generic component `modal-container` to cover all modal containers.
+    - Make sure that all components are split by features and are self-contained.
+    - Avoid circular dependencies. Use hooks to share logic between components. 
+Do the same for all components. Do not change functionality. Add tests.
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.
 - [x] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels. Admin can give specific permissions to users. For example: view-only mode for some users. Admin can manage user accounts (create, edit, delete).

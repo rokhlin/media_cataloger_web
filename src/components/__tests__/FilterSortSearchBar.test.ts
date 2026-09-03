@@ -5,8 +5,8 @@ import path from 'node:path';
 
 describe('FilterSortSearchBar Component & Feature Flag', () => {
   it('should have dedicated FilterSortSearchBar component exported', () => {
-    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
-    assert.ok(fs.existsSync(componentPath), 'FilterSortSearchBar.tsx should exist');
+    const componentPath = path.resolve('src/components/gallery/FilterSortSearchBar.tsx');
+    assert.ok(fs.existsSync(componentPath), 'FilterSortSearchBar.tsx should exist in gallery folder');
 
     const content = fs.readFileSync(componentPath, 'utf8');
     assert.ok(
@@ -26,7 +26,7 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
   });
 
   it('should support search, type filters, status filters, and sorting', () => {
-    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
+    const componentPath = path.resolve('src/components/gallery/FilterSortSearchBar.tsx');
     const content = fs.readFileSync(componentPath, 'utf8');
 
     assert.ok(content.includes('searchQuery'), 'Should support searchQuery');
@@ -39,8 +39,8 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
   });
 
   it('should have dedicated FilterSortSearchBar.css with theme variables and dropdown styles', () => {
-    const cssPath = path.resolve('src/components/FilterSortSearchBar.css');
-    assert.ok(fs.existsSync(cssPath), 'FilterSortSearchBar.css should exist');
+    const cssPath = path.resolve('src/components/gallery/FilterSortSearchBar.css');
+    assert.ok(fs.existsSync(cssPath), 'FilterSortSearchBar.css should exist in gallery folder');
 
     const cssContent = fs.readFileSync(cssPath, 'utf8');
     assert.ok(
@@ -52,7 +52,7 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
   });
 
   it('should verify MediaGallery utilizes FilterSortSearchBar component', () => {
-    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryPath = path.resolve('src/components/gallery/MediaGallery.tsx');
     const galleryContent = fs.readFileSync(galleryPath, 'utf8');
 
     assert.ok(
@@ -85,7 +85,7 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
   });
 
   it('should verify SearchBar is exported and rendered in MediaGallery gallery-title-wrap', () => {
-    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
+    const componentPath = path.resolve('src/components/gallery/FilterSortSearchBar.tsx');
     const content = fs.readFileSync(componentPath, 'utf8');
 
     assert.ok(
@@ -93,7 +93,7 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
       'FilterSortSearchBar must export SearchBar component and SearchBarProps interface'
     );
 
-    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryPath = path.resolve('src/components/gallery/MediaGallery.tsx');
     const galleryContent = fs.readFileSync(galleryPath, 'utf8');
 
     assert.ok(
@@ -103,7 +103,7 @@ describe('FilterSortSearchBar Component & Feature Flag', () => {
   });
 
   it('should verify min chars to start search is 3 letters', () => {
-    const componentPath = path.resolve('src/components/FilterSortSearchBar.tsx');
+    const componentPath = path.resolve('src/components/gallery/FilterSortSearchBar.tsx');
     const content = fs.readFileSync(componentPath, 'utf8');
 
     assert.ok(

@@ -5,8 +5,8 @@ import path from 'node:path';
 
 describe('FaceRegistryUI Component & Feature Flag', () => {
   it('should have dedicated FaceRegistryUI component exported', () => {
-    const componentPath = path.resolve('src/components/FaceRegistryUI.tsx');
-    assert.ok(fs.existsSync(componentPath), 'FaceRegistryUI.tsx should exist');
+    const componentPath = path.resolve('src/components/faces/FaceRegistryUI.tsx');
+    assert.ok(fs.existsSync(componentPath), 'FaceRegistryUI.tsx should exist in faces folder');
 
     const content = fs.readFileSync(componentPath, 'utf8');
     assert.ok(
@@ -26,7 +26,7 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
   });
 
   it('should support clusters, known persons, and unrecognized faces tabs', () => {
-    const componentPath = path.resolve('src/components/FaceRegistryUI.tsx');
+    const componentPath = path.resolve('src/components/faces/FaceRegistryUI.tsx');
     const content = fs.readFileSync(componentPath, 'utf8');
 
     assert.ok(content.includes("'groups'"), 'Should support groups tab');
@@ -35,8 +35,8 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
   });
 
   it('should have dedicated FaceRegistryUI.css with theme variables and dropdown styles', () => {
-    const cssPath = path.resolve('src/components/FaceRegistryUI.css');
-    assert.ok(fs.existsSync(cssPath), 'FaceRegistryUI.css should exist');
+    const cssPath = path.resolve('src/components/faces/FaceRegistryUI.css');
+    assert.ok(fs.existsSync(cssPath), 'FaceRegistryUI.css should exist in faces folder');
 
     const cssContent = fs.readFileSync(cssPath, 'utf8');
     assert.ok(
@@ -48,7 +48,7 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
   });
 
   it('should verify FaceRegistry and MediaGallery utilize FaceRegistryUI component', () => {
-    const registryPath = path.resolve('src/components/FaceRegistry.tsx');
+    const registryPath = path.resolve('src/components/faces/FaceRegistry.tsx');
     const registryContent = fs.readFileSync(registryPath, 'utf8');
 
     assert.ok(
@@ -60,11 +60,11 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
       'FaceRegistry must render FaceRegistryUI component'
     );
 
-    const galleryPath = path.resolve('src/components/MediaGallery.tsx');
+    const galleryPath = path.resolve('src/components/gallery/MediaGallery.tsx');
     const galleryContent = fs.readFileSync(galleryPath, 'utf8');
 
     assert.ok(
-      galleryContent.includes("import FaceRegistryUI from './FaceRegistryUI'"),
+      galleryContent.includes("import FaceRegistryUI from '../faces/FaceRegistryUI'"),
       'MediaGallery must import FaceRegistryUI'
     );
     assert.ok(
