@@ -79,11 +79,11 @@ export const QuickAddRelativeModal = ({
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(30, 41, 59, 0.7)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'var(--input-bg)',
+    border: '1px solid var(--border-color)',
     borderRadius: 8,
     padding: '8px 12px',
-    color: '#f8fafc',
+    color: 'var(--text-primary)',
     fontSize: 13,
     outline: 'none',
     boxSizing: 'border-box',
@@ -93,7 +93,7 @@ export const QuickAddRelativeModal = ({
     display: 'block',
     fontSize: 12,
     fontWeight: 600,
-    color: '#94a3b8',
+    color: 'var(--text-secondary)',
     marginBottom: 4,
   };
 
@@ -110,7 +110,7 @@ export const QuickAddRelativeModal = ({
         position: 'fixed',
         inset: 0,
         zIndex: 100,
-        background: 'rgba(0, 0, 0, 0.75)',
+        background: 'rgba(0, 0, 0, 0.65)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -121,15 +121,15 @@ export const QuickAddRelativeModal = ({
     >
       <div
         style={{
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'var(--modal-bg)',
+          border: '1px solid var(--border-color)',
           borderRadius: 16,
           width: '100%',
           maxWidth: 540,
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+          boxShadow: 'var(--shadow-modal)',
           overflow: 'hidden',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -138,17 +138,17 @@ export const QuickAddRelativeModal = ({
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
               Add Family Relative
             </div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               {targetPersonName ? `Connecting new relative to ${targetPersonName}` : 'Add relative to family tree'}
             </div>
           </div>
@@ -157,7 +157,7 @@ export const QuickAddRelativeModal = ({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: 16,
               cursor: 'pointer',
             }}
@@ -180,11 +180,11 @@ export const QuickAddRelativeModal = ({
                     key={rel.id}
                     type="button"
                     style={{
-                      background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(30, 41, 59, 0.5)',
-                      border: isSelected ? '1.5px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--card-bg)',
+                      border: isSelected ? '1.5px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
                       borderRadius: 8,
                       padding: '10px 12px',
-                      color: isSelected ? '#ffffff' : '#94a3b8',
+                      color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -320,7 +320,7 @@ export const QuickAddRelativeModal = ({
                 alignItems: 'center',
                 gap: 8,
                 fontSize: 13,
-                color: '#f8fafc',
+                color: 'var(--text-primary)',
                 cursor: 'pointer',
               }}
             >
@@ -351,9 +351,9 @@ export const QuickAddRelativeModal = ({
             <button
               type="button"
               style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: '#cbd5e1',
-                border: 'none',
+                background: 'var(--nav-tab-bg)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-color)',
                 borderRadius: 8,
                 padding: '8px 16px',
                 fontSize: 13,

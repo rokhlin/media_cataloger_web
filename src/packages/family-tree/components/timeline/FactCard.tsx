@@ -48,12 +48,12 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
   return (
     <div
       style={{
-        background: 'rgba(30, 41, 59, 0.65)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border-color)',
         borderRadius: 12,
         padding: '12px 16px',
         marginBottom: 16,
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        boxShadow: 'var(--shadow-card)',
         position: 'relative',
         transition: 'all 0.15s ease',
       }}
@@ -79,7 +79,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
             <span>{event.event_type.replace('_', ' ')}</span>
           </span>
 
-          <span style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 600 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>
             {dateDisplay}
           </span>
         </div>
@@ -91,10 +91,10 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
               <button
                 type="button"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: 'none',
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: 6,
-                  color: '#94a3b8',
+                  color: 'var(--text-secondary)',
                   padding: '3px 8px',
                   fontSize: 11,
                   cursor: 'pointer',
@@ -112,7 +112,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--text-secondary)',
                   fontSize: 12,
                   cursor: 'pointer',
                 }}
@@ -129,7 +129,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#ef4444',
+                  color: 'var(--error-color, #ef4444)',
                   fontSize: 12,
                   cursor: 'pointer',
                 }}
@@ -144,20 +144,20 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
       </div>
 
       {/* Title */}
-      <div style={{ fontWeight: 700, fontSize: 14, color: '#f8fafc', marginBottom: 4 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
         {event.title}
       </div>
 
       {/* Description */}
       {event.description && (
-        <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 8 }}>
           {event.description}
         </div>
       )}
 
       {/* Location */}
       {event.location_name && (
-        <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
           <span>📍</span>
           <span>{event.location_name}</span>
         </div>
@@ -165,8 +165,8 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
 
       {/* Pinned Gallery Media Strip */}
       {event.pinned_media && event.pinned_media.length > 0 && (
-        <div style={{ marginTop: 10, borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
+        <div style={{ marginTop: 10, borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
             Pinned Photos ({event.pinned_media.length})
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
@@ -182,7 +182,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                     height: 64,
                     borderRadius: 8,
                     overflow: 'hidden',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    border: '1px solid var(--border-color)',
                     cursor: 'pointer',
                   }}
                   onClick={() => setSelectedPin(pin)}

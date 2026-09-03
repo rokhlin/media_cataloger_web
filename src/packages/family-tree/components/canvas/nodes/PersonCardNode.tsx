@@ -46,10 +46,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
   const cardBorder = isHighlighted
     ? '2px solid #f59e0b'
     : isCurrentSelected
-      ? '2px solid #6366f1'
+      ? '2px solid var(--primary-color, #6366f1)'
       : isRoot
-        ? '1.5px solid rgba(168, 85, 247, 0.6)'
-        : '1px solid rgba(255, 255, 255, 0.1)';
+        ? '1.5px solid var(--accent-color, #a855f7)'
+        : '1px solid var(--border-color)';
 
   const cardShadow = isHighlighted
     ? '0 0 25px rgba(245, 158, 11, 0.5)'
@@ -57,14 +57,14 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
       ? '0 0 25px rgba(99, 102, 241, 0.5)'
       : isRoot
         ? '0 4px 20px rgba(168, 85, 247, 0.25)'
-        : '0 4px 16px rgba(0, 0, 0, 0.35)';
+        : 'var(--shadow-card)';
 
   return (
     <div
       style={{
         width: 250,
         height: 140,
-        backgroundColor: 'rgba(17, 24, 39, 0.85)',
+        backgroundColor: 'var(--card-bg-solid)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderRadius: 14,
@@ -93,10 +93,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
         type="target"
         position={Position.Top}
         style={{
-          background: '#6366f1',
+          background: 'var(--primary-color, #6366f1)',
           width: 8,
           height: 8,
-          border: '2px solid #0f172a',
+          border: '2px solid var(--card-bg-solid)',
           top: -4,
         }}
       />
@@ -104,10 +104,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
         type="source"
         position={Position.Bottom}
         style={{
-          background: '#a855f7',
+          background: 'var(--accent-color, #a855f7)',
           width: 8,
           height: 8,
-          border: '2px solid #0f172a',
+          border: '2px solid var(--card-bg-solid)',
           bottom: -4,
         }}
       />
@@ -190,7 +190,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             style={{
               fontWeight: 700,
               fontSize: 14,
-              color: '#f3f4f6',
+              color: 'var(--text-primary)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -203,7 +203,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             <div
               style={{
                 fontSize: 11,
-                color: '#9ca3af',
+                color: 'var(--text-muted)',
                 fontStyle: 'italic',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -216,7 +216,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           <div
             style={{
               fontSize: 11,
-              color: person.is_living ? '#10b981' : '#9ca3af',
+              color: person.is_living ? '#10b981' : 'var(--text-secondary)',
               marginTop: 2,
               fontWeight: 500,
             }}
@@ -232,10 +232,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+          borderTop: '1px solid var(--border-color)',
           paddingTop: 6,
           fontSize: 11,
-          color: '#9ca3af',
+          color: 'var(--text-secondary)',
         }}
       >
         <div
@@ -255,10 +255,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           <button
             type="button"
             style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: 'none',
+              background: 'var(--nav-tab-bg)',
+              border: '1px solid var(--border-color)',
               borderRadius: 6,
-              color: '#cbd5e1',
+              color: 'var(--text-primary)',
               width: 22,
               height: 22,
               display: 'flex',
@@ -280,10 +280,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           <button
             type="button"
             style={{
-              background: isFolded ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.08)',
-              border: isFolded ? '1px solid #a855f7' : 'none',
+              background: isFolded ? 'rgba(168, 85, 247, 0.25)' : 'var(--nav-tab-bg)',
+              border: isFolded ? '1px solid var(--accent-color, #a855f7)' : '1px solid var(--border-color)',
               borderRadius: 6,
-              color: isFolded ? '#c084fc' : '#cbd5e1',
+              color: isFolded ? 'var(--accent-color, #a855f7)' : 'var(--text-primary)',
               width: 22,
               height: 22,
               display: 'flex',

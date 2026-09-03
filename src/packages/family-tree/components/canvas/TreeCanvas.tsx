@@ -20,6 +20,7 @@ import { KinshipHUD } from './controls/KinshipHUD.js';
 import { TreeSearchBar } from './controls/TreeSearchBar.js';
 import { useTreeLayoutWorker } from '../../hooks/useTreeLayoutWorker.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
+import { useTheme } from '../../../../theme/ThemeContext.js';
 import type { TreeGraphData } from '../../types/tree.types.js';
 
 interface TreeCanvasProps {
@@ -41,6 +42,8 @@ const edgeTypes: EdgeTypes = {
 export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanvasProps) => {
   const { layoutDirection, foldedNodeIds, selectPerson } = useFamilyTreeStore();
   const { fitView } = useReactFlow();
+  const { themeMode } = useTheme();
+  const isDark = themeMode === 'dark';
 
   const {
     nodes,
@@ -89,9 +92,9 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 30,
-            background: 'rgba(15, 23, 42, 0.9)',
-            border: '1px solid rgba(99, 102, 241, 0.4)',
-            color: '#c7d2fe',
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--primary-color)',
+            color: 'var(--text-primary)',
             padding: '6px 16px',
             borderRadius: 20,
             fontSize: 12,
@@ -99,7 +102,7 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
+            boxShadow: 'var(--shadow-card)',
             backdropFilter: 'blur(8px)',
           }}
         >
@@ -119,15 +122,15 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#94a3b8',
+            color: 'var(--text-muted)',
             gap: 16,
           }}
         >
           <div style={{ fontSize: 48 }}>🌳</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
             Your Family Tree is Empty
           </div>
-          <div style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', color: '#94a3b8' }}>
+          <div style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', color: 'var(--text-secondary)' }}>
             Start your genealogical journey by adding yourself or your first ancestor to the tree.
           </div>
           <button
@@ -167,26 +170,28 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
           background: 'transparent',
         }}
       >
-        <Background color="rgba(255, 255, 255, 0.05)" gap={24} size={1} />
+        <Background color={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)'} gap={24} size={1} />
         <Controls
           position="bottom-right"
           showInteractive={false}
           style={{
-            background: 'rgba(15, 23, 42, 0.8)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--border-color)',
             borderRadius: 8,
             overflow: 'hidden',
+            boxShadow: 'var(--shadow-card)',
           }}
         />
         <MiniMap
-          nodeColor={(n: Node) => (n.type === 'person' ? '#6366f1' : '#a855f7')}
-          maskColor="rgba(11, 15, 25, 0.75)"
+          nodeColor={(n: Node) => (n.type === 'person' ? 'var(--primary-color, #6366f1)' : 'var(--accent-color, #a855f7)')}
+          maskColor={isDark ? 'rgba(11, 15, 25, 0.75)' : 'rgba(240, 243, 248, 0.75)'}
           style={{
-            background: 'rgba(15, 23, 42, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--border-color)',
             borderRadius: 8,
             bottom: 24,
             left: 24,
+            boxShadow: 'var(--shadow-card)',
           }}
           zoomable
           pannable

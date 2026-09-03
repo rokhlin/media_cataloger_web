@@ -27,9 +27,9 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         width: 36,
         height: 36,
         borderRadius: '50%',
-        backgroundColor: '#1e293b',
-        border: '2px solid rgba(255, 255, 255, 0.18)',
-        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.4)',
+        backgroundColor: 'var(--card-bg-solid)',
+        border: '2px solid var(--border-color-hover)',
+        boxShadow: 'var(--shadow-card)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -44,10 +44,10 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         type="target"
         position={Position.Top}
         style={{
-          background: '#6366f1',
+          background: 'var(--primary-color, #6366f1)',
           width: 6,
           height: 6,
-          border: '1px solid #0f172a',
+          border: '1px solid var(--card-bg-solid)',
           top: -3,
         }}
       />
@@ -58,10 +58,10 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         type="source"
         position={Position.Bottom}
         style={{
-          background: '#a855f7',
+          background: 'var(--accent-color, #a855f7)',
           width: 6,
           height: 6,
-          border: '1px solid #0f172a',
+          border: '1px solid var(--card-bg-solid)',
           bottom: -3,
         }}
       />

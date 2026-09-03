@@ -79,13 +79,13 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header with "+ Add Life Fact" and Filter Pills */}
-      <div style={{ padding: '0 0 14px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+      <div style={{ padding: '0 0 14px', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
               Chronological Life Story & Timeline
             </div>
-            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
               {events.length} milestones & life facts recorded for {personName}
             </div>
           </div>
@@ -121,10 +121,10 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
                 key={cat.id}
                 type="button"
                 style={{
-                  background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  border: isSelected ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+                  background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
+                  border: isSelected ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
                   borderRadius: 20,
-                  color: isSelected ? '#c7d2fe' : '#94a3b8',
+                  color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
                   padding: '3px 10px',
                   fontSize: 11,
                   fontWeight: 600,
@@ -144,16 +144,16 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
       {/* Timeline List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 4px 16px 0', position: 'relative' }}>
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
             Loading timeline facts...
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>📜</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
               No facts recorded in this category
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
               Click &quot;Add Life Fact&quot; above to document graduations, trips, moves, or anecdotes!
             </div>
           </div>
@@ -167,7 +167,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
                 bottom: 8,
                 left: 6,
                 width: 2,
-                background: 'linear-gradient(to bottom, #6366f1, #a855f7, rgba(255, 255, 255, 0.1))',
+                background: 'linear-gradient(to bottom, var(--primary-color, #6366f1), var(--accent-color, #a855f7), var(--border-color))',
               }}
             />
 
@@ -183,7 +183,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
                     height: 10,
                     borderRadius: '50%',
                     background: evt.is_system_generated ? '#a855f7' : '#6366f1',
-                    border: '2px solid #0f172a',
+                    border: '2px solid var(--card-bg-solid)',
                     boxShadow: '0 0 8px rgba(99, 102, 241, 0.6)',
                   }}
                 />

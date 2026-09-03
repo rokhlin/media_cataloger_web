@@ -88,7 +88,7 @@ export const FaceLinkModal = ({
         position: 'fixed',
         inset: 0,
         zIndex: 110,
-        background: 'rgba(0, 0, 0, 0.75)',
+        background: 'rgba(0, 0, 0, 0.65)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -99,15 +99,15 @@ export const FaceLinkModal = ({
     >
       <div
         style={{
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'var(--modal-bg)',
+          border: '1px solid var(--border-color)',
           borderRadius: 16,
           width: '100%',
           maxWidth: 640,
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+          boxShadow: 'var(--shadow-modal)',
           overflow: 'hidden',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -116,17 +116,17 @@ export const FaceLinkModal = ({
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
               Link Face Crop & Photo Avatar
             </div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               Connecting recognized visual identity for {person.full_name || person.first_name}
             </div>
           </div>
@@ -135,7 +135,7 @@ export const FaceLinkModal = ({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: 16,
               cursor: 'pointer',
             }}
@@ -149,8 +149,8 @@ export const FaceLinkModal = ({
         <div
           style={{
             display: 'flex',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            background: 'rgba(30, 41, 59, 0.5)',
+            borderBottom: '1px solid var(--border-color)',
+            background: 'var(--card-bg)',
             padding: '0 12px',
           }}
         >
@@ -160,8 +160,8 @@ export const FaceLinkModal = ({
               padding: '10px 16px',
               border: 'none',
               background: 'transparent',
-              color: activeTab === 'known' ? '#6366f1' : '#94a3b8',
-              borderBottom: activeTab === 'known' ? '2px solid #6366f1' : '2px solid transparent',
+              color: activeTab === 'known' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'known' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
               fontWeight: 600,
               fontSize: 13,
               cursor: 'pointer',
@@ -177,8 +177,8 @@ export const FaceLinkModal = ({
               padding: '10px 16px',
               border: 'none',
               background: 'transparent',
-              color: activeTab === 'unrecognized' ? '#6366f1' : '#94a3b8',
-              borderBottom: activeTab === 'unrecognized' ? '2px solid #6366f1' : '2px solid transparent',
+              color: activeTab === 'unrecognized' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'unrecognized' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
               fontWeight: 600,
               fontSize: 13,
               cursor: 'pointer',
@@ -194,8 +194,8 @@ export const FaceLinkModal = ({
               padding: '10px 16px',
               border: 'none',
               background: 'transparent',
-              color: activeTab === 'linked' ? '#6366f1' : '#94a3b8',
-              borderBottom: activeTab === 'linked' ? '2px solid #6366f1' : '2px solid transparent',
+              color: activeTab === 'linked' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'linked' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
               fontWeight: 600,
               fontSize: 13,
               cursor: 'pointer',
@@ -217,11 +217,11 @@ export const FaceLinkModal = ({
                 placeholder="Filter known persons..."
                 style={{
                   width: '100%',
-                  background: 'rgba(30, 41, 59, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: 8,
                   padding: '8px 12px',
-                  color: '#f8fafc',
+                  color: 'var(--text-primary)',
                   fontSize: 13,
                   outline: 'none',
                   marginBottom: 14,
@@ -230,9 +230,9 @@ export const FaceLinkModal = ({
               />
 
               {isLoading ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>Loading faces...</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>Loading faces...</div>
               ) : filteredKnown.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No matching known persons found.</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>No matching known persons found.</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
                   {filteredKnown.map((p) => {
@@ -243,8 +243,8 @@ export const FaceLinkModal = ({
                       <div
                         key={p.person_id || p.name}
                         style={{
-                          background: 'rgba(30, 41, 59, 0.6)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          background: 'var(--card-bg)',
+                          border: '1px solid var(--border-color)',
                           borderRadius: 10,
                           padding: 10,
                           display: 'flex',
@@ -281,10 +281,10 @@ export const FaceLinkModal = ({
                             {p.name[0]}
                           </div>
                         )}
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
                           {p.name}
                         </div>
-                        <div style={{ fontSize: 10, color: '#94a3b8' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
                           {p.reference_count || 1} photo(s)
                         </div>
                       </div>
@@ -298,9 +298,9 @@ export const FaceLinkModal = ({
           {activeTab === 'unrecognized' && (
             <div>
               {isLoading ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>Loading faces...</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>Loading faces...</div>
               ) : unrecognizedFaces.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>No unrecognized face crops available.</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>No unrecognized face crops available.</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
                   {unrecognizedFaces.slice(0, 50).map((f) => {
@@ -311,8 +311,8 @@ export const FaceLinkModal = ({
                       <div
                         key={f.face_id}
                         style={{
-                          background: 'rgba(30, 41, 59, 0.6)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          background: 'var(--card-bg)',
+                          border: '1px solid var(--border-color)',
                           borderRadius: 8,
                           padding: 8,
                           display: 'flex',
@@ -330,7 +330,7 @@ export const FaceLinkModal = ({
                             style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }}
                           />
                         )}
-                        <div style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center' }}>
                           {f.face_id}
                         </div>
                       </div>
@@ -344,7 +344,7 @@ export const FaceLinkModal = ({
           {activeTab === 'linked' && (
             <div>
               {personFaceLinks.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>
                   No face crops currently linked to this person.
                 </div>
               ) : (
@@ -356,8 +356,8 @@ export const FaceLinkModal = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: 'rgba(30, 41, 59, 0.6)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: 'var(--card-bg)',
+                        border: '1px solid var(--border-color)',
                         borderRadius: 10,
                         padding: 12,
                       }}
@@ -372,10 +372,10 @@ export const FaceLinkModal = ({
                           }}
                         />
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                             {link.media_person_name}
                           </div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                             Face ID: {link.media_face_id} {link.is_primary_avatar ? '• ⭐ Primary Avatar' : ''}
                           </div>
                         </div>

@@ -25,7 +25,7 @@ export const BiologicalEdge = memo(({
       path={edgePath}
       markerEnd={markerEnd}
       style={{
-        stroke: '#818cf8',
+        stroke: 'var(--primary-color, #6366f1)',
         strokeWidth: 2,
         opacity: 0.85,
         ...style,

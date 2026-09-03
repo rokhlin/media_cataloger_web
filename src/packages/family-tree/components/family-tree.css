@@ -1,0 +1,31 @@
+/* Family Tree & XYFlow Theme Adaptation */
+
+.react-flow__controls {
+  background: var(--card-bg-solid) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.react-flow__controls-button {
+  background: var(--card-bg-solid) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  fill: var(--text-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--nav-tab-bg) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: var(--text-primary) !important;
+}
+
+.react-flow__minimap {
+  background: var(--card-bg-solid) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-card) !important;
+}

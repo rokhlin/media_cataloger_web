@@ -84,7 +84,7 @@ export const GalleryPhotoPicker = ({
         position: 'fixed',
         inset: 0,
         zIndex: 110,
-        background: 'rgba(0, 0, 0, 0.75)',
+        background: 'rgba(0, 0, 0, 0.65)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -95,15 +95,15 @@ export const GalleryPhotoPicker = ({
     >
       <div
         style={{
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'var(--modal-bg)',
+          border: '1px solid var(--border-color)',
           borderRadius: 16,
           width: '100%',
           maxWidth: 720,
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+          boxShadow: 'var(--shadow-modal)',
           overflow: 'hidden',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -112,7 +112,7 @@ export const GalleryPhotoPicker = ({
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -121,10 +121,10 @@ export const GalleryPhotoPicker = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🖼️</span>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                 Select Gallery Photos to Pin
               </div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 Attach visual memories and documents from your Media Cataloger library
               </div>
             </div>
@@ -134,7 +134,7 @@ export const GalleryPhotoPicker = ({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               fontSize: 16,
               cursor: 'pointer',
             }}
@@ -145,7 +145,7 @@ export const GalleryPhotoPicker = ({
         </div>
 
         {/* Filter bar */}
-        <div style={{ padding: '12px 20px', display: 'flex', gap: 10, borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+        <div style={{ padding: '12px 20px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border-color)' }}>
           <input
             type="text"
             value={searchQuery}
@@ -153,11 +153,11 @@ export const GalleryPhotoPicker = ({
             placeholder="Search by photo name, tagged person, description..."
             style={{
               flex: 1,
-              background: 'rgba(30, 41, 59, 0.7)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border-color)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               fontSize: 13,
               outline: 'none',
             }}
@@ -167,9 +167,9 @@ export const GalleryPhotoPicker = ({
             <button
               type="button"
               style={{
-                background: 'rgba(99, 102, 241, 0.2)',
-                border: '1px solid rgba(99, 102, 241, 0.4)',
-                color: '#c7d2fe',
+                background: 'var(--nav-tab-active-bg)',
+                border: '1px solid var(--primary-color, #6366f1)',
+                color: 'var(--primary-color, #6366f1)',
                 borderRadius: 8,
                 padding: '0 12px',
                 fontSize: 12,
@@ -186,11 +186,11 @@ export const GalleryPhotoPicker = ({
         {/* Media Grid */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
           {isLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
               Loading media library...
             </div>
           ) : filteredMedia.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
               No photos found matching your search.
             </div>
           ) : (
@@ -213,7 +213,7 @@ export const GalleryPhotoPicker = ({
                       aspectRatio: '1',
                       borderRadius: 10,
                       overflow: 'hidden',
-                      border: isSelected ? '3px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.1)',
+                      border: isSelected ? '3px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
                       cursor: 'pointer',
                       transition: 'transform 0.15s ease, border 0.15s ease',
                       boxShadow: isSelected ? '0 0 15px rgba(99, 102, 241, 0.5)' : 'none',
@@ -276,15 +276,14 @@ export const GalleryPhotoPicker = ({
           )}
         </div>
 
-        {/* Footer with caption input and submit */}
+        {/* Footer */}
         <div
           style={{
             padding: '14px 20px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            background: 'rgba(30, 41, 59, 0.5)',
+            borderTop: '1px solid var(--border-color)',
+            background: 'var(--card-bg)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             gap: 12,
           }}
         >
@@ -295,11 +294,11 @@ export const GalleryPhotoPicker = ({
             placeholder="Optional caption for pinned photo(s)..."
             style={{
               flex: 1,
-              background: 'rgba(15, 23, 42, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border-color)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
               fontSize: 13,
               outline: 'none',
             }}
@@ -309,9 +308,9 @@ export const GalleryPhotoPicker = ({
             <button
               type="button"
               style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: '#cbd5e1',
-                border: 'none',
+                background: 'var(--nav-tab-bg)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-color)',
                 borderRadius: 8,
                 padding: '8px 16px',
                 fontSize: 13,

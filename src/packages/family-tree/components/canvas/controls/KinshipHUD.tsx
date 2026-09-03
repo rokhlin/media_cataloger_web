@@ -36,16 +36,16 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 20,
-        background: 'rgba(15, 23, 42, 0.9)',
-        border: '1.5px solid rgba(99, 102, 241, 0.5)',
+        background: 'var(--card-bg-solid)',
+        border: '1.5px solid var(--primary-color, #6366f1)',
         borderRadius: 30,
         padding: '8px 20px',
         display: 'flex',
         alignItems: 'center',
         gap: 16,
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.25)',
+        boxShadow: 'var(--shadow-modal)',
         backdropFilter: 'blur(16px)',
-        color: '#f8fafc',
+        color: 'var(--text-primary)',
         fontSize: 13,
         fontWeight: 500,
         userSelect: 'none',
@@ -55,7 +55,7 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 16 }}>🧬</span>
         <span>
-          <strong style={{ color: '#a5b4fc' }}>{selectedName}</strong>
+          <strong style={{ color: 'var(--primary-color, #6366f1)' }}>{selectedName}</strong>
           {' is '}
           <span
             style={{
@@ -69,7 +69,7 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
             {term}
           </span>
           {` to ${rootName}`}
-          <span style={{ color: '#94a3b8', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
             {category}
             {genDist}
             {blood}
@@ -80,9 +80,9 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
       <button
         type="button"
         style={{
-          background: 'rgba(255, 255, 255, 0.1)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          color: '#ffffff',
+          background: 'var(--nav-tab-bg)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--text-primary)',
           padding: '4px 12px',
           borderRadius: 20,
           fontSize: 12,

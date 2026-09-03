@@ -6,6 +6,7 @@ import { TreeCanvas } from './canvas/TreeCanvas.js';
 import { PersonDetailDrawer } from './modals/PersonDetailDrawer.js';
 import { QuickAddRelativeModal } from './modals/QuickAddRelativeModal.js';
 import { FaceLinkModal } from './modals/FaceLinkModal.js';
+import './family-tree.css';
 
 export const FamilyTreeTab = () => {
   const {
@@ -113,7 +114,7 @@ export const FamilyTreeTab = () => {
                 zIndex: 40,
                 background: 'rgba(239, 68, 68, 0.15)',
                 border: '1px solid rgba(239, 68, 68, 0.4)',
-                color: '#fca5a5',
+                color: 'var(--error-color, #ef4444)',
                 padding: '10px 18px',
                 borderRadius: 10,
                 fontSize: 13,
@@ -121,7 +122,7 @@ export const FamilyTreeTab = () => {
                 alignItems: 'center',
                 gap: 12,
                 backdropFilter: 'blur(10px)',
-                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+                boxShadow: 'var(--shadow-modal)',
               }}
             >
               <span>⚠️ {error}</span>
@@ -181,7 +182,7 @@ export const FamilyTreeTab = () => {
               position: 'fixed',
               inset: 0,
               zIndex: 100,
-              background: 'rgba(0, 0, 0, 0.75)',
+              background: 'rgba(0, 0, 0, 0.65)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -192,17 +193,17 @@ export const FamilyTreeTab = () => {
           >
             <div
               style={{
-                background: 'rgba(15, 23, 42, 0.95)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
+                background: 'var(--modal-bg)',
+                border: '1px solid var(--border-color)',
                 borderRadius: 16,
                 width: '100%',
                 maxWidth: 440,
                 padding: 24,
-                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+                boxShadow: 'var(--shadow-modal)',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 12 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
                 Add Initial Family Member
               </div>
               <form onSubmit={handleAddNewStandalonePerson}>
@@ -215,11 +216,11 @@ export const FamilyTreeTab = () => {
                   placeholder="Enter full name (e.g. Alex Johnson)"
                   style={{
                     width: '100%',
-                    background: 'rgba(30, 41, 59, 0.7)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: 8,
                     padding: '10px 14px',
-                    color: '#f8fafc',
+                    color: 'var(--text-primary)',
                     fontSize: 14,
                     outline: 'none',
                     boxSizing: 'border-box',
@@ -230,9 +231,9 @@ export const FamilyTreeTab = () => {
                   <button
                     type="button"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      color: '#cbd5e1',
-                      border: 'none',
+                      background: 'var(--nav-tab-bg)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
                       borderRadius: 8,
                       padding: '8px 16px',
                       fontSize: 13,

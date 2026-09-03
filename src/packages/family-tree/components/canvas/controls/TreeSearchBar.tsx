@@ -75,15 +75,15 @@ export const TreeSearchBar = memo(() => {
         style={{
           display: 'flex',
           alignItems: 'center',
-          background: 'rgba(15, 23, 42, 0.85)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
+          background: 'var(--card-bg-solid)',
+          border: '1px solid var(--border-color)',
           borderRadius: 10,
           padding: '6px 12px',
           backdropFilter: 'blur(12px)',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
-        <span style={{ marginRight: 8, fontSize: 14, color: '#94a3b8' }}>🔍</span>
+        <span style={{ marginRight: 8, fontSize: 14, color: 'var(--text-muted)' }}>🔍</span>
         <input
           type="text"
           value={query}
@@ -93,7 +93,7 @@ export const TreeSearchBar = memo(() => {
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: '#f8fafc',
+            color: 'var(--text-primary)',
             fontSize: 13,
             width: '100%',
           }}
@@ -104,7 +104,7 @@ export const TreeSearchBar = memo(() => {
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-muted)',
               cursor: 'pointer',
               fontSize: 12,
             }}
@@ -126,13 +126,13 @@ export const TreeSearchBar = memo(() => {
             top: 'calc(100% + 6px)',
             left: 0,
             right: 0,
-            background: 'rgba(15, 23, 42, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--border-color)',
             borderRadius: 10,
             maxHeight: 280,
             overflowY: 'auto',
             backdropFilter: 'blur(16px)',
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
+            boxShadow: 'var(--shadow-modal)',
             padding: '4px',
           }}
         >
@@ -149,7 +149,7 @@ export const TreeSearchBar = memo(() => {
                 transition: 'background 0.1s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.2)';
+                e.currentTarget.style.background = 'var(--nav-tab-active-bg)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
@@ -183,11 +183,11 @@ export const TreeSearchBar = memo(() => {
                 )}
 
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     {p.fullName}
                   </div>
                   {p.birthYear && (
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                       {p.isLiving ? `b. ${p.birthYear}` : `Lifespan info`}
                     </div>
                   )}
@@ -197,9 +197,9 @@ export const TreeSearchBar = memo(() => {
               {p.kinshipTerm && (
                 <span
                   style={{
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    color: '#c7d2fe',
+                    background: 'var(--nav-tab-active-bg)',
+                    border: '1px solid var(--primary-color, #6366f1)',
+                    color: 'var(--primary-color, #6366f1)',
                     fontSize: 10,
                     fontWeight: 700,
                     padding: '2px 6px',

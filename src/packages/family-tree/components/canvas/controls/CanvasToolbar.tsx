@@ -25,9 +25,9 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
   };
 
   const buttonStyle: React.CSSProperties = {
-    background: 'rgba(30, 41, 59, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    color: '#e2e8f0',
+    background: 'var(--card-bg-solid)',
+    border: '1px solid var(--border-color)',
+    color: 'var(--text-primary)',
     padding: '7px 12px',
     borderRadius: 8,
     fontSize: 12,
@@ -50,12 +50,12 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        background: 'rgba(15, 23, 42, 0.75)',
+        background: 'var(--card-bg)',
         padding: '6px 8px',
         borderRadius: 12,
-        border: '1px solid rgba(255, 255, 255, 0.1)',
+        border: '1px solid var(--border-color)',
         backdropFilter: 'blur(12px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <button type="button" style={buttonStyle} onClick={() => zoomIn({ duration: 300 })} title="Zoom In">
@@ -74,9 +74,9 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         type="button"
         style={{
           ...buttonStyle,
-          background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(99, 102, 241, 0.3))',
-          border: '1px solid rgba(168, 85, 247, 0.4)',
-          color: '#e0e7ff',
+          background: 'var(--nav-tab-active-bg)',
+          border: '1px solid var(--accent-color, #a855f7)',
+          color: 'var(--accent-color, #a855f7)',
         }}
         onClick={handleFocusRoot}
         title="Focus on Root ('ME') Person"

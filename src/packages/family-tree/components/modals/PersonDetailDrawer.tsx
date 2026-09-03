@@ -125,11 +125,11 @@ export const PersonDetailDrawer = ({
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(30, 41, 59, 0.7)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'var(--input-bg)',
+    border: '1px solid var(--border-color)',
     borderRadius: 8,
     padding: '8px 12px',
-    color: '#f8fafc',
+    color: 'var(--text-primary)',
     fontSize: 13,
     outline: 'none',
     boxSizing: 'border-box',
@@ -139,7 +139,7 @@ export const PersonDetailDrawer = ({
     display: 'block',
     fontSize: 12,
     fontWeight: 600,
-    color: '#94a3b8',
+    color: 'var(--text-secondary)',
     marginBottom: 4,
   };
 
@@ -152,10 +152,10 @@ export const PersonDetailDrawer = ({
         bottom: 0,
         width: 460,
         zIndex: 50,
-        background: 'rgba(15, 23, 42, 0.95)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
+        background: 'var(--modal-bg)',
+        borderLeft: '1px solid var(--border-color)',
         backdropFilter: 'blur(20px)',
-        boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.6)',
+        boxShadow: 'var(--shadow-modal)',
         display: 'flex',
         flexDirection: 'column',
         animation: 'fadeIn 0.2s ease-out',
@@ -165,11 +165,11 @@ export const PersonDetailDrawer = ({
       <div
         style={{
           padding: '16px 20px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--border-color)',
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
-          background: 'rgba(30, 41, 59, 0.4)',
+          background: 'var(--card-bg)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -215,7 +215,7 @@ export const PersonDetailDrawer = ({
                 right: -2,
                 background: '#6366f1',
                 color: '#ffffff',
-                border: '1.5px solid #0f172a',
+                border: '1.5px solid var(--card-bg-solid)',
                 borderRadius: '50%',
                 width: 20,
                 height: 20,
@@ -233,7 +233,7 @@ export const PersonDetailDrawer = ({
           </div>
 
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>{fullName}</span>
               {isRoot && (
                 <span
@@ -252,7 +252,7 @@ export const PersonDetailDrawer = ({
             </div>
 
             {person.maiden_name && (
-              <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 née {person.maiden_name}
               </div>
             )}
@@ -261,9 +261,9 @@ export const PersonDetailDrawer = ({
               <div style={{ marginTop: 4 }}>
                 <span
                   style={{
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    color: '#c7d2fe',
+                    background: 'var(--nav-tab-active-bg)',
+                    border: '1px solid var(--primary-color, #6366f1)',
+                    color: 'var(--primary-color, #6366f1)',
                     fontSize: 11,
                     fontWeight: 700,
                     padding: '2px 8px',
@@ -282,7 +282,7 @@ export const PersonDetailDrawer = ({
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#94a3b8',
+            color: 'var(--text-secondary)',
             fontSize: 18,
             cursor: 'pointer',
             padding: 4,
@@ -300,17 +300,17 @@ export const PersonDetailDrawer = ({
           alignItems: 'center',
           gap: 8,
           padding: '8px 20px',
-          background: 'rgba(30, 41, 59, 0.25)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'var(--nav-tab-bg)',
+          borderBottom: '1px solid var(--border-color)',
           overflowX: 'auto',
         }}
       >
         <button
           type="button"
           style={{
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: '#cbd5e1',
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
             borderRadius: 6,
             padding: '4px 10px',
             fontSize: 11,
@@ -326,9 +326,9 @@ export const PersonDetailDrawer = ({
         <button
           type="button"
           style={{
-            background: 'rgba(99, 102, 241, 0.2)',
-            border: '1px solid rgba(99, 102, 241, 0.4)',
-            color: '#c7d2fe',
+            background: 'var(--nav-tab-active-bg)',
+            border: '1px solid var(--primary-color, #6366f1)',
+            color: 'var(--primary-color, #6366f1)',
             borderRadius: 6,
             padding: '4px 10px',
             fontSize: 11,
@@ -347,7 +347,7 @@ export const PersonDetailDrawer = ({
             style={{
               background: 'rgba(168, 85, 247, 0.2)',
               border: '1px solid rgba(168, 85, 247, 0.4)',
-              color: '#e9d5ff',
+              color: 'var(--accent-color, #a855f7)',
               borderRadius: 6,
               padding: '4px 10px',
               fontSize: 11,
@@ -366,7 +366,7 @@ export const PersonDetailDrawer = ({
           style={{
             background: 'rgba(239, 68, 68, 0.15)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
+            color: 'var(--error-color, #ef4444)',
             borderRadius: 6,
             padding: '4px 10px',
             fontSize: 11,
@@ -384,8 +384,8 @@ export const PersonDetailDrawer = ({
       <div
         style={{
           display: 'flex',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(15, 23, 42, 0.5)',
+          borderBottom: '1px solid var(--border-color)',
+          background: 'var(--card-bg)',
         }}
       >
         <button
@@ -395,8 +395,8 @@ export const PersonDetailDrawer = ({
             padding: '10px 0',
             border: 'none',
             background: 'transparent',
-            color: drawerActiveTab === 'bio' ? '#6366f1' : '#94a3b8',
-            borderBottom: drawerActiveTab === 'bio' ? '2px solid #6366f1' : '2px solid transparent',
+            color: drawerActiveTab === 'bio' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+            borderBottom: drawerActiveTab === 'bio' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'pointer',
@@ -413,8 +413,8 @@ export const PersonDetailDrawer = ({
             padding: '10px 0',
             border: 'none',
             background: 'transparent',
-            color: drawerActiveTab === 'family' ? '#6366f1' : '#94a3b8',
-            borderBottom: drawerActiveTab === 'family' ? '2px solid #6366f1' : '2px solid transparent',
+            color: drawerActiveTab === 'family' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+            borderBottom: drawerActiveTab === 'family' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'pointer',
@@ -431,8 +431,8 @@ export const PersonDetailDrawer = ({
             padding: '10px 0',
             border: 'none',
             background: 'transparent',
-            color: drawerActiveTab === 'timeline' ? '#6366f1' : '#94a3b8',
-            borderBottom: drawerActiveTab === 'timeline' ? '2px solid #6366f1' : '2px solid transparent',
+            color: drawerActiveTab === 'timeline' ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+            borderBottom: drawerActiveTab === 'timeline' ? '2px solid var(--primary-color, #6366f1)' : '2px solid transparent',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'pointer',
@@ -469,32 +469,32 @@ export const PersonDetailDrawer = ({
                   </button>
                 </div>
 
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: 10, padding: 14, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Birth Information</div>
-                  <div style={{ fontSize: 14, color: '#f8fafc', fontWeight: 600 }}>
+                <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Birth Information</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
                     {person.birth_date || 'Date unknown'} {person.birth_place ? `• ${person.birth_place}` : ''}
                   </div>
                 </div>
 
                 {!person.is_living && (
-                  <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: 10, padding: 14, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Passing Information</div>
-                    <div style={{ fontSize: 14, color: '#f8fafc', fontWeight: 600 }}>
+                  <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Passing Information</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
                       {person.death_date || 'Date unknown'} {person.death_place ? `• ${person.death_place}` : ''}
                     </div>
                   </div>
                 )}
 
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: 10, padding: 14, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Gender</div>
-                  <div style={{ fontSize: 14, color: '#f8fafc', fontWeight: 600 }}>
+                <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Gender</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
                     {person.gender}
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: 10, padding: 14, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Life Biography & Notes</div>
-                  <div style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Life Biography & Notes</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                     {person.bio || 'No biography written yet. Click Edit Information above to add memories, background, and stories.'}
                   </div>
                 </div>
@@ -545,7 +545,7 @@ export const PersonDetailDrawer = ({
                 </div>
 
                 <div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#f8fafc', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={isLiving} onChange={(e) => setIsLiving(e.target.checked)} />
                     <span>Currently living</span>
                   </label>
@@ -572,7 +572,7 @@ export const PersonDetailDrawer = ({
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
                   <button
                     type="button"
-                    style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#cbd5e1', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}
+                    style={{ background: 'var(--nav-tab-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}
                     onClick={() => setIsEditingBio(false)}
                   >
                     Cancel
@@ -596,12 +596,12 @@ export const PersonDetailDrawer = ({
             {/* Parents */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   Parents ({personContext?.immediateFamily?.parents?.length || 0})
                 </div>
                 <button
                   type="button"
-                  style={{ background: 'transparent', border: 'none', color: '#6366f1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'PARENT')}
                 >
                   + Add Parent
@@ -612,14 +612,14 @@ export const PersonDetailDrawer = ({
                 {personContext?.immediateFamily?.parents?.map((p: any) => (
                   <div
                     key={p.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
                     onClick={() => selectPerson(p.id, true)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>👤</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{p.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 600 }}>{p.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{p.relation}</span>
                   </div>
                 ))}
               </div>
@@ -628,12 +628,12 @@ export const PersonDetailDrawer = ({
             {/* Spouses */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   Spouses & Partners ({personContext?.immediateFamily?.spouses?.length || 0})
                 </div>
                 <button
                   type="button"
-                  style={{ background: 'transparent', border: 'none', color: '#6366f1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'SPOUSE')}
                 >
                   + Add Spouse
@@ -644,12 +644,12 @@ export const PersonDetailDrawer = ({
                 {personContext?.immediateFamily?.spouses?.map((s: any) => (
                   <div
                     key={s.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
                     onClick={() => selectPerson(s.id, true)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>💍</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{s.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.name}</span>
                     </div>
                     <span style={{ fontSize: 11, color: '#f472b6', fontWeight: 600 }}>{s.relation}</span>
                   </div>
@@ -660,12 +660,12 @@ export const PersonDetailDrawer = ({
             {/* Siblings */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   Siblings ({personContext?.immediateFamily?.siblings?.length || 0})
                 </div>
                 <button
                   type="button"
-                  style={{ background: 'transparent', border: 'none', color: '#6366f1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'SIBLING')}
                 >
                   + Add Sibling
@@ -676,14 +676,14 @@ export const PersonDetailDrawer = ({
                 {personContext?.immediateFamily?.siblings?.map((sib: any) => (
                   <div
                     key={sib.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
                     onClick={() => selectPerson(sib.id, true)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>↔️</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{sib.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{sib.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#cbd5e1', fontWeight: 600 }}>{sib.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{sib.relation}</span>
                   </div>
                 ))}
               </div>
@@ -692,12 +692,12 @@ export const PersonDetailDrawer = ({
             {/* Children */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   Children ({personContext?.immediateFamily?.children?.length || 0})
                 </div>
                 <button
                   type="button"
-                  style={{ background: 'transparent', border: 'none', color: '#6366f1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'CHILD')}
                 >
                   + Add Child
@@ -708,14 +708,14 @@ export const PersonDetailDrawer = ({
                 {personContext?.immediateFamily?.children?.map((c: any) => (
                   <div
                     key={c.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer' }}
                     onClick={() => selectPerson(c.id, true)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>👶</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>{c.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>{c.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{c.relation}</span>
                   </div>
                 ))}
               </div>
