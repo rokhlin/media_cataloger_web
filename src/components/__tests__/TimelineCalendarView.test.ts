@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getMediaDate, formatDateKey } from '../gallery/calendarUtils.js';
+import { getMediaDate, formatDateKey, getThumbnailSrc } from '../gallery/calendarUtils.js';
 import type { GalleryMediaFile } from '../../models/media.js';
 
 describe('TimelineCalendarView Component & Logic', () => {
@@ -28,6 +28,35 @@ describe('TimelineCalendarView Component & Logic', () => {
       content.includes('count-overflow'),
       'Must include overflow badge logic when photos exceed 10'
     );
+    assert.ok(
+      content.includes('photo-placeholder'),
+      'Must include fallback placeholder for images in calendar stack'
+    );
+  });
+
+  it('should construct correct /api/media/thumbnail URLs using getThumbnailSrc', () => {
+    const fileWithFilePath: GalleryMediaFile = {
+      filename: 'photo1.jpg',
+      file_path: 'C:\\Users\\photos\\summer 2024\\photo1.jpg',
+    };
+    const url1 = getThumbnailSrc(fileWithFilePath, 200);
+    assert.ok(
+      url1.startsWith('/api/media/thumbnail?path='),
+      'Must call backend /api/media/thumbnail endpoint'
+    );
+    assert.ok(
+      url1.includes(encodeURIComponent('C:\\Users\\photos\\summer 2024\\photo1.jpg')),
+      'Must URL-encode file path'
+    );
+    assert.ok(url1.includes('&size=200'), 'Must include size query parameter');
+
+    // Existing thumbnail_url should take precedence if present
+    const fileWithExistingThumb: GalleryMediaFile = {
+      filename: 'photo2.jpg',
+      thumbnail_url: '/custom/thumb.webp',
+    };
+    const url2 = getThumbnailSrc(fileWithExistingThumb);
+    assert.strictEqual(url2, '/custom/thumb.webp');
   });
 
   it('should extract media date with priority for capture_date over mtime', () => {
@@ -86,5 +115,15 @@ describe('TimelineCalendarView Component & Logic', () => {
     assert.ok(cssContent.includes('.photo-stack-card'), 'Must define .photo-stack-card');
     assert.ok(cssContent.includes('.count-overflow'), 'Must define .count-overflow badge style');
     assert.ok(cssContent.includes('.calendar-day-modal-overlay'), 'Must define day details modal');
+    assert.ok(cssContent.includes('.calendar-day-footer'), 'Must define .calendar-day-footer for bottom-left badge');
+  });
+
+  it('should render bottom-left photo badge footer in TimelineCalendarView', () => {
+    const componentPath = path.resolve('src/components/gallery/TimelineCalendarView.tsx');
+    const content = fs.readFileSync(componentPath, 'utf8');
+
+    assert.ok(content.includes('calendar-day-footer'), 'Calendar day cells must have calendar-day-footer');
+    assert.ok(content.includes('calendar-photo-badge'), 'Calendar day cells must have calendar-photo-badge');
   });
 });
+

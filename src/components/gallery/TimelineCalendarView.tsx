@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { GalleryMediaFile } from '../../models/media';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { getMediaDate, formatDateKey, type CalendarDay } from './calendarUtils';
+import { getMediaDate, formatDateKey, getThumbnailSrc, type CalendarDay } from './calendarUtils';
 import './TimelineCalendarView.css';
 
 export interface TimelineCalendarViewProps {
@@ -10,7 +10,7 @@ export interface TimelineCalendarViewProps {
   className?: string;
 }
 
-export { getMediaDate, formatDateKey, type CalendarDay };
+export { getMediaDate, formatDateKey, getThumbnailSrc, type CalendarDay };
 
 export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
   files,
@@ -209,12 +209,7 @@ export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
     });
   };
 
-  // Helper to get thumbnail image url
-  const getThumbnailSrc = (file: GalleryMediaFile) => {
-    if (file.thumbnail_url) return file.thumbnail_url;
-    const path = file.file_path || file.absolute_path || file.relative_path || file.filename;
-    return `/api/thumbnails?file=${encodeURIComponent(path)}&size=sm`;
-  };
+
 
   return (
     <div className={`timeline-calendar-wrapper ${className}`.trim()}>
@@ -302,7 +297,9 @@ export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
         {calendarDays.map((day, idx) => {
           const count = day.files.length;
           const hasPhotos = count > 0;
-          const hasOverflowBadge = count > 10; // Requirement: if in one date is more than 10 photos, show badge with number of photos
+          const hasOverflowBadge = count > 10;
+          const hasOnlyVideos = hasPhotos && day.files.every((f) => f.is_video);
+          const mediaIcon = hasOnlyVideos ? '🎥' : '📷';
 
           return (
             <div
@@ -323,6 +320,10 @@ export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
             >
               <div className="calendar-day-header">
                 <span className="calendar-day-number">{day.dayNumber}</span>
+              </div>
+
+              {/* Bottom-left photo count badge */}
+              <div className="calendar-day-footer">
                 {hasPhotos && (
                   <span
                     className={`calendar-photo-badge ${
@@ -334,55 +335,10 @@ export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
                         : `${count} photos`
                     }
                   >
-                    {hasOverflowBadge ? `+${count}` : count}
+                    {mediaIcon} {count}
                   </span>
                 )}
               </div>
-
-              {/* Photo Stack */}
-              {hasPhotos && (
-                <div className="calendar-photo-stack">
-                  {/* Layer 3 (back) */}
-                  {count >= 3 && (
-                    <div className="photo-stack-card card-layer-3">
-                      <img
-                        src={getThumbnailSrc(day.files[2])}
-                        alt=""
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.currentTarget.style as any).display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Layer 2 (middle) */}
-                  {count >= 2 && (
-                    <div className="photo-stack-card card-layer-2">
-                      <img
-                        src={getThumbnailSrc(day.files[1])}
-                        alt=""
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.currentTarget.style as any).display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Layer 1 (top) */}
-                  <div className="photo-stack-card card-layer-1">
-                    <img
-                      src={getThumbnailSrc(day.files[0])}
-                      alt={day.files[0].filename}
-                      loading="lazy"
-                      onError={(e) => {
-                        (e.currentTarget.style as any).display = 'none';
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -434,10 +390,47 @@ export const TimelineCalendarView: React.FC<TimelineCalendarViewProps> = ({
                   title={`${file.filename} - ${t('clickToView')}`}
                 >
                   <img
-                    src={getThumbnailSrc(file)}
+                    src={getThumbnailSrc(file, 360)}
                     alt={file.filename}
                     loading="lazy"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
                   />
+                  <div
+                    className="calendar-grid-fallback photo-placeholder"
+                    style={{
+                      display: 'none',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      height: '100%',
+                      flexDirection: 'column',
+                      background: file.is_video
+                        ? 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)'
+                        : 'linear-gradient(135deg, #1e293b, #0f172a)',
+                      color: file.is_video ? '#c7d2fe' : 'var(--text-muted, #94a3b8)',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.8rem' }}>{file.is_video ? '🎥' : '📷'}</span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        marginTop: '4px',
+                        textAlign: 'center',
+                        padding: '0 4px',
+                        maxWidth: '90%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {file.filename}
+                    </span>
+                  </div>
                   {file.is_video && (
                     <span className="calendar-day-grid-item-badge">
                       🎥 {file.duration ? `${Math.round(file.duration)}s` : 'Video'}

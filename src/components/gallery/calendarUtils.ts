@@ -34,3 +34,14 @@ export function formatDateKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/**
+ * Resolves the thumbnail URL for a media file, using the backend /api/media/thumbnail endpoint.
+ */
+export function getThumbnailSrc(file: GalleryMediaFile, size: number = 300): string {
+  if (file.thumbnail_url) return file.thumbnail_url;
+  const path = file.file_path || file.absolute_path || file.relative_path || file.filename || '';
+  if (!path) return '';
+  return `/api/media/thumbnail?path=${encodeURIComponent(path)}&size=${size}`;
+}
+
