@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
 import type { TreeGraphData } from '../../../types/tree.types.js';
+import { FlagsManager } from '../../../../../services/featureFlagsContext.js';
 
 interface CanvasToolbarProps {
   graphData: TreeGraphData | null;
@@ -12,6 +13,16 @@ interface CanvasToolbarProps {
 export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout }: CanvasToolbarProps) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const { layoutDirection, setLayoutDirection, selectPerson, setActiveSubTab } = useFamilyTreeStore();
+
+  const hideTopScreenZoomActions = (() => {
+    try {
+      if (FlagsManager.IsActive('hide_top_screen_zoom_actions', true)) return true;
+      if (!FlagsManager.IsActive('tree_top_zoom_controls', true)) return true;
+      return false;
+    } catch {
+      return true;
+    }
+  })();
 
   const handleFocusRoot = () => {
     if (!graphData?.root_person_id) return;
@@ -58,17 +69,21 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         boxShadow: 'var(--shadow-card)',
       }}
     >
-      <button type="button" style={buttonStyle} onClick={() => zoomIn({ duration: 300 })} title="Zoom In">
-        ➕ Zoom In
-      </button>
+      {!hideTopScreenZoomActions && (
+        <div className="family-tree-top-zoom-actions tree-top-zoom-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" style={buttonStyle} onClick={() => zoomIn({ duration: 300 })} title="Zoom In">
+            ➕ Zoom In
+          </button>
 
-      <button type="button" style={buttonStyle} onClick={() => zoomOut({ duration: 300 })} title="Zoom Out">
-        ➖ Zoom Out
-      </button>
+          <button type="button" style={buttonStyle} onClick={() => zoomOut({ duration: 300 })} title="Zoom Out">
+            ➖ Zoom Out
+          </button>
 
-      <button type="button" style={buttonStyle} onClick={() => fitView({ duration: 500, padding: 0.2 })} title="Fit Tree View">
-        🔍 Fit View
-      </button>
+          <button type="button" style={buttonStyle} onClick={() => fitView({ duration: 500, padding: 0.2 })} title="Fit Tree View">
+            🔍 Fit View
+          </button>
+        </div>
+      )}
 
       <button
         type="button"

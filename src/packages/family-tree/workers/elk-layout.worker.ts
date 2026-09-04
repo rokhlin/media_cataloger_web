@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { TreeGraphData, NodeViewStyle } from '../types/tree.types.js';
+import { computeRelationshipToRoot } from '../utils/kinshipUtils.js';
 
 export interface LayoutRequestMessage {
   type: 'LAYOUT_REQUEST';
@@ -238,6 +239,7 @@ export async function computeElkLayout(
         isRoot: p.id === graphData.root_person_id,
         isFolded: foldedNodeIds.has(p.id),
         spouses,
+        relationshipToRoot: computeRelationshipToRoot(p, graphData),
       },
     });
   }

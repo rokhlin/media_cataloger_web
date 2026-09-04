@@ -72,15 +72,46 @@ describe('Family Tree csvTreeService', () => {
         updated_at: '2026-01-01',
       },
     ],
+    facts: [
+      {
+        id: 'evt_1',
+        person_id: 'p1',
+        event_type: 'GRADUATION',
+        title: 'Master of Science',
+        description: 'Computer Science degree',
+        event_date: '1982-06-10',
+        date_is_approximate: 0,
+        is_system_generated: 0,
+        location_name: 'Chicago, IL',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      },
+      {
+        id: 'evt_2',
+        person_id: 'p3',
+        event_type: 'CAREER',
+        title: 'Senior Software Engineer',
+        description: 'Joined Tech Solutions',
+        event_date: '2014-09-01',
+        date_is_approximate: 0,
+        is_system_generated: 0,
+        location_name: 'San Francisco, CA',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      },
+    ],
   };
 
   it('exports graph data to CSV text containing persons and unions headers and data', () => {
     const csv = exportTreeToCSV(mockGraphData);
     assert.ok(csv.includes('# PERSONS'));
     assert.ok(csv.includes('# UNIONS'));
+    assert.ok(csv.includes('# FACTS'));
     assert.ok(csv.includes('John,,Smith,,MALE,1960-05-15'));
     assert.ok(csv.includes('Mary,,Smith,Doe,FEMALE,1962-08-20'));
     assert.ok(csv.includes('MARRIAGE,p1;p2,1988-06-25'));
+    assert.ok(csv.includes('evt_1,p1,GRADUATION,Master of Science'));
+    assert.ok(csv.includes('evt_2,p3,CAREER,Senior Software Engineer'));
   });
 
   it('parses exported CSV back into persons and unions', () => {
@@ -89,6 +120,14 @@ describe('Family Tree csvTreeService', () => {
 
     assert.strictEqual(parsed.persons.length, 3);
     assert.strictEqual(parsed.unions.length, 1);
+    assert.ok(parsed.facts);
+    assert.strictEqual(parsed.facts?.length, 2);
+
+    const fact1 = parsed.facts?.find((f) => f.id === 'evt_1');
+    assert.ok(fact1);
+    assert.strictEqual(fact1?.person_id, 'p1');
+    assert.strictEqual(fact1?.event_type, 'GRADUATION');
+    assert.strictEqual(fact1?.title, 'Master of Science');
 
     const john = parsed.persons.find((p) => p.first_name === 'John');
     assert.ok(john);
@@ -110,5 +149,6 @@ describe('Family Tree csvTreeService', () => {
     const parsed = parseTreeFromCSV(sample);
     assert.ok(parsed.persons.length >= 4);
     assert.ok(parsed.unions.length >= 1);
+    assert.ok(parsed.facts && parsed.facts.length >= 2);
   });
 });

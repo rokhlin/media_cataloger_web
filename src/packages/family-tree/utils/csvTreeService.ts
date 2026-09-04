@@ -93,6 +93,30 @@ export function exportTreeToCSV(graphData: TreeGraphData): string {
     ].join(','));
   }
 
+  lines.push('');
+
+  // Section 3: Facts
+  lines.push('# FACTS');
+  lines.push('id,person_id,event_type,title,description,event_date,end_date,date_is_approximate,location_name,relationship_target_name,relationship_status');
+
+  if (graphData.facts && graphData.facts.length > 0) {
+    for (const f of graphData.facts) {
+      lines.push([
+        escapeCsvField(f.id),
+        escapeCsvField(f.person_id),
+        escapeCsvField(f.event_type),
+        escapeCsvField(f.title),
+        escapeCsvField(f.description),
+        escapeCsvField(f.event_date),
+        escapeCsvField(f.end_date),
+        escapeCsvField(f.date_is_approximate),
+        escapeCsvField(f.location_name),
+        escapeCsvField(f.relationship_target_name),
+        escapeCsvField(f.relationship_status),
+      ].join(','));
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -144,6 +168,19 @@ export interface ParsedCsvTree {
       birth_order: number;
     }>;
   }>;
+  facts?: Array<{
+    id?: string;
+    person_id: string;
+    event_type: string;
+    title: string;
+    description?: string;
+    event_date?: string;
+    end_date?: string;
+    date_is_approximate?: boolean;
+    location_name?: string;
+    relationship_target_name?: string;
+    relationship_status?: string;
+  }>;
 }
 
 /**
@@ -153,9 +190,10 @@ export function parseTreeFromCSV(csvText: string): ParsedCsvTree {
   const lines = csvText.split(/\r?\n/);
   const result: ParsedCsvTree = { persons: [], unions: [] };
 
-  let currentSection: 'PERSONS' | 'UNIONS' | 'UNKNOWN' = 'UNKNOWN';
+  let currentSection: 'PERSONS' | 'UNIONS' | 'FACTS' | 'UNKNOWN' = 'UNKNOWN';
   let personHeaderIndexMap: Record<string, number> = {};
   let unionHeaderIndexMap: Record<string, number> = {};
+  let factHeaderIndexMap: Record<string, number> = {};
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -170,6 +208,12 @@ export function parseTreeFromCSV(csvText: string): ParsedCsvTree {
     if (line.startsWith('# UNIONS')) {
       currentSection = 'UNIONS';
       unionHeaderIndexMap = {};
+      continue;
+    }
+
+    if (line.startsWith('# FACTS')) {
+      currentSection = 'FACTS';
+      factHeaderIndexMap = {};
       continue;
     }
 
@@ -259,6 +303,36 @@ export function parseTreeFromCSV(csvText: string): ParsedCsvTree {
         notes: getVal('notes') || undefined,
         children,
       });
+    } else if (currentSection === 'FACTS') {
+      if (Object.keys(factHeaderIndexMap).length === 0 && (cols.includes('event_type') || cols.includes('title'))) {
+        cols.forEach((col, idx) => {
+          factHeaderIndexMap[col.toLowerCase()] = idx;
+        });
+        continue;
+      }
+
+      const getVal = (key: string): string => {
+        const idx = factHeaderIndexMap[key];
+        return idx !== undefined && cols[idx] ? cols[idx] : '';
+      };
+
+      const pId = getVal('person_id') || cols[1];
+      if (!pId) continue;
+
+      if (!result.facts) result.facts = [];
+      result.facts.push({
+        id: getVal('id') || cols[0] || undefined,
+        person_id: pId,
+        event_type: getVal('event_type') || cols[2] || 'CUSTOM',
+        title: getVal('title') || cols[3] || 'Event',
+        description: getVal('description') || cols[4] || undefined,
+        event_date: getVal('event_date') || cols[5] || undefined,
+        end_date: getVal('end_date') || cols[6] || undefined,
+        date_is_approximate: getVal('date_is_approximate') === '1' || getVal('date_is_approximate').toLowerCase() === 'true',
+        location_name: getVal('location_name') || cols[8] || undefined,
+        relationship_target_name: getVal('relationship_target_name') || cols[9] || undefined,
+        relationship_status: getVal('relationship_status') || cols[10] || undefined,
+      });
     }
   }
 
@@ -281,5 +355,10 @@ p_5,Jessica,Anne,Taylor,,FEMALE,1960-09-08,Boston MA,1,,,Former spouse
 id,union_type,partner_ids,start_date,start_place,end_date,notes,children
 u_1,MARRIAGE,p_1;p_2,1980-06-21,Chicago IL,,,p_3:BIOLOGICAL:1;p_4:BIOLOGICAL:2
 u_2,DIVORCED,p_1;p_5,1976-05-10,Boston MA,1979-11-04,Amicable separation,
+
+# FACTS
+id,person_id,event_type,title,description,event_date,end_date,date_is_approximate,location_name,relationship_target_name,relationship_status
+evt_1,p_1,GRADUATION,Architecture Degree,Graduated with honors,1978-06-15,,,MIT,Boston MA,
+evt_2,p_3,CAREER,Senior Engineer,Promoted to Lead Architect,2015-04-01,,,Tech Corp,Chicago IL,
 `;
 }

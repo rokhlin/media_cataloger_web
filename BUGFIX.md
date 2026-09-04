@@ -26,7 +26,31 @@ Each bug is categorized by component and marked with its current status.
   - **Affected version**: v0.3.x
   - **Fixed in**: v0.4.0 (Unreleased)
   - **References**: Conversation `3710b459` – *Troubleshooting Child Delete Button*
-- [ ] 🟠 **Filter facts on Family Tree** - The filter facts on the Family Tree showing in a list that should scroll horizontally. this is not a good user experience. fit in width of screen, add multiline support. And show only filter for facts existing for this person. 
+- [x] 🟠 **Filter facts on Family Tree**: The filter facts pill list was confined to a horizontal scroll container. Changed to a responsive multi-line wrapping flex container (`flexWrap: 'wrap'`) fitting the drawer width. Filter pills now dynamically filter to only show categories that actually exist across the person's aggregated timeline events (`availableCategories`), including support for the MILITARY category.
+  - **Fixed in**: v0.4.0
+  - **Files**: `PersonTimelineView.tsx`
+
+- [x] 🟡 **Set as Root ME**: Removed the "Set as Root ME" button from the Person Detail Drawer (`PersonDetailDrawer.tsx`) to prevent unintended re-rooting from the drawer view.
+  - **Fixed in**: v0.4.0
+  - **Files**: `PersonDetailDrawer.tsx`
+
+- [x] 🟡 **Top screen actions**: Added feature flag `hide_top_screen_zoom_actions` in `/data/feature_flags.json` (enabled by default) and integrated into `CanvasToolbar.tsx` using `FlagsManager.IsActive` to hide duplicate Zoom In, Zoom Out, and Fit view buttons from the top toolbar while preserving bottom-left canvas controls.
+  - **Fixed in**: v0.4.0
+  - **Files**: `data/feature_flags.json`, `CanvasToolbar.tsx`
+
+- [x] 🟡 **Square card improvements & round card mourning styles**:
+  - For square cards: when birthdate is unset, the subtitle dynamically displays the person's exact computed kinship relationship to the root "ME" person (e.g., Father, Mother, Son, Daughter, Brother, Sister, Spouse, Self, and affinity/in-law relationships like Father-in-law, Mother-in-law, Brother-in-law, Sister-in-law, Son-in-law, Daughter-in-law, Step-relations) instead of generic "Relative" or "Living". For instance, spouse's father (Miniyar Bayguildin) accurately evaluates to "Father-in-law".
+  - Mourning styling: When a person has a death date (`isDeceased`), square cards render a solid 2px black border (`#000000`) and a 45-degree diagonal black mourning stripe in the bottom-left corner with `overflow: 'hidden'`. Round cards render a solid 2px black border around the avatar.
+  - **Fixed in**: v0.4.0
+  - **Files**: `kinshipUtils.ts`, `kinshipUtils.test.ts`, `elk-layout.worker.ts`, `useTreeLayoutWorker.ts`, `PersonCardNode.tsx`, `family-tree.service.ts`, `family-tree.types.ts`
+
+- [x] 🟡 **Connection cards (unions)**: Removed the spouse name text label from union/marriage badges on the person card (`renderSpouseBadge`), keeping only the marriage/partnership icon badge and interactive drawer trigger.
+  - **Fixed in**: v0.4.0
+  - **Files**: `PersonCardNode.tsx`
+
+- [x] 🟡 **Export to CSV with facts data**: Extended tree CSV export and import to include a dedicated `# FACTS` section storing person life events (`person_id`, `event_type`, `title`, `description`, `event_date`, `event_place`, `is_private`). Updated backend `getTreeGraph` to return `facts` from `ft_person_events`, updated frontend `TreeSettingsTab.tsx` import workflow, and expanded sample CSV template and test suites.
+  - **Fixed in**: v0.4.0
+  - **Files**: `server/family-tree/family-tree.service.ts`, `server/family-tree/types/family-tree.types.ts`, `src/packages/family-tree/types/tree.types.ts`, `csvTreeService.ts`, `TreeSettingsTab.tsx`, `csvTreeService.test.ts`
 ---
 
 ## 🖼️ UI / UX & Visual Features

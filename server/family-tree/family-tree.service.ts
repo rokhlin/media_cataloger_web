@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, Optional } from '@nestjs/common';
 import { FamilyTreeDatabaseService } from './family-tree-db.service.js';
 import { GraphIntegrityService } from './graph-integrity.service.js';
 import { FamilyEventsService } from './family-events.service.js';
+import { KinshipEngineService } from './kinship-engine.service.js';
 import type {
   TreeRecord,
   PersonRecord,
@@ -10,6 +11,7 @@ import type {
   TreeGraphData,
   TreeGraphPerson,
   TreeGraphUnion,
+  PersonEventRecord,
 } from './types/family-tree.types.js';
 import type {
   CreateTreeDto,
@@ -30,6 +32,7 @@ export class FamilyTreeService {
     @Inject(FamilyTreeDatabaseService) private readonly dbService: FamilyTreeDatabaseService,
     @Inject(GraphIntegrityService) private readonly integrityService: GraphIntegrityService,
     @Inject(FamilyEventsService) private readonly eventsService: FamilyEventsService,
+    @Optional() @Inject(KinshipEngineService) private readonly kinshipService?: KinshipEngineService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -828,10 +831,23 @@ export class FamilyTreeService {
       .prepare('SELECT * FROM ft_persons WHERE tree_id = ? ORDER BY created_at ASC')
       .all(tree.id) as PersonRecord[];
 
-    const graphPersons: TreeGraphPerson[] = persons.map((p) => ({
-      ...p,
-      full_name: [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' '),
-    }));
+    const rootPersonId = tree.root_person_id;
+    const graphPersons: TreeGraphPerson[] = persons.map((p) => {
+      let kinshipToRoot: string | null = null;
+      if (rootPersonId && this.kinshipService) {
+        try {
+          const k = this.kinshipService.calculateKinship(rootPersonId, p.id);
+          kinshipToRoot = k?.primaryTerm || null;
+        } catch {
+          // fallback
+        }
+      }
+      return {
+        ...p,
+        full_name: [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' '),
+        kinship_to_root: kinshipToRoot,
+      };
+    });
 
     const unions = db
       .prepare('SELECT * FROM ft_unions WHERE tree_id = ? ORDER BY created_at ASC')
@@ -860,11 +876,21 @@ export class FamilyTreeService {
       };
     });
 
+    const facts = db
+      .prepare(`
+        SELECT pe.* FROM ft_person_events pe
+        JOIN ft_persons p ON pe.person_id = p.id
+        WHERE p.tree_id = ?
+        ORDER BY pe.event_date ASC
+      `)
+      .all(tree.id) as PersonEventRecord[];
+
     return {
       tree,
       persons: graphPersons,
       unions: graphUnions,
       root_person_id: tree.root_person_id,
+      facts,
     };
   }
 }

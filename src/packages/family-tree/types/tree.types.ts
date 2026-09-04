@@ -1,3 +1,5 @@
+import type { PersonEventRecord } from './event.types.js';
+
 export type LivingPrivacyMode = 'MASK_LIVING' | 'SHOW_ALL' | 'PRIVATE';
 
 export type Gender = 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'UNKNOWN';
@@ -98,6 +100,7 @@ export interface ChildRelationItem {
 
 export interface TreeGraphPerson extends PersonRecord {
   full_name: string;
+  kinship_to_root?: string | null;
 }
 
 export interface TreeGraphUnion extends UnionRecord {
@@ -110,6 +113,7 @@ export interface TreeGraphData {
   persons: TreeGraphPerson[];
   unions: TreeGraphUnion[];
   root_person_id?: string | null;
+  facts?: PersonEventRecord[];
 }
 
 export interface KinshipInfo {

@@ -18,10 +18,11 @@ export interface PersonCardNodeData {
   isRoot?: boolean;
   isFolded?: boolean;
   spouses?: SpouseSummary[];
+  relationshipToRoot?: string;
 }
 
 export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
-  const { person, isRoot, isFolded, spouses = [] } = data as unknown as PersonCardNodeData;
+  const { person, isRoot, isFolded, spouses = [], relationshipToRoot } = data as unknown as PersonCardNodeData;
   const {
     selectedPersonId,
     highlightedPersonId,
@@ -40,6 +41,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
   const fullName = person.full_name || `${person.first_name} ${person.last_name || ''}`.trim();
   const formattedBirth = person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle) : '';
   const formattedDeath = person.death_date ? formatTreeDate(person.death_date, dateFormatStyle) : '';
+
+  const isDeceased = Boolean(person.death_date) || !person.is_living || person.is_living === 0;
+  const computedRelationship = relationshipToRoot || person.kinship_to_root;
+  const relationshipText = isRoot ? 'Me' : (computedRelationship || 'Relative');
 
   const lifespan = person.is_living
     ? formattedBirth ? `b. ${formattedBirth}` : 'Living'
@@ -161,34 +166,32 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
         <div
           style={{
             position: 'absolute',
-            bottom: -6,
+            bottom: -8,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 11,
+            zIndex: 15,
             background: isDivorced ? 'rgba(244, 63, 94, 0.95)' : 'rgba(99, 102, 241, 0.95)',
             color: '#ffffff',
             borderRadius: 10,
-            padding: '1px 6px',
-            fontSize: 9,
+            padding: '2px 7px',
+            fontSize: 10,
             fontWeight: 700,
+            lineHeight: '1',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: 2,
+            gap: 3,
             boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
             whiteSpace: 'nowrap',
-            maxWidth: 100,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
           }}
-          title={`${isDivorced ? 'Divorced from' : 'Spouse'}: ${primarySpouse.spouseName}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
+          title={`${isDivorced ? 'Divorced' : 'Spouse'}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
           onClick={(e) => {
             e.stopPropagation();
             openDrawer('family', person.id);
           }}
         >
           <span>{icon}</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{primarySpouse.spouseName}</span>
+          {isDivorced && <span style={{ fontSize: 8, opacity: 0.9 }}>(Div.)</span>}
         </div>
       );
     }
@@ -208,21 +211,15 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           fontWeight: 600,
           cursor: 'pointer',
           whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          maxWidth: 155,
           transition: 'all 0.15s ease',
         }}
-        title={`${isDivorced ? 'Divorced from' : 'Spouse'}: ${primarySpouse.spouseName}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
+        title={`${isDivorced ? 'Divorced' : 'Spouse'}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
         onClick={(e) => {
           e.stopPropagation();
           openDrawer('family', person.id);
         }}
       >
         <span>{icon}</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {primarySpouse.spouseName}
-        </span>
         {isDivorced && <span style={{ fontSize: 9, opacity: 0.8 }}>(Div.)</span>}
       </div>
     );
@@ -310,8 +307,8 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             width: 72,
             height: 72,
             borderRadius: '50%',
-            border: cardBorder,
-            boxShadow: cardShadow,
+            border: isDeceased ? '2px solid #000000' : cardBorder,
+            boxShadow: isDeceased ? '0 0 10px rgba(0, 0, 0, 0.5)' : cardShadow,
             background: 'var(--card-bg-solid)',
             overflow: 'hidden',
             display: 'flex',
@@ -388,8 +385,8 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           backgroundColor: 'var(--card-bg-solid)',
           backdropFilter: 'blur(12px)',
           borderRadius: 12,
-          border: cardBorder,
-          boxShadow: cardShadow,
+          border: isDeceased ? '2px solid #000000' : cardBorder,
+          boxShadow: isDeceased ? '0 0 12px rgba(0, 0, 0, 0.45)' : cardShadow,
           padding: 8,
           display: 'flex',
           flexDirection: 'column',
@@ -410,6 +407,34 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
       >
         {renderHandles()}
         {renderCelebrationBadge(false)}
+
+        {/* Mourning black stripe in the bottom-left corner */}
+        {isDeceased && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 12,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+              zIndex: 5,
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 6,
+                left: -20,
+                width: 54,
+                height: 10,
+                background: '#000000',
+                transform: 'rotate(45deg)',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
+              }}
+              title="Deceased"
+            />
+          </div>
+        )}
 
         {isRoot && (
           <div
@@ -473,7 +498,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           )}
         </div>
 
-        {/* Name and Birth date */}
+        {/* Name and Birth date / Relationship to Me */}
         <div style={{ width: '100%', textAlign: 'center' }}>
           <div
             style={{
@@ -491,15 +516,16 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           <div
             style={{
               fontSize: 10,
-              color: person.is_living ? '#10b981' : 'var(--text-secondary)',
+              color: isDeceased ? '#ef4444' : (person.is_living ? '#10b981' : 'var(--text-secondary)'),
               marginTop: 2,
               fontWeight: 500,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}
+            title={formattedBirth ? `Born: ${formattedBirth}` : `Relationship: ${relationshipText}`}
           >
-            {formattedBirth ? `b. ${formattedBirth}` : (person.is_living ? 'Living' : 'Deceased')}
+            {formattedBirth ? `b. ${formattedBirth}` : relationshipText}
           </div>
           {renderSpouseBadge(true)}
         </div>

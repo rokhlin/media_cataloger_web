@@ -22,7 +22,7 @@ export const PersonDetailDrawer = ({
   graphData,
   onUpdatePerson,
   onDeletePerson,
-  onSetRootPerson,
+  onSetRootPerson: _onSetRootPerson,
   onOpenQuickAdd,
   onOpenFaceLink,
 }: PersonDetailDrawerProps) => {
@@ -32,7 +32,6 @@ export const PersonDetailDrawer = ({
     closeDrawer,
     selectPerson,
     openDrawer,
-    activeTreeId,
     dateFormatStyle,
   } = useFamilyTreeStore();
 
@@ -365,26 +364,6 @@ export const PersonDetailDrawer = ({
         >
           ➕ Add Relative
         </button>
-
-        {!isRoot && (
-          <button
-            type="button"
-            style={{
-              background: 'rgba(168, 85, 247, 0.2)',
-              border: '1px solid rgba(168, 85, 247, 0.4)',
-              color: 'var(--accent-color, #a855f7)',
-              borderRadius: 6,
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-            onClick={() => onSetRootPerson(activeTreeId, person.id)}
-          >
-            ⭐ Set as Root &quot;ME&quot;
-          </button>
-        )}
 
         <button
           type="button"

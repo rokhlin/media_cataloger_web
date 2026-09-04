@@ -47,7 +47,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
   // CSV Import State
   const [csvText, setCsvText] = useState('');
-  const [importStats, setImportStats] = useState<{ personsCount: number; unionsCount: number; errors: string[] } | null>(null);
+  const [importStats, setImportStats] = useState<{ personsCount: number; unionsCount: number; factsCount?: number; errors: string[] } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
   const [importStatusType, setImportStatusType] = useState<'info' | 'success' | 'error'>('info');
@@ -112,9 +112,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         setImportStats({
           personsCount: parsed.persons.length,
           unionsCount: parsed.unions.length,
+          factsCount: parsed.facts?.length || 0,
           errors: [],
         });
-        setImportStatusMessage(`File loaded: ${parsed.persons.length} persons, ${parsed.unions.length} unions detected.`);
+        setImportStatusMessage(
+          `File loaded: ${parsed.persons.length} persons, ${parsed.unions.length} unions${parsed.facts?.length ? `, and ${parsed.facts.length} facts` : ''} detected.`
+        );
         setImportStatusType('info');
       }
     };
@@ -198,8 +201,38 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         }
       }
 
+      // 3. Create Facts if present in CSV
+      if (parsed.facts && parsed.facts.length > 0) {
+        for (const f of parsed.facts) {
+          const targetPersonId = idMap.get(f.person_id) || f.person_id;
+          if (targetPersonId) {
+            try {
+              await fetch(`/api/family-tree/persons/${targetPersonId}/timeline`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event_type: f.event_type,
+                  title: f.title,
+                  description: f.description,
+                  event_date: f.event_date,
+                  end_date: f.end_date,
+                  date_is_approximate: f.date_is_approximate,
+                  location_name: f.location_name,
+                  relationship_target_name: f.relationship_target_name,
+                  relationship_status: f.relationship_status,
+                }),
+              });
+            } catch {
+              // ignore fact error on import
+            }
+          }
+        }
+      }
+
       await refreshGraph();
-      setImportStatusMessage(`Import successful! Added ${parsed.persons.length} persons and ${parsed.unions.length} unions.`);
+      setImportStatusMessage(
+        `Import successful! Added ${parsed.persons.length} persons, ${parsed.unions.length} unions${parsed.facts?.length ? `, and ${parsed.facts.length} facts` : ''}.`
+      );
       setImportStatusType('success');
       setCsvText('');
       setImportStats(null);

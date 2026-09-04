@@ -145,6 +145,7 @@ export interface KinshipInfo {
 
 export interface TreeGraphPerson extends PersonRecord {
   full_name: string;
+  kinship_to_root?: string | null;
 }
 
 export interface TreeGraphUnion extends UnionRecord {
@@ -161,6 +162,7 @@ export interface TreeGraphData {
   persons: TreeGraphPerson[];
   unions: TreeGraphUnion[];
   root_person_id?: string | null;
+  facts?: PersonEventRecord[];
 }
 
 export interface ImmediateRelative {

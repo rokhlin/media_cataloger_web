@@ -20,6 +20,7 @@ const CATEGORY_FILTERS = [
   { id: 'RELOCATION', label: '📍 Relocation' },
   { id: 'TRAVEL', label: '✈️ Travel' },
   { id: 'CAREER', label: '💼 Career' },
+  { id: 'MILITARY', label: '🎖️ Military' },
   { id: 'CUSTOM', label: '📝 Custom' },
 ];
 
@@ -130,7 +131,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     lifeFactsConfig.showSpousesFacts,
   ]);
 
-  const filteredEvents = useMemo(() => {
+  const allAvailableEvents = useMemo(() => {
     const ownPart = lifeFactsConfig.showOwnFacts !== false ? events : [];
     let result = deduplicateTimelineEvents(ownPart, relativeEvents, personId);
 
@@ -146,15 +147,32 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
       return d1.localeCompare(d2);
     });
 
-    // Filter by tab category
-    if (activeCategory === 'ALL') return result;
+    return result;
+  }, [events, relativeEvents, lifeFactsConfig, personId]);
+
+  // Only show filter buttons for categories that exist for this person
+  const availableCategories = useMemo(() => {
+    if (allAvailableEvents.length === 0) return [];
+    return CATEGORY_FILTERS.filter((cat) => {
+      if (cat.id === 'ALL') return true;
+      if (cat.id === 'MILESTONES') {
+        return allAvailableEvents.some((e: PersonEventRecord) =>
+          ['BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN'].includes(e.event_type),
+        );
+      }
+      return allAvailableEvents.some((e: PersonEventRecord) => e.event_type === cat.id);
+    });
+  }, [allAvailableEvents]);
+
+  const filteredEvents = useMemo(() => {
+    if (activeCategory === 'ALL') return allAvailableEvents;
     if (activeCategory === 'MILESTONES') {
-      return result.filter((e: PersonEventRecord) =>
+      return allAvailableEvents.filter((e: PersonEventRecord) =>
         ['BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN'].includes(e.event_type),
       );
     }
-    return result.filter((e: PersonEventRecord) => e.event_type === activeCategory);
-  }, [events, relativeEvents, activeCategory, lifeFactsConfig, personId]);
+    return allAvailableEvents.filter((e: PersonEventRecord) => e.event_type === activeCategory);
+  }, [allAvailableEvents, activeCategory]);
 
   const handleOpenAdd = () => {
     setFactToEdit(null);
@@ -222,33 +240,35 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
           </button>
         </div>
 
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-          {CATEGORY_FILTERS.map((cat) => {
-            const isSelected = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                style={{
-                  background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
-                  border: isSelected ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                  borderRadius: 20,
-                  color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
-                  padding: '3px 10px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.1s ease',
-                }}
-                onClick={() => setActiveCategory(cat.id)}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Filter Pills with multiline support fitting width of screen */}
+        {availableCategories.length > 1 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingBottom: 4 }}>
+            {availableCategories.map((cat) => {
+              const isSelected = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  style={{
+                    background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
+                    border: isSelected ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                    borderRadius: 20,
+                    color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+                    padding: '3px 10px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.1s ease',
+                  }}
+                  onClick={() => setActiveCategory(cat.id)}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Timeline List */}
