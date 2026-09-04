@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import type { PersonEventRecord, EventType } from '../../types/event.types.js';
 import { GalleryPhotoPicker } from './GalleryPhotoPicker.js';
 import { CustomDatePicker } from '../common/CustomDatePicker.js';
@@ -26,18 +27,6 @@ interface AddEditFactModalProps {
   personName?: string;
 }
 
-const CATEGORIES: Array<{ type: EventType; label: string; icon: string }> = [
-  { type: 'GRADUATION', label: '🎓 Education', icon: '🎓' },
-  { type: 'CAREER', label: '💼 Career', icon: '💼' },
-  { type: 'RELOCATION', label: '📍 Relocation', icon: '📍' },
-  { type: 'TRAVEL', label: '✈️ Travel', icon: '✈️' },
-  { type: 'MARRIAGE', label: '💍 Marriage', icon: '💍' },
-  { type: 'DIVORCE', label: '💔 Divorce', icon: '💔' },
-  { type: 'RELATIONSHIP', label: '💞 Relationship', icon: '💞' },
-  { type: 'MILITARY', label: '🎖️ Military', icon: '🎖️' },
-  { type: 'CUSTOM', label: '📝 Custom Story', icon: '📝' },
-];
-
 export const AddEditFactModal = ({
   isOpen,
   onClose,
@@ -45,6 +34,7 @@ export const AddEditFactModal = ({
   factToEdit,
   personName,
 }: AddEditFactModalProps) => {
+  const { language, t } = useLanguage();
   const [eventType, setEventType] = useState<EventType>('GRADUATION');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -58,6 +48,18 @@ export const AddEditFactModal = ({
   const [pinnedPhotos, setPinnedPhotos] = useState<Array<{ media_file_path: string; caption?: string }>>([]);
   const [isPhotoPickerOpen, setIsPhotoPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const categories: Array<{ type: EventType; label: string; icon: string }> = useMemo(() => [
+    { type: 'GRADUATION', label: `🎓 ${t('factTypeEducation')}`, icon: '🎓' },
+    { type: 'CAREER', label: `💼 ${t('factTypeCareer')}`, icon: '💼' },
+    { type: 'RELOCATION', label: `📍 ${t('factTypeResidence')}`, icon: '📍' },
+    { type: 'TRAVEL', label: `✈️ ${t('filterCategoryTravel')}`, icon: '✈️' },
+    { type: 'MARRIAGE', label: `💍 ${t('factTypeMarriage')}`, icon: '💍' },
+    { type: 'DIVORCE', label: `💔 ${t('factTypeDivorce')}`, icon: '💔' },
+    { type: 'RELATIONSHIP', label: `💞 ${t('factTypeRelationship')}`, icon: '💞' },
+    { type: 'MILITARY', label: `🎖️ ${t('factTypeMilitary')}`, icon: '🎖️' },
+    { type: 'CUSTOM', label: `📝 ${t('factTypeOther')}`, icon: '📝' },
+  ], [t]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -183,11 +185,11 @@ export const AddEditFactModal = ({
           >
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                {factToEdit ? 'Edit Life Fact' : 'Add Life Fact / Milestone'}
+                {factToEdit ? t('modalEditFactTitle') : t('modalAddFactTitle')}
               </div>
               {personName && (
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Recording event for {personName}
+                  {t('recordingEventFor')} {personName}
                 </div>
               )}
             </div>
@@ -210,9 +212,9 @@ export const AddEditFactModal = ({
           <form onSubmit={handleSubmit} style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Category selection */}
             <div>
-              <label style={labelStyle}>Fact Category</label>
+              <label style={labelStyle}>{t('labelFactType')}</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {CATEGORIES.map((cat) => {
+                {categories.map((cat) => {
                   const isSelected = eventType === cat.type;
                   return (
                     <button
@@ -245,13 +247,17 @@ export const AddEditFactModal = ({
 
             {/* Title */}
             <div>
-              <label style={labelStyle}>Event Title *</label>
+              <label style={labelStyle}>{t('labelFactTitle')} *</label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={isRelationshipEvent ? 'e.g. Started dating, Wedding in Rome, Amicable separation' : 'e.g. Master\'s Degree in Computer Science from MIT'}
+                placeholder={
+                  isRelationshipEvent
+                    ? (language === 'ru' ? 'напр. Начали встречаться, Свадьба, Расставание' : 'e.g. Started dating, Wedding in Rome, Amicable separation')
+                    : (language === 'ru' ? 'напр. Окончание школы, степень магистра' : 'e.g. Master\'s Degree in Computer Science from MIT')
+                }
                 style={inputStyle}
               />
             </div>
@@ -260,42 +266,42 @@ export const AddEditFactModal = ({
             {isRelationshipEvent && (
               <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  💞 Relationship & Partner Details
+                  {t('relationshipDetailsSection')}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={labelStyle}>Relationship Type</label>
+                    <label style={labelStyle}>{t('relationshipStatusLabel')}</label>
                     <select value={relStatus} onChange={(e) => setRelStatus(e.target.value)} style={inputStyle}>
-                      <option value="dating">Started Dating</option>
-                      <option value="engaged">Engaged</option>
-                      <option value="married">Married</option>
-                      <option value="divorced">Divorced</option>
-                      <option value="separated">Separated</option>
-                      <option value="partner">Life Partnership</option>
+                      <option value="dating">{language === 'ru' ? 'Начали встречаться' : 'Started Dating'}</option>
+                      <option value="engaged">{language === 'ru' ? 'Помолвлены' : 'Engaged'}</option>
+                      <option value="married">{t('unionTypeMarriage')}</option>
+                      <option value="divorced">{t('unionTypeDivorced')}</option>
+                      <option value="separated">{language === 'ru' ? 'Расстались' : 'Separated'}</option>
+                      <option value="partner">{t('unionTypeUnmarried')}</option>
                     </select>
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Connect With</label>
+                    <label style={labelStyle}>{t('connectWithLabel')}</label>
                     <select value={relTargetType} onChange={(e) => setRelTargetType(e.target.value as any)} style={inputStyle}>
-                      <option value="EXTERNAL_PERSON">External Person (Name only)</option>
-                      <option value="PERSON">Family Member in Tree</option>
-                      <option value="FAMILY">Family Branch</option>
-                      <option value="FAMILY_TO_FAMILY">Two Families</option>
+                      <option value="EXTERNAL_PERSON">{t('connectWithExternal')}</option>
+                      <option value="PERSON">{t('connectWithMember')}</option>
+                      <option value="FAMILY">{t('connectWithBranch')}</option>
+                      <option value="FAMILY_TO_FAMILY">{t('connectWithTwoFamilies')}</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
                   <label style={labelStyle}>
-                    {relTargetType === 'FAMILY' || relTargetType === 'FAMILY_TO_FAMILY' ? 'Family Name(s)' : 'Partner / Person Name'}
+                    {t('partnerOrFamilyNameLabel')}
                   </label>
                   <input
                     type="text"
                     value={relTargetName}
                     onChange={(e) => setRelTargetName(e.target.value)}
-                    placeholder="e.g. Jordan Miller or The Johnson Family"
+                    placeholder={language === 'ru' ? 'напр. Иван Иванов или Семья Ивановых' : 'e.g. Jordan Miller or The Johnson Family'}
                     style={inputStyle}
                   />
                 </div>
@@ -306,14 +312,14 @@ export const AddEditFactModal = ({
             <div style={{ display: 'grid', gridTemplateColumns: isRelationshipEvent ? '1fr 1fr' : '1fr auto', gap: 12, alignItems: 'flex-start' }}>
               <div>
                 <label style={labelStyle}>
-                  {isRelationshipEvent ? 'Start Date' : 'Event Date'}
+                  {isRelationshipEvent ? t('labelUnionStartDate') : t('labelFactDate')}
                 </label>
                 <CustomDatePicker value={eventDate} onChange={setEventDate} placeholder="e.g. 2018-06-15, 15.06.2018" />
               </div>
 
               {isRelationshipEvent ? (
                 <div>
-                  <label style={labelStyle}>End Date (if ended / divorced)</label>
+                  <label style={labelStyle}>{t('labelUnionEndDate')}</label>
                   <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="e.g. 2022-08-10, 10.08.2022" />
                 </div>
               ) : (
@@ -333,30 +339,30 @@ export const AddEditFactModal = ({
                     checked={dateApprox}
                     onChange={(e) => setDateApprox(e.target.checked)}
                   />
-                  <span>Approximate / Circa</span>
+                  <span>{t('approximateCircaCheckbox')}</span>
                 </label>
               )}
             </div>
 
             {/* Location */}
             <div>
-              <label style={labelStyle}>Location</label>
+              <label style={labelStyle}>{t('labelFactPlace')}</label>
               <input
                 type="text"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
-                placeholder="e.g. Cambridge, MA, United States"
+                placeholder={language === 'ru' ? 'напр. Москва, Россия' : 'e.g. Cambridge, MA, United States'}
                 style={inputStyle}
               />
             </div>
 
             {/* Description */}
             <div>
-              <label style={labelStyle}>Story & Notes</label>
+              <label style={labelStyle}>{t('storyNotesLabel')}</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Details, memories, achievements, or anecdotes about this milestone..."
+                placeholder={language === 'ru' ? 'Дополнительные подробности, воспоминания, примечания...' : 'Additional context, memories, notes...'}
                 rows={3}
                 style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }}
               />
@@ -365,7 +371,9 @@ export const AddEditFactModal = ({
             {/* Gallery Photos Pinning Section */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={labelStyle}>Attached Gallery Photos ({pinnedPhotos.length})</label>
+                <label style={labelStyle}>
+                  {t('attachedGalleryPhotosLabel')} ({pinnedPhotos.length})
+                </label>
                 <button
                   type="button"
                   style={{
@@ -380,7 +388,7 @@ export const AddEditFactModal = ({
                   }}
                   onClick={() => setIsPhotoPickerOpen(true)}
                 >
-                  📷 Browse Gallery
+                  {t('btnBrowseGallery')}
                 </button>
               </div>
 
@@ -446,7 +454,7 @@ export const AddEditFactModal = ({
                 }}
                 onClick={onClose}
               >
-                Cancel
+                {t('cancel')}
               </button>
 
               <button
@@ -464,7 +472,7 @@ export const AddEditFactModal = ({
                   boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
                 }}
               >
-                {isSubmitting ? 'Saving...' : factToEdit ? 'Update Fact' : 'Create Fact'}
+                {isSubmitting ? (language === 'ru' ? 'Сохранение…' : 'Saving...') : factToEdit ? t('btnUpdateFact') : t('btnCreateFact')}
               </button>
             </div>
           </form>

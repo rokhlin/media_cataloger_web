@@ -158,5 +158,30 @@ describe('Family Tree dateUtils', () => {
 
       assert.strictEqual(res, null);
     });
+
+    it('formats Russian dates and celebrations properly in Russian mode', () => {
+      const formattedRu = formatTreeDate('1985-09-04', 'DD Month YYYY', 'ru');
+      assert.strictEqual(formattedRu, '4 сентября 1985');
+
+      const formattedRuShort = formatTreeDate('1985-09', 'DD Month YYYY', 'ru');
+      assert.strictEqual(formattedRuShort, 'сен 1985');
+
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const birthDate = `1990-${month}-${day}`;
+
+      const resRu = checkCelebration(
+        { birth_date: birthDate, is_living: 1 },
+        { enabled: true, showBirthday: true, daysThreshold: 7, badgeStyle: 'pill', badgeColor: '#f59e0b', customIcon: '' },
+        7,
+        now,
+        'ru'
+      );
+
+      assert.ok(resRu);
+      assert.strictEqual(resRu?.label, 'День рождения');
+      assert.ok(resRu?.title.includes('сегодня!'), `Expected title to contain 'сегодня!', got: ${resRu?.title}`);
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 
 interface GalleryPhotoPickerProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export const GalleryPhotoPicker = ({
   onSelectPhotos,
   defaultPersonName,
 }: GalleryPhotoPickerProps) => {
+  const { t } = useLanguage();
   const [mediaFiles, setMediaFiles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,10 +124,10 @@ export const GalleryPhotoPicker = ({
             <span style={{ fontSize: 20 }}>🖼️</span>
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Select Gallery Photos to Pin
+                {t('modalPhotoPickerTitle')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Attach visual memories and documents from your Media Cataloger library
+                {t('modalPhotoPickerSubtitle')}
               </div>
             </div>
           </div>
@@ -150,7 +152,7 @@ export const GalleryPhotoPicker = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by photo name, tagged person, description..."
+            placeholder={t('searchPhotosPlaceholder')}
             style={{
               flex: 1,
               background: 'var(--input-bg)',
@@ -178,7 +180,7 @@ export const GalleryPhotoPicker = ({
               }}
               onClick={() => setSearchQuery(defaultPersonName)}
             >
-              Filter by {defaultPersonName}
+              {t('filterByPersonBtn')} {defaultPersonName}
             </button>
           )}
         </div>
@@ -187,11 +189,11 @@ export const GalleryPhotoPicker = ({
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
           {isLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-              Loading media library...
+              {t('loadingMediaLibrary')}
             </div>
           ) : filteredMedia.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-              No photos found matching your search.
+              {t('noPhotosFoundSearch')}
             </div>
           ) : (
             <div
@@ -291,7 +293,7 @@ export const GalleryPhotoPicker = ({
             type="text"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            placeholder="Optional caption for pinned photo(s)..."
+            placeholder={t('captionForPinnedPhotosPlaceholder')}
             style={{
               flex: 1,
               background: 'var(--input-bg)',
@@ -318,7 +320,7 @@ export const GalleryPhotoPicker = ({
               }}
               onClick={onClose}
             >
-              Cancel
+              {t('cancel')}
             </button>
 
             <button
@@ -337,7 +339,7 @@ export const GalleryPhotoPicker = ({
               disabled={selectedPaths.size === 0}
               onClick={handleConfirm}
             >
-              Pin {selectedPaths.size} Photo{selectedPaths.size === 1 ? '' : 's'}
+              {t('btnPinSelectedPhotos')} ({selectedPaths.size})
             </button>
           </div>
         </div>

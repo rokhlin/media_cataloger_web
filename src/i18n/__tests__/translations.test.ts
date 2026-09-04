@@ -6,6 +6,8 @@ import {
   headerTranslationsRu,
   commonTranslationsEn,
   commonTranslationsRu,
+  familyTreeTranslationsEn,
+  familyTreeTranslationsRu,
 } from '../translations.js';
 
 describe('i18n Translations', () => {
@@ -35,7 +37,7 @@ describe('i18n Translations', () => {
     }
   });
 
-  it('should have consistent sub-dictionaries (header, common)', () => {
+  it('should have consistent sub-dictionaries (header, common, family tree)', () => {
     const enHeaderKeys = Object.keys(headerTranslationsEn).sort();
     const ruHeaderKeys = Object.keys(headerTranslationsRu).sort();
     assert.deepStrictEqual(enHeaderKeys, ruHeaderKeys);
@@ -43,5 +45,9 @@ describe('i18n Translations', () => {
     const enCommonKeys = Object.keys(commonTranslationsEn).sort();
     const ruCommonKeys = Object.keys(commonTranslationsRu).sort();
     assert.deepStrictEqual(enCommonKeys, ruCommonKeys);
+
+    const enTreeKeys = Object.keys(familyTreeTranslationsEn).sort();
+    const ruTreeKeys = Object.keys(familyTreeTranslationsRu).sort();
+    assert.deepStrictEqual(enTreeKeys, ruTreeKeys);
   });
 });

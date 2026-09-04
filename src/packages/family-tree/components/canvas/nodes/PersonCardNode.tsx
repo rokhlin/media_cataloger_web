@@ -3,6 +3,8 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { TreeGraphPerson } from '../../../types/tree.types.js';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
 import { formatTreeDate, checkCelebration } from '../../../utils/dateUtils.js';
+import { localizeKinshipTerm } from '../../../utils/kinshipUtils.js';
+import { useLanguage } from '../../../../../i18n/LanguageContext.js';
 
 export interface SpouseSummary {
   unionId: string;
@@ -35,22 +37,24 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
     toggleFoldBranch,
   } = useFamilyTreeStore();
 
+  const { language, t } = useLanguage();
+
   const isCurrentSelected = selected || selectedPersonId === person.id;
   const isHighlighted = highlightedPersonId === person.id;
 
   const fullName = person.full_name || `${person.first_name} ${person.last_name || ''}`.trim();
-  const formattedBirth = person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle) : '';
-  const formattedDeath = person.death_date ? formatTreeDate(person.death_date, dateFormatStyle) : '';
+  const formattedBirth = person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle, language) : '';
+  const formattedDeath = person.death_date ? formatTreeDate(person.death_date, dateFormatStyle, language) : '';
 
   const isDeceased = Boolean(person.death_date) || !person.is_living || person.is_living === 0;
   const computedRelationship = relationshipToRoot || person.kinship_to_root;
-  const relationshipText = isRoot ? 'Me' : (computedRelationship || 'Relative');
+  const relationshipText = isRoot ? t('hudMe') : (computedRelationship ? localizeKinshipTerm(computedRelationship, language) : t('hudRelative'));
 
   const lifespan = person.is_living
-    ? formattedBirth ? `b. ${formattedBirth}` : 'Living'
+    ? formattedBirth ? `${t('bornPrefix')} ${formattedBirth}` : t('statusLiving')
     : formattedBirth && formattedDeath
       ? `${formattedBirth} – ${formattedDeath}`
-      : formattedDeath ? `d. ${formattedDeath}` : 'Deceased';
+      : formattedDeath ? `${t('diedPrefix')} ${formattedDeath}` : t('statusDeceased');
 
   const avatarUrl = person.avatar_url || (person.avatar_face_id && !person.avatar_face_id.startsWith('manual_') && !person.avatar_face_id.startsWith('face_manual_') ? `/api/faces/image/${person.avatar_face_id}` : null);
   const initials = `${person.first_name?.[0] || ''}${person.last_name?.[0] || ''}`.toUpperCase() || '?';
@@ -81,7 +85,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
 
   // Celebration calculation
   const celebration = celebrationConfig.enabled
-    ? checkCelebration(person.birth_date, 'BIRTHDAY', celebrationConfig.daysThreshold)
+    ? checkCelebration(person.birth_date, 'BIRTHDAY', celebrationConfig.daysThreshold, new Date(), language)
     : null;
 
   const renderCelebrationBadge = (compact = false) => {
@@ -91,7 +95,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
     const icon = celebrationConfig.customIcon || celebration.icon;
     const isIconOnly = celebrationConfig.contentDisplay === 'icon_only';
     const showText = !compact && !isIconOnly;
-    const detailedTooltip = `${celebration.title} (${celebration.isToday ? 'Today!' : `${celebration.daysRemaining} days remaining`})`;
+    const detailedTooltip = `${celebration.title} (${celebration.isToday ? t('celebrationToday') : `${celebration.daysRemaining} ${t('celebrationDaysRemaining')}`})`;
 
     if (celebrationConfig.badgeStyle === 'ribbon') {
       return (
@@ -117,7 +121,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           title={detailedTooltip}
         >
           <span>{icon}</span>
-          {showText && <span>{celebration.isToday ? 'Today!' : `${celebration.daysRemaining}d`}</span>}
+          {showText && <span>{celebration.isToday ? t('celebrationToday') : `${celebration.daysRemaining}d`}</span>}
         </div>
       );
     }
@@ -146,7 +150,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
         title={detailedTooltip}
       >
         <span>{icon}</span>
-        {showText && <span>{celebration.isToday ? 'Today' : `${celebration.daysRemaining}d`}</span>}
+        {showText && <span>{celebration.isToday ? t('celebrationToday') : `${celebration.daysRemaining}d`}</span>}
       </div>
     );
   };
@@ -157,9 +161,10 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
     const isDivorced = primarySpouse.unionType === 'DIVORCED';
     const icon = isDivorced ? '💔' : primarySpouse.unionType === 'MARRIAGE' ? '💍' : '💞';
     const dates = [
-      primarySpouse.startDate ? formatTreeDate(primarySpouse.startDate, dateFormatStyle) : null,
-      primarySpouse.endDate ? formatTreeDate(primarySpouse.endDate, dateFormatStyle) : null,
+      primarySpouse.startDate ? formatTreeDate(primarySpouse.startDate, dateFormatStyle, language) : null,
+      primarySpouse.endDate ? formatTreeDate(primarySpouse.endDate, dateFormatStyle, language) : null,
     ].filter(Boolean).join(' – ');
+    const spouseLabel = isDivorced ? t('unionDivorced') : t('unionSpouse');
 
     if (compact) {
       return (
@@ -184,14 +189,14 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
             whiteSpace: 'nowrap',
           }}
-          title={`${isDivorced ? 'Divorced' : 'Spouse'}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
+          title={`${spouseLabel}${dates ? ` (${dates})` : ''}`}
           onClick={(e) => {
             e.stopPropagation();
             openDrawer('family', person.id);
           }}
         >
           <span>{icon}</span>
-          {isDivorced && <span style={{ fontSize: 8, opacity: 0.9 }}>(Div.)</span>}
+          {isDivorced && <span style={{ fontSize: 8, opacity: 0.9 }}>({t('unionDivorced').slice(0, 4)}.)</span>}
         </div>
       );
     }
@@ -213,14 +218,14 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           whiteSpace: 'nowrap',
           transition: 'all 0.15s ease',
         }}
-        title={`${isDivorced ? 'Divorced' : 'Spouse'}${dates ? ` (${dates})` : ''} - Click to view/edit details`}
+        title={`${spouseLabel}${dates ? ` (${dates})` : ''}`}
         onClick={(e) => {
           e.stopPropagation();
           openDrawer('family', person.id);
         }}
       >
         <span>{icon}</span>
-        {isDivorced && <span style={{ fontSize: 9, opacity: 0.8 }}>(Div.)</span>}
+        {isDivorced && <span style={{ fontSize: 9, opacity: 0.8 }}>({t('unionDivorced').slice(0, 4)}.)</span>}
       </div>
     );
   };
@@ -297,7 +302,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
               zIndex: 10,
             }}
           >
-            ME
+            {t('hudMe').toUpperCase()}
           </div>
         )}
 
@@ -431,7 +436,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
                 transform: 'rotate(45deg)',
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
               }}
-              title="Deceased"
+              title={t('statusDeceased')}
             />
           </div>
         )}
@@ -451,7 +456,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
               zIndex: 10,
             }}
           >
-            ME
+            {t('hudMe').toUpperCase()}
           </div>
         )}
 
@@ -586,7 +591,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
             zIndex: 10,
           }}
         >
-          ⭐ ROOT (ME)
+          ⭐ {language === 'ru' ? 'Я (КОРЕНЬ)' : 'ROOT (ME)'}
         </div>
       )}
 
@@ -654,7 +659,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
                 textOverflow: 'ellipsis',
               }}
             >
-              née {person.maiden_name}
+              {language === 'ru' ? 'урожд.' : 'née'} {person.maiden_name}
             </div>
           )}
           <div
@@ -696,7 +701,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
           }}
           title={person.birth_place || ''}
         >
-          {person.birth_place ? `📍 ${person.birth_place}` : '📍 Location unrecorded'}
+          {person.birth_place ? `📍 ${person.birth_place}` : `📍 ${language === 'ru' ? 'Место не указано' : 'Location unrecorded'}`}
         </div>
 
         {/* Action buttons: Quick-Add & Fold */}
@@ -717,7 +722,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
               fontSize: 13,
               fontWeight: 700,
             }}
-            title="Quick add relative"
+            title={t('btnAddRelative')}
             onClick={(e) => {
               e.stopPropagation();
               openQuickAdd(person.id);
@@ -741,7 +746,7 @@ export const PersonCardNode = memo(({ data, selected }: NodeProps) => {
               cursor: 'pointer',
               fontSize: 12,
             }}
-            title={isFolded ? 'Unfold branch' : 'Fold descendants branch'}
+            title={isFolded ? (language === 'ru' ? 'Развернуть ветвь' : 'Unfold branch') : (language === 'ru' ? 'Свернуть ветвь потомков' : 'Fold descendants branch')}
             onClick={(e) => {
               e.stopPropagation();
               toggleFoldBranch(person.id);

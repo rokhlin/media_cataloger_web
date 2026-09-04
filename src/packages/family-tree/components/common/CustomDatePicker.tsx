@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { parseFlexibleDate } from '../../utils/dateUtils.js';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 
 interface CustomDatePickerProps {
   value?: string | null;
@@ -18,6 +19,7 @@ export const CustomDatePicker = ({
   style,
   autoFocus = false,
 }: CustomDatePickerProps) => {
+  const { language, t } = useLanguage();
   const [inputValue, setInputValue] = useState(value || '');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,10 +109,17 @@ export const CustomDatePicker = ({
   // Adjust so Monday is 0:
   const firstDayIndex = (firstDayWeekday + 6) % 7;
 
-  const monthNames = [
+  const monthNames = language === 'ru' ? [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ] : [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
+
+  const weekDays = language === 'ru'
+    ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+    : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%', ...style }}>
@@ -158,7 +167,7 @@ export const CustomDatePicker = ({
             alignItems: 'center',
             justifyContent: 'center',
           }}
-          title="Open calendar picker"
+          title={t('calendarPickerTooltip')}
         >
           📅
         </button>
@@ -178,10 +187,10 @@ export const CustomDatePicker = ({
         >
           {parsed.isValid ? (
             <span>
-              ✓ Detected: <strong>{parsed.detectedFormat}</strong> (Saved as <code>{parsed.standardValue}</code>)
+              ✓ {t('dateFormatDetected')} <strong>{parsed.detectedFormat}</strong> ({language === 'ru' ? 'сохранено как' : 'saved as'} <code>{parsed.standardValue}</code>)
             </span>
           ) : (
-            <span>⚠️ Unrecognized date format (supports YYYY, YYYY-MM, YYYY-MM-DD, DD.MM.YYYY, MM/DD/YYYY)</span>
+            <span>⚠️ {t('unrecognizedDateFormat')}</span>
           )}
         </div>
       )}
@@ -292,7 +301,7 @@ export const CustomDatePicker = ({
 
           {/* Weekday headers */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 6 }}>
-            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
+            {weekDays.map((d) => (
               <div key={d} style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>
                 {d}
               </div>
@@ -354,9 +363,9 @@ export const CustomDatePicker = ({
                 fontSize: 10,
                 cursor: 'pointer',
               }}
-              title="Save only year (approximate)"
+              title={t('saveApproximateYear')}
             >
-              Year: {viewYear}
+              {language === 'ru' ? `Год: ${viewYear}` : `Year: ${viewYear}`}
             </button>
 
             <button
@@ -371,7 +380,7 @@ export const CustomDatePicker = ({
                 fontSize: 10,
                 cursor: 'pointer',
               }}
-              title="Save Month & Year"
+              title={t('saveMonthYear')}
             >
               {monthNames[viewMonth].substring(0, 3)} {viewYear}
             </button>
@@ -391,7 +400,7 @@ export const CustomDatePicker = ({
                 cursor: 'pointer',
               }}
             >
-              Clear
+              {t('btnClearDate')}
             </button>
           </div>
         </div>

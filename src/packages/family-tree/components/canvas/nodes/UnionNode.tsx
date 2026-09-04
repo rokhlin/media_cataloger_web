@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { TreeGraphUnion } from '../../../types/tree.types.js';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
+import { useLanguage } from '../../../../../i18n/LanguageContext.js';
 
 export interface UnionNodeData {
   union: TreeGraphUnion;
@@ -11,17 +12,24 @@ export interface UnionNodeData {
 export const UnionNode = memo(({ data }: NodeProps) => {
   const { union } = data as unknown as UnionNodeData;
   const { foldedDivorcedUnionIds, toggleFoldDivorcedUnion } = useFamilyTreeStore();
+  const { language, t } = useLanguage();
 
   const isDivorced = union.union_type === 'DIVORCED';
   const isFolded = foldedDivorcedUnionIds.has(union.id);
   const icon = isDivorced ? '💔' : union.union_type === 'MARRIAGE' ? '💍' : '💞';
 
+  const typeLabel = isDivorced
+    ? t('unionTypeDivorced')
+    : union.union_type === 'MARRIAGE'
+      ? t('unionTypeMarriage')
+      : t('unionTypeUnmarried');
+
   const tooltipText = [
-    union.union_type,
-    union.start_date ? `Since: ${union.start_date}` : null,
-    union.start_place ? `at ${union.start_place}` : null,
-    union.end_date ? `Divorced/Ended: ${union.end_date}` : null,
-    isDivorced ? (isFolded ? 'Divorced spouse branch folded (Click to expand)' : 'Divorced spouse branch expanded (Click to collapse)') : null,
+    typeLabel,
+    union.start_date ? `${language === 'ru' ? 'С' : 'Since'}: ${union.start_date}` : null,
+    union.start_place ? `${language === 'ru' ? 'в' : 'at'} ${union.start_place}` : null,
+    union.end_date ? `${language === 'ru' ? 'Развод' : 'Divorced/Ended'}: ${union.end_date}` : null,
+    isDivorced ? (isFolded ? (language === 'ru' ? 'Ветвь бывшего супруга свёрнута' : 'Divorced spouse branch folded') : (language === 'ru' ? 'Ветвь бывшего супруга развёрнута' : 'Divorced spouse branch expanded')) : null,
   ]
     .filter(Boolean)
     .join(' • ');
@@ -50,7 +58,7 @@ export const UnionNode = memo(({ data }: NodeProps) => {
         position: 'relative',
         transition: 'transform 0.15s ease',
       }}
-      title={tooltipText || 'Partnership Union'}
+      title={tooltipText || (language === 'ru' ? 'Семейный союз' : 'Partnership Union')}
       onClick={handleToggleFold}
     >
       <Handle
@@ -91,7 +99,7 @@ export const UnionNode = memo(({ data }: NodeProps) => {
             padding: 0,
             boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
           }}
-          title={isFolded ? 'Expand divorced spouse subtree' : 'Collapse divorced spouse subtree'}
+          title={isFolded ? (language === 'ru' ? 'Развернуть ветвь бывшего супруга' : 'Expand divorced spouse subtree') : (language === 'ru' ? 'Свернуть ветвь бывшего супруга' : 'Collapse divorced spouse subtree')}
         >
           {isFolded ? ' + ' : ' − '}
         </button>

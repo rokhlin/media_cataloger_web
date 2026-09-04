@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import type { Gender, FiliationType, TreeGraphData } from '../../types/tree.types.js';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 
 interface QuickAddRelativeModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const QuickAddRelativeModal = ({
   graphData,
   onAddRelative,
 }: QuickAddRelativeModalProps) => {
+  const { language, t } = useLanguage();
   const [relationship, setRelationship] = useState<'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING'>(initialRelationship);
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -52,7 +54,11 @@ export const QuickAddRelativeModal = ({
         if (pid !== targetPersonId && !spouseMap.has(pid)) {
           const person = (graphData.persons || []).find((p) => p.id === pid);
           const name = person?.full_name || [person?.first_name, person?.last_name].filter(Boolean).join(' ') || 'Unknown Person';
-          const unionStatus = u.union_type === 'DIVORCED' ? ' (Divorced)' : u.union_type === 'SEPARATED' ? ' (Separated)' : '';
+          const unionStatus = u.union_type === 'DIVORCED'
+            ? (language === 'ru' ? ' (В разводе)' : ' (Divorced)')
+            : u.union_type === 'SEPARATED'
+            ? (language === 'ru' ? ' (Расстались)' : ' (Separated)')
+            : '';
           spouseMap.set(pid, {
             id: pid,
             name: `${name}${unionStatus}`,
@@ -61,7 +67,7 @@ export const QuickAddRelativeModal = ({
       }
     }
     return Array.from(spouseMap.values());
-  }, [graphData, targetPersonId]);
+  }, [graphData, targetPersonId, language]);
 
   // When modal opens, initialize relationship and default spouse if exactly 1 spouse
   const prevOpenRef = useRef(false);
@@ -142,10 +148,10 @@ export const QuickAddRelativeModal = ({
   };
 
   const RELATIONSHIPS = [
-    { id: 'PARENT', label: 'Parent (Father / Mother)', icon: '⬆️' },
-    { id: 'SPOUSE', label: 'Spouse / Partner', icon: '💍' },
-    { id: 'SIBLING', label: 'Sibling (Brother / Sister)', icon: '↔️' },
-    { id: 'CHILD', label: 'Child (Son / Daughter)', icon: '⬇️' },
+    { id: 'PARENT', label: t('relationParentDetailed'), icon: '⬆️' },
+    { id: 'SPOUSE', label: t('relationSpouseDetailed'), icon: '💍' },
+    { id: 'SIBLING', label: t('relationSiblingDetailed'), icon: '↔️' },
+    { id: 'CHILD', label: t('relationChildDetailed'), icon: '⬇️' },
   ];
 
   return (
@@ -190,10 +196,10 @@ export const QuickAddRelativeModal = ({
         >
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Add Family Relative
+              {t('modalAddRelativeTitle')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {targetPersonName ? `Connecting new relative to ${targetPersonName}` : 'Add relative to family tree'}
+              {targetPersonName ? `${t('connectingRelativeTo')} ${targetPersonName}` : t('emptyTreeAddButton')}
             </div>
           </div>
           <button
@@ -215,7 +221,7 @@ export const QuickAddRelativeModal = ({
         <form onSubmit={handleSubmit} style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Relationship Selector */}
           <div>
-            <label style={labelStyle}>Relationship to {targetPersonName || 'Selection'}</label>
+            <label style={labelStyle}>{t('relationshipToPerson')} {targetPersonName || 'Selection'}</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
               {RELATIONSHIPS.map((rel) => {
                 const isSelected = relationship === rel.id;
@@ -252,13 +258,13 @@ export const QuickAddRelativeModal = ({
             {/* If adding a child, allow specifying other parent from spouse list or unknown */}
             {relationship === 'CHILD' && (
               <div style={{ marginTop: 10 }}>
-                <label style={labelStyle}>Other Parent</label>
+                <label style={labelStyle}>{t('labelOtherParent')}</label>
                 <select
                   value={otherParentId}
                   onChange={(e) => setOtherParentId(e.target.value)}
                   style={inputStyle}
                 >
-                  <option value="">Unknown</option>
+                  <option value="">{t('unknownOtherParent')}</option>
                   {spouses.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -267,10 +273,10 @@ export const QuickAddRelativeModal = ({
                 </select>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                   {otherParentId
-                    ? 'Child will be linked to this spouse as second parent.'
+                    ? (language === 'ru' ? 'Ребёнок будет привязан к этому супругу как ко второму родителю.' : 'Child will be linked to this spouse as second parent.')
                     : spouses.length === 0
-                    ? 'No spouse on record. Child\'s second parent will remain empty.'
-                    : 'Selecting "Unknown" keeps the child\'s second parent empty.'}
+                    ? (language === 'ru' ? 'Нет данных о супруге. Второй родитель останется незаполненным.' : 'No spouse on record. Child\'s second parent will remain empty.')
+                    : (language === 'ru' ? 'При выборе «Не указан» второй родитель останется пустым.' : 'Selecting "Unknown" keeps the child\'s second parent empty.')}
                 </div>
               </div>
             )}
@@ -279,24 +285,24 @@ export const QuickAddRelativeModal = ({
           {/* Names */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={labelStyle}>First Name *</label>
+              <label style={labelStyle}>{t('labelFirstName')} *</label>
               <input
                 type="text"
                 required
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="e.g. Sarah"
+                placeholder={language === 'ru' ? 'напр. Анна' : 'e.g. Sarah'}
                 style={inputStyle}
               />
             </div>
 
             <div>
-              <label style={labelStyle}>Last Name</label>
+              <label style={labelStyle}>{t('labelLastName')}</label>
               <input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="e.g. Johnson"
+                placeholder={language === 'ru' ? 'напр. Иванова' : 'e.g. Johnson'}
                 style={inputStyle}
               />
             </div>
@@ -304,23 +310,23 @@ export const QuickAddRelativeModal = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={labelStyle}>Middle Name</label>
+              <label style={labelStyle}>{t('labelMiddleName')}</label>
               <input
                 type="text"
                 value={middleName}
                 onChange={(e) => setMiddleName(e.target.value)}
-                placeholder="e.g. Elizabeth"
+                placeholder={language === 'ru' ? 'напр. Сергеевна' : 'e.g. Elizabeth'}
                 style={inputStyle}
               />
             </div>
 
             <div>
-              <label style={labelStyle}>Maiden / Birth Name</label>
+              <label style={labelStyle}>{t('labelMaidenName')}</label>
               <input
                 type="text"
                 value={maidenName}
                 onChange={(e) => setMaidenName(e.target.value)}
-                placeholder="e.g. Smith"
+                placeholder={language === 'ru' ? 'напр. Смирнова' : 'e.g. Smith'}
                 style={inputStyle}
               />
             </div>
@@ -329,33 +335,33 @@ export const QuickAddRelativeModal = ({
           {/* Gender and Filiation */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={labelStyle}>Gender</label>
+              <label style={labelStyle}>{t('labelGender')}</label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value as Gender)}
                 style={inputStyle}
               >
-                <option value="UNKNOWN">Unknown / Unspecified</option>
-                <option value="MALE">Male</option>
-                <option value="FEMALE">Female</option>
-                <option value="NON_BINARY">Non-Binary</option>
-                <option value="OTHER">Other</option>
+                <option value="UNKNOWN">{t('genderUnknown')}</option>
+                <option value="MALE">{t('genderMale')}</option>
+                <option value="FEMALE">{t('genderFemale')}</option>
+                <option value="NON_BINARY">{t('genderOther')}</option>
+                <option value="OTHER">{t('genderOther')}</option>
               </select>
             </div>
 
             {(relationship === 'CHILD' || relationship === 'PARENT' || relationship === 'SIBLING') && (
               <div>
-                <label style={labelStyle}>Filiation / Tie</label>
+                <label style={labelStyle}>{t('filiationTypeLabel')}</label>
                 <select
                   value={filiation}
                   onChange={(e) => setFiliation(e.target.value as FiliationType)}
                   style={inputStyle}
                 >
-                  <option value="BIOLOGICAL">Biological</option>
-                  <option value="ADOPTED">Adopted</option>
-                  <option value="FOSTER">Foster</option>
-                  <option value="STEP">Step-Relation</option>
-                  <option value="SURROGATE">Surrogate</option>
+                  <option value="BIOLOGICAL">{t('filiationBiological')}</option>
+                  <option value="ADOPTED">{t('filiationAdopted')}</option>
+                  <option value="FOSTER">{t('filiationFoster')}</option>
+                  <option value="STEP">{t('filiationStep')}</option>
+                  <option value="SURROGATE">{t('filiationSurrogate')}</option>
                 </select>
               </div>
             )}
@@ -364,7 +370,7 @@ export const QuickAddRelativeModal = ({
           {/* Birth Info */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={labelStyle}>Birth Date (YYYY, YYYY-MM, or YYYY-MM-DD)</label>
+              <label style={labelStyle}>{t('labelBirthDate')}</label>
               <input
                 type="text"
                 value={birthDate}
@@ -375,12 +381,12 @@ export const QuickAddRelativeModal = ({
             </div>
 
             <div>
-              <label style={labelStyle}>Birth Place</label>
+              <label style={labelStyle}>{t('labelBirthPlace')}</label>
               <input
                 type="text"
                 value={birthPlace}
                 onChange={(e) => setBirthPlace(e.target.value)}
-                placeholder="e.g. Boston, MA"
+                placeholder={language === 'ru' ? 'напр. Москва, Россия' : 'e.g. Boston, MA'}
                 style={inputStyle}
               />
             </div>
@@ -403,12 +409,12 @@ export const QuickAddRelativeModal = ({
                 checked={isLiving}
                 onChange={(e) => setIsLiving(e.target.checked)}
               />
-              <span>This person is currently living</span>
+              <span>{t('currentlyLivingCheckbox')}</span>
             </label>
 
             {!isLiving && (
               <div style={{ marginTop: 10 }}>
-                <label style={labelStyle}>Death Date (YYYY, YYYY-MM, or YYYY-MM-DD)</label>
+                <label style={labelStyle}>{t('labelDeathDate')}</label>
                 <input
                   type="text"
                   value={deathDate}
@@ -435,7 +441,7 @@ export const QuickAddRelativeModal = ({
               }}
               onClick={onClose}
             >
-              Cancel
+              {t('cancel')}
             </button>
 
             <button
@@ -453,7 +459,7 @@ export const QuickAddRelativeModal = ({
                 boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
               }}
             >
-              {isSubmitting ? 'Adding...' : 'Add Family Member'}
+              {isSubmitting ? t('addingFamilyMember') : t('btnAddFamilyMember')}
             </button>
           </div>
         </form>

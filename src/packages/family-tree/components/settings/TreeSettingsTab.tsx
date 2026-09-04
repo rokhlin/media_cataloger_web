@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import { exportTreeToCSV, parseTreeFromCSV, getSampleTreeCSV } from '../../utils/csvTreeService.js';
 import { formatTreeDate } from '../../utils/dateUtils.js';
@@ -33,6 +34,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   addChildToUnion,
   onBackToCanvas,
 }) => {
+  const { language, t } = useLanguage();
   const {
     nodeViewStyle,
     setNodeViewStyle,
@@ -305,10 +307,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-            ⚙️ Tree Configuration & Settings
+            {t('settingsHeaderTitle')}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-            Customize canvas node styles, celebrations, date display formats, life facts filters, and CSV backup.
+            {t('settingsHeaderSubtitle')}
           </p>
         </div>
 
@@ -341,7 +343,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               transition: 'all 0.15s ease',
             }}
           >
-            <span>{Object.values(expandedSections).every(Boolean) ? '📁 Collapse All' : '📂 Expand All'}</span>
+            <span>{Object.values(expandedSections).every(Boolean) ? t('btnCollapseAllSections') : t('btnExpandAllSections')}</span>
           </button>
 
           <button
@@ -362,7 +364,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
             }}
           >
-            ← Back to Interactive Canvas
+            {t('btnBackToCanvas')}
           </button>
         </div>
       </div>
@@ -378,10 +380,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         >
           <div>
             <div style={sectionTitleStyle}>
-              <span>🎨</span> Tree Node View Style
+              <span>🎨</span> {t('settingsViewStylesTitle') || 'Tree Node View Style'}
             </div>
             <div style={sectionSubtextStyle}>
-              Select how persons are rendered on the tree canvas. ELK layout dimensions adjust automatically.
+              {t('settingsViewStylesDesc')}
             </div>
           </div>
           <span
@@ -417,12 +419,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                  1. Default Style
+                  {t('settingsStyleDefault')}
                 </span>
                 <input type="radio" checked={nodeViewStyle === 'default'} readOnly />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Full detailed card with avatar portrait, name, maiden name, lifespan, birthplace, and quick-add actions.
+                {t('settingsStyleDefaultDesc')}
               </div>
               {/* Visual Mini Mockup */}
               <div
@@ -464,12 +466,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                  2. Circle Style
+                  {t('settingsStyleCircle')}
                 </span>
                 <input type="radio" checked={nodeViewStyle === 'circle'} readOnly />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Ultra-compact circular avatar showing only image and person name. Ideal for large dense genealogical trees.
+                {t('settingsStyleCircleDesc')}
               </div>
               {/* Visual Mini Mockup */}
               <div
@@ -509,12 +511,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                  3. Square Style
+                  {t('settingsStyleSquare')}
                 </span>
                 <input type="radio" checked={nodeViewStyle === 'square'} readOnly />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Balanced card featuring a modern square portrait, full person name, and formatted birth date.
+                {t('settingsStyleSquareDesc')}
               </div>
               {/* Visual Mini Mockup */}
               <div
@@ -553,10 +555,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         >
           <div>
             <div style={sectionTitleStyle}>
-              <span>🎂</span> Celebration & Milestone Badges
+              <span>🎂</span> {t('settingsCelebrationsTitle') || 'Celebration & Milestone Badges'}
             </div>
             <div style={sectionSubtextStyle}>
-              Display celebratory badges on nodes when birthdays, wedding anniversaries, or memorial days approach.
+              {t('settingsCelebrationsDesc')}
             </div>
           </div>
 
@@ -568,7 +570,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 onChange={(e) => setCelebrationConfig({ enabled: e.target.checked })}
                 style={{ width: 16, height: 16 }}
               />
-              Enable Badges
+              {t('settingsEnableCelebrations')}
             </label>
             <span
               style={{
@@ -594,7 +596,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             {/* Event Types */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                Occasions to Celebrate
+                {language === 'ru' ? 'Поводы для праздников' : 'Occasions to Celebrate'}
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -603,7 +605,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={celebrationConfig.showBirthday}
                     onChange={(e) => setCelebrationConfig({ showBirthday: e.target.checked })}
                   />
-                  <span>🎂 Birthdays</span>
+                  <span>{t('settingsShowBirthdays')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -612,7 +614,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={celebrationConfig.showAnniversary}
                     onChange={(e) => setCelebrationConfig({ showAnniversary: e.target.checked })}
                   />
-                  <span>💍 Wedding Anniversaries</span>
+                  <span>{t('settingsShowAnniversaries')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -621,7 +623,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={celebrationConfig.showMemorial}
                     onChange={(e) => setCelebrationConfig({ showMemorial: e.target.checked })}
                   />
-                  <span>🕯️ Memorial Days</span>
+                  <span>{t('settingsShowMemorials')}</span>
                 </label>
               </div>
             </div>
@@ -630,7 +632,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                  Show badge within: <strong>{celebrationConfig.daysThreshold} days</strong>
+                  {t('settingsDaysThreshold')}: <strong>{celebrationConfig.daysThreshold} {language === 'ru' ? 'дн.' : 'days'}</strong>
                 </label>
                 <input
                   type="range"
@@ -641,15 +643,15 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   style={{ width: '100%' }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-secondary)' }}>
-                  <span>0 (Day of event only)</span>
-                  <span>15 days</span>
-                  <span>30 days ahead</span>
+                  <span>{language === 'ru' ? '0 (В день события)' : '0 (Day of event only)'}</span>
+                  <span>{language === 'ru' ? '15 дней' : '15 days'}</span>
+                  <span>{language === 'ru' ? '30 дней заранее' : '30 days ahead'}</span>
                 </div>
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                  Badge Presentation Style
+                  {t('settingsBadgeStyle')}
                 </label>
                 <div style={{ display: 'flex', gap: 10 }}>
                   {(['pill', 'glow', 'ribbon'] as const).map((style) => (
@@ -680,7 +682,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             {/* Badge Content Display Mode: Icon Only vs Icon and Text */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                Badge Content Mode
+                {t('settingsDisplayContent')}
               </label>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button
@@ -705,8 +707,8 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span>{celebrationConfig.customIcon || '🎂'} Birthday in 3d</span>
-                  <span style={{ fontSize: 11, opacity: 0.85 }}>(Icon & text)</span>
+                  <span>{celebrationConfig.customIcon || '🎂'} {language === 'ru' ? 'День рождения через 3 дн.' : 'Birthday in 3d'}</span>
+                  <span style={{ fontSize: 11, opacity: 0.85 }}>({language === 'ru' ? 'Значок и текст' : 'Icon & text'})</span>
                 </button>
 
                 <button
@@ -732,7 +734,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   }}
                 >
                   <span>{celebrationConfig.customIcon || '🎂'}</span>
-                  <span style={{ fontSize: 11, opacity: 0.85 }}>(Icon only • hover for details)</span>
+                  <span style={{ fontSize: 11, opacity: 0.85 }}>({language === 'ru' ? 'Только значок • при наведении' : 'Icon only • hover for details'})</span>
                 </button>
               </div>
             </div>
@@ -741,7 +743,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                  Badge Color & Accent
+                  {t('settingsBadgeColor')}
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {COLOR_PRESETS.map((c) => (
@@ -773,7 +775,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                  Badge Picture / Icon
+                  {t('settingsCustomIcon')}
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {ICON_PRESETS.map((ico) => (
@@ -816,7 +818,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
             {/* Live Badge Preview */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--nav-tab-bg)', padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-color)' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Preview:</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{language === 'ru' ? 'Предпросмотр:' : 'Preview:'}</span>
               <div
                 style={{
                   background: celebrationConfig.badgeColor || '#ec4899',
@@ -831,13 +833,13 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   gap: 6,
                   cursor: celebrationConfig.contentDisplay === 'icon_only' ? 'help' : 'default',
                 }}
-                title={celebrationConfig.contentDisplay === 'icon_only' ? 'Birthday in 3 days (Hover to view details)' : undefined}
+                title={celebrationConfig.contentDisplay === 'icon_only' ? (language === 'ru' ? 'День рождения через 3 дня (наведите для подробностей)' : 'Birthday in 3 days (Hover to view details)') : undefined}
               >
                 <span>{celebrationConfig.customIcon || '🎂'}</span>
-                {celebrationConfig.contentDisplay !== 'icon_only' && <span>Birthday in 3 days</span>}
+                {celebrationConfig.contentDisplay !== 'icon_only' && <span>{language === 'ru' ? 'День рождения через 3 дня' : 'Birthday in 3 days'}</span>}
               </div>
               {celebrationConfig.contentDisplay === 'icon_only' && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(Hover over badge to preview tooltip)</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({language === 'ru' ? 'Наведите курсор на значок для деталей' : 'Hover over badge to preview tooltip'})</span>
               )}
             </div>
           </div>
@@ -855,10 +857,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         >
           <div>
             <div style={sectionTitleStyle}>
-              <span>📅</span> Date Formats & Date Picker Configuration
+              <span>📅</span> {t('settingsDateFormatsTitle') || 'Date Formats & Date Picker Configuration'}
             </div>
             <div style={sectionSubtextStyle}>
-              Choose how dates are formatted on nodes, cards, and drawers. All common input formats are automatically recognized and converted.
+              {t('settingsDateFormatsDesc')}
             </div>
           </div>
           <span
@@ -880,7 +882,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'center' }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'block' }}>
-                  Screen Display Format
+                  {t('settingsDateFormatsTitle')}
                 </label>
                 <select
                   value={dateFormatStyle}
@@ -905,18 +907,20 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
               {/* Sample Format Preview */}
               <div style={{ background: 'var(--nav-tab-bg)', padding: '12px 18px', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Example output on cards:</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  {language === 'ru' ? 'Пример отображения на карточках:' : 'Example output on cards:'}
+                </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary-color, #6366f1)' }}>
-                  Birth: {formatTreeDate('1985-04-12', dateFormatStyle)}
+                  {t('birthInformation')}: {formatTreeDate('1985-04-12', dateFormatStyle, language)}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2 }}>
-                  Marriage: {formatTreeDate('2010-09-25', dateFormatStyle)}
+                  {t('unionTypeMarriage')}: {formatTreeDate('2010-09-25', dateFormatStyle, language)}
                 </div>
               </div>
             </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(99, 102, 241, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-              💡 <strong>Smart Parser:</strong> When typing in the Date Picker, you can enter dates in <code>YYYY-MM-DD</code>, <code>YYYY-MM</code>, <code>YYYY</code>, <code>DD.MM.YYYY</code>, <code>DD.MM</code>, <code>DD</code>, <code>MM.YYYY</code>, <code>MM/DD/YYYY</code>, or <code>MM/DD</code>. The system detects the format on the fly and standardizes it automatically.
+              💡 <strong>Smart Parser:</strong> {t('datePickerHint')}
             </div>
           </div>
         )}
@@ -933,10 +937,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         >
           <div>
             <div style={sectionTitleStyle}>
-              <span>📜</span> Person Life Facts & Relatives Filtering
+              <span>📜</span> {t('settingsLifeFactsTitle') || 'Person Life Facts & Relatives Filtering'}
             </div>
             <div style={sectionSubtextStyle}>
-              Configure what facts and whose milestones appear when exploring a person's life timeline.
+              {t('settingsLifeFactsDesc')}
             </div>
           </div>
           <span
@@ -958,7 +962,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             {/* Checkbox Group 1: Whose facts to show */}
             <div>
               <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>
-                1. Whose Life Facts to Display in Person Timeline
+                {language === 'ru' ? '1. Чьи события отображать в хронике' : '1. Whose Life Facts to Display in Person Timeline'}
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -967,7 +971,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showOwnFacts}
                     onChange={(e) => setLifeFactsConfig({ showOwnFacts: e.target.checked })}
                   />
-                  <span>👤 Person's Own Facts</span>
+                  <span>👤 {t('settingsOwnFacts')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -976,7 +980,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showParentsFacts}
                     onChange={(e) => setLifeFactsConfig({ showParentsFacts: e.target.checked })}
                   />
-                  <span>👨‍👩‍👧 Parents' Facts</span>
+                  <span>👨‍👩‍👧 {t('labelParents')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -985,7 +989,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showSiblingsFacts}
                     onChange={(e) => setLifeFactsConfig({ showSiblingsFacts: e.target.checked })}
                   />
-                  <span>👫 Siblings' Facts</span>
+                  <span>👫 {t('labelSiblings')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -994,7 +998,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showChildrenFacts}
                     onChange={(e) => setLifeFactsConfig({ showChildrenFacts: e.target.checked })}
                   />
-                  <span>👶 Children's Facts</span>
+                  <span>👶 {t('labelChildren')}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -1003,7 +1007,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showGrandparentsFacts}
                     onChange={(e) => setLifeFactsConfig({ showGrandparentsFacts: e.target.checked })}
                   />
-                  <span>👴 Grandparents' Facts</span>
+                  <span>👴 {language === 'ru' ? 'Дедушки и бабушки' : "Grandparents' Facts"}</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -1012,7 +1016,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     checked={lifeFactsConfig.showSpousesFacts}
                     onChange={(e) => setLifeFactsConfig({ showSpousesFacts: e.target.checked })}
                   />
-                  <span>💍 Spouses & Partners</span>
+                  <span>💍 {t('sectionSpousesPartners')}</span>
                 </label>
               </div>
             </div>
@@ -1071,10 +1075,10 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
         >
           <div>
             <div style={sectionTitleStyle}>
-              <span>📁</span> Export & Import Family Tree (.csv)
+              <span>📁</span> {t('settingsCsvBackupTitle') || 'Export & Import Family Tree (.csv)'}
             </div>
             <div style={sectionSubtextStyle}>
-              Backup your genealogical tree or restore persons, unions, and child relationships from a standardized CSV spreadsheet.
+              {t('settingsCsvBackupDesc')}
             </div>
           </div>
           <span
@@ -1106,10 +1110,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                📤 Export Current Tree
+                📤 {language === 'ru' ? 'Экспорт текущего древа' : 'Export Current Tree'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Download all <strong>{graphData?.persons?.length || 0} persons</strong> and <strong>{graphData?.unions?.length || 0} family unions</strong> as a comma-separated CSV file.
+                {language === 'ru'
+                  ? `Скачать все персоны (${graphData?.persons?.length || 0}) и семейные союзы (${graphData?.unions?.length || 0}) в виде CSV файла.`
+                  : `Download all ${graphData?.persons?.length || 0} persons and ${graphData?.unions?.length || 0} family unions as a comma-separated CSV file.`}
               </div>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
@@ -1133,7 +1139,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
                   }}
                 >
-                  📥 Export Tree to CSV
+                  📥 {t('btnExportCsv')}
                 </button>
 
                 <button
@@ -1151,7 +1157,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   }}
                   title="Download sample template CSV"
                 >
-                  📄 Sample CSV
+                  📄 {t('btnDownloadSampleCsv')}
                 </button>
               </div>
             </div>
@@ -1169,10 +1175,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                📥 Import Tree from CSV
+                📥 {language === 'ru' ? 'Импорт древа из CSV' : 'Import Tree from CSV'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Select a <code>.csv</code> file or paste CSV content below to import members and unions into this tree.
+                {language === 'ru'
+                  ? 'Выберите файл .csv или вставьте содержимое CSV ниже для импорта членов семьи и союзов.'
+                  : 'Select a .csv file or paste CSV content below to import members and unions into this tree.'}
               </div>
 
               <input
@@ -1203,7 +1211,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     gap: 6,
                   }}
                 >
-                  📂 Choose .CSV File
+                  📂 {t('btnChooseCsvFile')}
                 </button>
               </div>
 
@@ -1250,7 +1258,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     marginTop: 'auto',
                   }}
                 >
-                  {isImporting ? 'Importing...' : `Confirm Import (${importStats.personsCount} persons, ${importStats.unionsCount} unions)`}
+                  {isImporting ? '...' : `${t('btnCommitCsvImport')} (${importStats.personsCount} ${language === 'ru' ? 'персон' : 'persons'}, ${importStats.unionsCount} ${language === 'ru' ? 'союзов' : 'unions'})`}
                 </button>
               )}
             </div>

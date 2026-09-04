@@ -6,6 +6,8 @@ import type { TreeGraphPerson, TreeGraphData, Gender, UnionType, TreeGraphUnion 
 import { PersonTimelineView } from '../timeline/PersonTimelineView.js';
 import { CustomDatePicker } from '../common/CustomDatePicker.js';
 import { formatTreeDate } from '../../utils/dateUtils.js';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
+import { localizeKinshipTerm } from '../../utils/kinshipUtils.js';
 
 interface PersonDetailDrawerProps {
   person: TreeGraphPerson | null;
@@ -26,6 +28,7 @@ export const PersonDetailDrawer = ({
   onOpenQuickAdd,
   onOpenFaceLink,
 }: PersonDetailDrawerProps) => {
+  const { language, t } = useLanguage();
   const {
     isDetailDrawerOpen,
     drawerActiveTab,
@@ -249,7 +252,7 @@ export const PersonDetailDrawer = ({
                 justifyContent: 'center',
                 cursor: 'pointer',
               }}
-              title="Link / Update Face Photo"
+              title={t('btnLinkFace')}
               onClick={() => onOpenFaceLink(person.id)}
             >
               📷
@@ -270,14 +273,14 @@ export const PersonDetailDrawer = ({
                     borderRadius: 8,
                   }}
                 >
-                  ROOT ME
+                  {t('hudMe')}
                 </span>
               )}
             </div>
 
             {person.maiden_name && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                née {person.maiden_name}
+                {language === 'ru' ? `урожд. ${person.maiden_name}` : `née ${person.maiden_name}`}
               </div>
             )}
 
@@ -294,7 +297,7 @@ export const PersonDetailDrawer = ({
                     borderRadius: 6,
                   }}
                 >
-                  {kinship.primaryTerm}
+                  {localizeKinshipTerm(kinship.primaryTerm, language)}
                 </span>
               </div>
             )}
@@ -344,7 +347,7 @@ export const PersonDetailDrawer = ({
           }}
           onClick={handleFlyToNode}
         >
-          🎯 Focus in Canvas
+          🎯 {t('btnFocusInCanvas')}
         </button>
 
         <button
@@ -362,7 +365,7 @@ export const PersonDetailDrawer = ({
           }}
           onClick={() => onOpenQuickAdd(person.id)}
         >
-          ➕ Add Relative
+          ➕ {t('btnAddRelative')}
         </button>
 
         <button
@@ -383,7 +386,7 @@ export const PersonDetailDrawer = ({
             setDeleteError(null);
           }}
         >
-          🗑️ Delete
+          🗑️ {t('delete')}
         </button>
       </div>
 
@@ -404,7 +407,7 @@ export const PersonDetailDrawer = ({
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--error-color, #ef4444)', fontWeight: 600, flex: 1 }}>
-            ⚠️ Permanently delete <strong>{fullName}</strong>? This cannot be undone.
+            ⚠️ {t('confirmDeletePersonPrompt')} <strong>{fullName}</strong>?
           </span>
           {deleteError && (
             <span style={{ fontSize: 11, color: 'var(--error-color, #ef4444)', width: '100%', marginTop: 2 }}>
@@ -427,7 +430,7 @@ export const PersonDetailDrawer = ({
               onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
               disabled={isDeleting}
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               type="button"
@@ -445,7 +448,7 @@ export const PersonDetailDrawer = ({
               onClick={handleDeleteConfirmed}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Deleting…' : 'Confirm Delete'}
+              {isDeleting ? t('deletingPerson') : t('confirm')}
             </button>
           </div>
         </div>
@@ -474,7 +477,7 @@ export const PersonDetailDrawer = ({
           }}
           onClick={() => openDrawer('bio', person.id)}
         >
-          👤 Bio & Details
+          👤 {t('drawerTabBio')}
         </button>
 
         <button
@@ -492,7 +495,7 @@ export const PersonDetailDrawer = ({
           }}
           onClick={() => openDrawer('family', person.id)}
         >
-          👨‍👩‍👧‍👦 Family
+          👨‍👩‍👧‍👦 {t('drawerTabFamily')}
         </button>
 
         <button
@@ -510,7 +513,7 @@ export const PersonDetailDrawer = ({
           }}
           onClick={() => openDrawer('timeline', person.id)}
         >
-          📖 Life Story & Facts
+          📖 {t('drawerTabTimeline')}
         </button>
       </div>
 
@@ -536,37 +539,37 @@ export const PersonDetailDrawer = ({
                     }}
                     onClick={() => setIsEditingBio(true)}
                   >
-                    ✏️ Edit Information
+                    ✏️ {t('btnEditBio')}
                   </button>
                 </div>
 
                 <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Birth Information</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{t('birthInformation')}</div>
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle) : 'Date unknown'} {person.birth_place ? `• ${person.birth_place}` : ''}
+                    {person.birth_date ? formatTreeDate(person.birth_date, dateFormatStyle, language) : t('dateUnknown')} {person.birth_place ? `• ${person.birth_place}` : ''}
                   </div>
                 </div>
 
                 {!person.is_living && (
                   <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Passing Information</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{t('passingInformation')}</div>
                     <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {person.death_date ? formatTreeDate(person.death_date, dateFormatStyle) : 'Date unknown'} {person.death_place ? `• ${person.death_place}` : ''}
+                      {person.death_date ? formatTreeDate(person.death_date, dateFormatStyle, language) : t('dateUnknown')} {person.death_place ? `• ${person.death_place}` : ''}
                     </div>
                   </div>
                 )}
 
                 <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Gender</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{t('labelGender')}</div>
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {person.gender}
+                    {person.gender === 'MALE' ? t('genderMale') : person.gender === 'FEMALE' ? t('genderFemale') : person.gender === 'NON_BINARY' ? t('genderOther') : t('genderUnknown')}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Life Biography & Notes</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{t('labelBioNotes')}</div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                    {person.bio || 'No biography written yet. Click Edit Information above to add memories, background, and stories.'}
+                    {person.bio || t('noBioWritten')}
                   </div>
                 </div>
               </div>
@@ -574,43 +577,43 @@ export const PersonDetailDrawer = ({
               <form onSubmit={handleSaveBio} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={labelStyle}>First Name</label>
+                    <label style={labelStyle}>{t('labelFirstName')}</label>
                     <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Last Name</label>
+                    <label style={labelStyle}>{t('labelLastName')}</label>
                     <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} style={inputStyle} />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={labelStyle}>Middle Name</label>
+                    <label style={labelStyle}>{t('labelMiddleName')}</label>
                     <input type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Maiden Name</label>
+                    <label style={labelStyle}>{t('labelMaidenName')}</label>
                     <input type="text" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} style={inputStyle} />
                   </div>
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Gender</label>
+                  <label style={labelStyle}>{t('labelGender')}</label>
                   <select value={gender} onChange={(e) => setGender(e.target.value as any)} style={inputStyle}>
-                    <option value="UNKNOWN">Unknown</option>
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
-                    <option value="NON_BINARY">Non-Binary</option>
+                    <option value="UNKNOWN">{t('genderUnknown')}</option>
+                    <option value="MALE">{t('genderMale')}</option>
+                    <option value="FEMALE">{t('genderFemale')}</option>
+                    <option value="NON_BINARY">{t('genderOther')}</option>
                   </select>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={labelStyle}>Birth Date</label>
+                    <label style={labelStyle}>{t('labelBirthDate')}</label>
                     <CustomDatePicker value={birthDate} onChange={setBirthDate} placeholder="e.g. 1985-04-12, 12.04.1985..." />
                   </div>
                   <div>
-                    <label style={labelStyle}>Birth Place</label>
+                    <label style={labelStyle}>{t('labelBirthPlace')}</label>
                     <input type="text" value={birthPlace} onChange={(e) => setBirthPlace(e.target.value)} style={inputStyle} />
                   </div>
                 </div>
@@ -618,25 +621,25 @@ export const PersonDetailDrawer = ({
                 <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={isLiving} onChange={(e) => setIsLiving(e.target.checked)} />
-                    <span>Currently living</span>
+                    <span>{t('currentlyLivingCheckbox')}</span>
                   </label>
                 </div>
 
                 {!isLiving && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div>
-                      <label style={labelStyle}>Death Date</label>
+                      <label style={labelStyle}>{t('labelDeathDate')}</label>
                       <CustomDatePicker value={deathDate} onChange={setDeathDate} placeholder="e.g. 2020-05-10, 10.05.2020..." />
                     </div>
                     <div>
-                      <label style={labelStyle}>Death Place</label>
+                      <label style={labelStyle}>{t('labelDeathPlace')}</label>
                       <input type="text" value={deathPlace} onChange={(e) => setDeathPlace(e.target.value)} style={inputStyle} />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label style={labelStyle}>Biography</label>
+                  <label style={labelStyle}>{t('labelBioNotes')}</label>
                   <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
                 </div>
 
@@ -646,14 +649,14 @@ export const PersonDetailDrawer = ({
                     style={{ background: 'var(--nav-tab-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}
                     onClick={() => setIsEditingBio(false)}
                   >
-                    Cancel
+                    {t('cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={isSaving}
                     style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#ffffff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                   >
-                    {isSaving ? 'Saving...' : 'Save Changes'}
+                    {isSaving ? t('btnSavingUnion') : t('btnSaveBio')}
                   </button>
                 </div>
               </form>
@@ -668,14 +671,14 @@ export const PersonDetailDrawer = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Parents ({personContext?.immediateFamily?.parents?.length || 0})
+                  {t('labelParents')} ({personContext?.immediateFamily?.parents?.length || 0})
                 </div>
                 <button
                   type="button"
                   style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'PARENT')}
                 >
-                  + Add Parent
+                  + {t('btnAddParent')}
                 </button>
               </div>
 
@@ -690,7 +693,7 @@ export const PersonDetailDrawer = ({
                       <span>👤</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{p.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{localizeKinshipTerm(p.relation, language)}</span>
                   </div>
                 ))}
               </div>
@@ -700,14 +703,14 @@ export const PersonDetailDrawer = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Spouses & Partners ({personContext?.immediateFamily?.spouses?.length || 0})
+                  {t('sectionSpousesPartners')} ({personContext?.immediateFamily?.spouses?.length || 0})
                 </div>
                 <button
                   type="button"
                   style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'SPOUSE')}
                 >
-                  + Add Spouse
+                  + {t('btnAddPartner')}
                 </button>
               </div>
 
@@ -719,16 +722,16 @@ export const PersonDetailDrawer = ({
                   const isDivorced = u?.union_type === 'DIVORCED';
                   const uIcon = isDivorced ? '💔' : u?.union_type === 'MARRIAGE' ? '💍' : '💞';
                   const statusLabel = isDivorced
-                    ? 'Divorced'
+                    ? t('unionTypeDivorced')
                     : u?.union_type === 'MARRIAGE'
-                      ? 'Married'
+                      ? t('unionTypeMarriage')
                       : u?.union_type === 'SEPARATED'
-                        ? 'Separated'
-                        : (u?.union_type || s.relation);
+                        ? t('unionTypeDivorced')
+                        : (localizeKinshipTerm(u?.union_type || s.relation, language));
 
                   const dateDetails = [
-                    u?.start_date ? `Since ${formatTreeDate(u.start_date, dateFormatStyle)}` : null,
-                    u?.end_date ? `Ended ${formatTreeDate(u.end_date, dateFormatStyle)}` : null,
+                    u?.start_date ? `${t('sincePrefix')} ${formatTreeDate(u.start_date, dateFormatStyle, language)}` : null,
+                    u?.end_date ? `${t('endedPrefix')} ${formatTreeDate(u.end_date, dateFormatStyle, language)}` : null,
                   ].filter(Boolean).join(' • ');
 
                   return (
@@ -787,9 +790,9 @@ export const PersonDetailDrawer = ({
                                 fontSize: 11,
                                 cursor: 'pointer',
                               }}
-                              title="Edit spouse union details"
+                              title={t('btnEditUnion')}
                             >
-                              ✏️ Edit
+                              ✏️ {t('btnEditUnion')}
                             </button>
                           )}
                         </div>
@@ -835,55 +838,55 @@ export const PersonDetailDrawer = ({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                    Spouse & Union Details
+                    {t('spouseUnionDetailsModalTitle')}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                    Relationship between {person.first_name} and {editingSpouseName}
+                    {t('relationshipBetween')} {person.first_name} {t('labelAnd')} {editingSpouseName}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
-                      <label style={labelStyle}>Union Status</label>
+                      <label style={labelStyle}>{t('labelUnionType')}</label>
                       <select value={unionType} onChange={(e) => setUnionType(e.target.value as UnionType)} style={inputStyle}>
-                        <option value="MARRIAGE">💍 Marriage</option>
-                        <option value="DIVORCED">💔 Divorced</option>
-                        <option value="SEPARATED">⚡ Separated</option>
-                        <option value="PARTNERSHIP">💞 Partnership</option>
-                        <option value="CIVIL_UNION">📜 Civil Union</option>
+                        <option value="MARRIAGE">💍 {t('unionTypeMarriage')}</option>
+                        <option value="DIVORCED">💔 {t('unionTypeDivorced')}</option>
+                        <option value="SEPARATED">⚡ {t('unionTypeDivorced')}</option>
+                        <option value="PARTNERSHIP">💞 {t('unionTypeUnmarried')}</option>
+                        <option value="CIVIL_UNION">📜 {t('unionTypeCivilUnion')}</option>
                       </select>
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Marriage / Start Date</label>
+                      <label style={labelStyle}>{t('labelUnionStartDate')}</label>
                       <CustomDatePicker value={unionStartDate} onChange={setUnionStartDate} placeholder="e.g. 1980-06-21, 21.06.1980..." />
                     </div>
 
                     <div>
                       <label style={labelStyle}>
-                        {unionType === 'DIVORCED' ? 'Divorce Date' : 'End Date (if applicable)'}
+                        {t('labelUnionEndDate')}
                       </label>
                       <CustomDatePicker value={unionEndDate} onChange={setUnionEndDate} placeholder="e.g. 1995-11-04, 04.11.1995..." />
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Marriage / Union Location</label>
+                      <label style={labelStyle}>{t('labelUnionPlace')}</label>
                       <input
                         type="text"
                         value={unionStartPlace}
                         onChange={(e) => setUnionStartPlace(e.target.value)}
                         style={inputStyle}
-                        placeholder="City, State, Country"
+                        placeholder={language === 'ru' ? 'Город, регион, страна' : 'City, State, Country'}
                       />
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Notes & Details</label>
+                      <label style={labelStyle}>{t('labelUnionNotes')}</label>
                       <textarea
                         value={unionNotes}
                         onChange={(e) => setUnionNotes(e.target.value)}
                         rows={2}
                         style={{ ...inputStyle, resize: 'vertical' }}
-                        placeholder="Optional details or memories..."
+                        placeholder={language === 'ru' ? 'Дополнительные подробности или воспоминания...' : 'Optional details or memories...'}
                       />
                     </div>
 
@@ -901,7 +904,7 @@ export const PersonDetailDrawer = ({
                         }}
                         onClick={() => setEditingUnion(null)}
                       >
-                        Cancel
+                        {t('cancel')}
                       </button>
                       <button
                         type="button"
@@ -941,7 +944,7 @@ export const PersonDetailDrawer = ({
                           }
                         }}
                       >
-                        {isSavingUnion ? 'Saving...' : 'Save Union'}
+                        {isSavingUnion ? t('btnSavingUnion') : t('btnSaveUnion')}
                       </button>
                     </div>
                   </div>
@@ -953,14 +956,14 @@ export const PersonDetailDrawer = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Siblings ({personContext?.immediateFamily?.siblings?.length || 0})
+                  {t('labelSiblings')} ({personContext?.immediateFamily?.siblings?.length || 0})
                 </div>
                 <button
                   type="button"
                   style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'SIBLING')}
                 >
-                  + Add Sibling
+                  + {t('btnAddSibling')}
                 </button>
               </div>
 
@@ -975,7 +978,7 @@ export const PersonDetailDrawer = ({
                       <span>↔️</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{sib.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{sib.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{localizeKinshipTerm(sib.relation, language)}</span>
                   </div>
                 ))}
               </div>
@@ -985,14 +988,14 @@ export const PersonDetailDrawer = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Children ({personContext?.immediateFamily?.children?.length || 0})
+                  {t('labelChildren')} ({personContext?.immediateFamily?.children?.length || 0})
                 </div>
                 <button
                   type="button"
                   style={{ background: 'transparent', border: 'none', color: 'var(--primary-color, #6366f1)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => onOpenQuickAdd(person.id, 'CHILD')}
                 >
-                  + Add Child
+                  + {t('btnAddChild')}
                 </button>
               </div>
 
@@ -1007,7 +1010,7 @@ export const PersonDetailDrawer = ({
                       <span>👶</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{c.relation}</span>
+                    <span style={{ fontSize: 11, color: 'var(--primary-color, #6366f1)', fontWeight: 600 }}>{localizeKinshipTerm(c.relation, language)}</span>
                   </div>
                 ))}
               </div>

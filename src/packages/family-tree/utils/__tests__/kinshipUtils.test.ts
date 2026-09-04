@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRelationshipToRoot } from '../kinshipUtils.js';
+import { computeRelationshipToRoot, localizeKinshipTerm, localizeKinshipCategory } from '../kinshipUtils.js';
 import type { TreeGraphData, TreeGraphPerson, TreeGraphUnion } from '../../types/tree.types.js';
 
 describe('kinshipUtils - computeRelationshipToRoot', () => {
@@ -250,5 +250,30 @@ describe('kinshipUtils - computeRelationshipToRoot', () => {
       kinship_to_root: 'Father-in-law',
     };
     assert.strictEqual(computeRelationshipToRoot(personWithBackendKinship, graphData), 'Father-in-law');
+  });
+
+  it('localizes kinship terms and categories into Russian accurately', () => {
+    assert.strictEqual(localizeKinshipTerm('Me', 'ru'), 'Я');
+    assert.strictEqual(localizeKinshipTerm('Father', 'ru'), 'Отец');
+    assert.strictEqual(localizeKinshipTerm('Mother', 'ru'), 'Мать');
+    assert.strictEqual(localizeKinshipTerm('Son', 'ru'), 'Сын');
+    assert.strictEqual(localizeKinshipTerm('Daughter', 'ru'), 'Дочь');
+    assert.strictEqual(localizeKinshipTerm('Brother', 'ru'), 'Брат');
+    assert.strictEqual(localizeKinshipTerm('Sister', 'ru'), 'Сестра');
+    assert.strictEqual(localizeKinshipTerm('Husband', 'ru'), 'Муж');
+    assert.strictEqual(localizeKinshipTerm('Wife', 'ru'), 'Жена');
+    assert.strictEqual(localizeKinshipTerm('Father-in-law', 'ru'), 'Свёкор / Тесть');
+    assert.strictEqual(localizeKinshipTerm('Mother-in-law', 'ru'), 'Свекровь / Тёща');
+    assert.strictEqual(localizeKinshipTerm('Brother-in-law', 'ru'), 'Шурин / Деверь / Зять');
+    assert.strictEqual(localizeKinshipTerm('Grandfather', 'ru'), 'Дедушка');
+    assert.strictEqual(localizeKinshipTerm('Grandmother', 'ru'), 'Бабушка');
+
+    // In English mode, keeps English
+    assert.strictEqual(localizeKinshipTerm('Father-in-law', 'en'), 'Father-in-law');
+
+    // Categories
+    assert.strictEqual(localizeKinshipCategory('SELF', 'ru'), 'Я / Корень');
+    assert.strictEqual(localizeKinshipCategory('SPOUSE_PARTNER', 'ru'), 'Супруг(а) / Партнёр');
+    assert.strictEqual(localizeKinshipCategory('DIRECT_ANCESTOR', 'ru'), 'Прямой предок');
   });
 });

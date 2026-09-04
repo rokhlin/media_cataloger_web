@@ -1,5 +1,6 @@
 import AdminPanel from '../components/admin';
 import type { StatusInfo, UISettings, GalleryMediaFile } from '../models';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export interface AdminScreenProps {
   canAccessAdmin: boolean;
@@ -32,6 +33,8 @@ export default function AdminScreen({
   onReloadFaces,
   onViewInFamilyTree,
 }: AdminScreenProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="tab-pane active" id="pane-admin">
       {!canAccessAdmin ? (
@@ -52,9 +55,9 @@ export default function AdminScreen({
         >
           <span style={{ fontSize: '3.5rem' }}>🛡️</span>
           <div>
-            <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Administrator Privileges Required</h2>
+            <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>{t('adminPrivilegesRequiredTitle')}</h2>
             <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
-              You need to sign in with an Administrator account to configure feature flags, system parameters, and manage users.
+              {t('adminPrivilegesRequiredDesc')}
             </p>
           </div>
           <button
@@ -64,7 +67,7 @@ export default function AdminScreen({
             style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
             id="btn-admin-signin"
           >
-            🔑 Sign In as Admin
+            🔑 {t('btnSignInAsAdmin')}
           </button>
         </div>
       ) : (

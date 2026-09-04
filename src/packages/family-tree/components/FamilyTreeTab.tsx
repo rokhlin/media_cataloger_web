@@ -7,6 +7,7 @@ import { PersonDetailDrawer } from './modals/PersonDetailDrawer.js';
 import { QuickAddRelativeModal } from './modals/QuickAddRelativeModal.js';
 import { FaceLinkModal } from './modals/FaceLinkModal.js';
 import { TreeSettingsTab } from './settings/TreeSettingsTab.js';
+import { useLanguage } from '../../../i18n/LanguageContext.js';
 import './family-tree.css';
 
 export const FamilyTreeTab = () => {
@@ -25,6 +26,8 @@ export const FamilyTreeTab = () => {
     openFaceLink,
     closeFaceLink,
   } = useFamilyTreeStore();
+
+  const { t } = useLanguage();
 
   const {
     graphData,
@@ -121,7 +124,7 @@ export const FamilyTreeTab = () => {
               }}
             >
               <span>🌳</span>
-              <span>Interactive Tree</span>
+              <span>{t('tabInteractiveTree')}</span>
             </button>
 
             <button
@@ -145,13 +148,13 @@ export const FamilyTreeTab = () => {
               }}
             >
               <span>⚙️</span>
-              <span>Tree Settings</span>
+              <span>{t('tabTreeSettings')}</span>
             </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
             <span>
-              {graphData?.persons?.length || 0} Persons • {graphData?.unions?.length || 0} Unions
+              {graphData?.persons?.length || 0} {t('countPersonsSuffix')} • {graphData?.unions?.length || 0} {t('countUnionsSuffix')}
             </span>
           </div>
         </div>
@@ -287,7 +290,7 @@ export const FamilyTreeTab = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-                Add Initial Family Member
+                {t('emptyTreeAddButton')}
               </div>
               <form onSubmit={handleAddNewStandalonePerson}>
                 <input
@@ -296,7 +299,7 @@ export const FamilyTreeTab = () => {
                   autoFocus
                   value={newPersonName}
                   onChange={(e) => setNewPersonName(e.target.value)}
-                  placeholder="Enter full name (e.g. Alex Johnson)"
+                  placeholder={`${t('labelFirstName')} ${t('labelLastName')}`}
                   style={{
                     width: '100%',
                     background: 'var(--input-bg)',
@@ -324,7 +327,7 @@ export const FamilyTreeTab = () => {
                     }}
                     onClick={() => setIsCreatePersonOpen(false)}
                   >
-                    Cancel
+                    {t('btnCancel')}
                   </button>
                   <button
                     type="submit"
@@ -339,7 +342,7 @@ export const FamilyTreeTab = () => {
                       cursor: 'pointer',
                     }}
                   >
-                    Create Person
+                    {t('emptyTreeAddButton')}
                   </button>
                 </div>
               </form>

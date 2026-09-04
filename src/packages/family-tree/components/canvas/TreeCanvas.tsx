@@ -22,6 +22,7 @@ import { TreeSearchBar } from './controls/TreeSearchBar.js';
 import { useTreeLayoutWorker } from '../../hooks/useTreeLayoutWorker.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import { useTheme } from '../../../../theme/ThemeContext.js';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import type { TreeGraphData } from '../../types/tree.types.js';
 
 interface TreeCanvasProps {
@@ -51,6 +52,7 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
   } = useFamilyTreeStore();
   const { fitView } = useReactFlow();
   const { themeMode } = useTheme();
+  const { t } = useLanguage();
   const isDark = themeMode === 'dark';
 
   const {
@@ -115,7 +117,7 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
           }}
         >
           <span style={{ animation: 'pulse 1s infinite' }}>⚙️</span>
-          Computing Tree Layout...
+          {t('computingLayoutNotice')}
         </div>
       )}
 
@@ -136,10 +138,10 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
         >
           <div style={{ fontSize: 48 }}>🌳</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-            Your Family Tree is Empty
+            {t('emptyTreeTitle')}
           </div>
           <div style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Start your genealogical journey by adding yourself or your first ancestor to the tree.
+            {t('emptyTreeDesc')}
           </div>
           <button
             type="button"
@@ -156,7 +158,7 @@ export const TreeCanvas = memo(({ graphData, isLoading, onAddMember }: TreeCanva
             }}
             onClick={onAddMember}
           >
-            ➕ Add First Family Member
+            ➕ {t('emptyTreeAddButton')}
           </button>
         </div>
       )}

@@ -533,3 +533,91 @@ export function computeRelationshipToRoot(person: TreeGraphPerson, graphData: Tr
 
   return 'Relative';
 }
+
+const KINSHIP_TERMS_RU: Record<string, string> = {
+  'Me': 'Я',
+  'Relative': 'Родственник',
+  'Father': 'Отец',
+  'Mother': 'Мать',
+  'Parent': 'Родитель',
+  'Son': 'Сын',
+  'Daughter': 'Дочь',
+  'Child': 'Ребёнок',
+  'Husband': 'Муж',
+  'Wife': 'Жена',
+  'Spouse': 'Супруг(а)',
+  'Ex-Husband': 'Бывший муж',
+  'Ex-Wife': 'Бывшая жена',
+  'Ex-Spouse': 'Бывший(ая) супруг(а)',
+  'Partner': 'Партнёр',
+  'Brother': 'Брат',
+  'Sister': 'Сестра',
+  'Sibling': 'Брат / Сестра',
+  'Grandfather': 'Дедушка',
+  'Grandmother': 'Бабушка',
+  'Grandson': 'Внук',
+  'Granddaughter': 'Внучка',
+  'Grandparent': 'Дедушка / Бабушка',
+  'Grandchild': 'Внук / Внучка',
+  'Great-Grandfather': 'Прадедушка',
+  'Great-Grandmother': 'Прабабушка',
+  'Great-Grandson': 'Правнук',
+  'Great-Granddaughter': 'Правнучка',
+  'Great-Grandparent': 'Прадедушка / Прабабушка',
+  'Great-Grandchild': 'Правнук / Правнучка',
+  'Great-Great-Grandfather': 'Прапрадедушка',
+  'Great-Great-Grandmother': 'Прапрабабушка',
+  'Great-Great-Grandson': 'Праправнук',
+  'Great-Great-Granddaughter': 'Праправнучка',
+  'Uncle': 'Дядя',
+  'Aunt': 'Тётя',
+  'Nephew': 'Племянник',
+  'Niece': 'Племянница',
+  'Cousin': 'Двоюродный брат / сестра',
+  'Father-in-law': 'Свёкор / Тесть',
+  'Mother-in-law': 'Свекровь / Тёща',
+  'Brother-in-law': 'Шурин / Деверь / Зять',
+  'Sister-in-law': 'Золовка / Свояченица / Невестка',
+  'Son-in-law': 'Зять',
+  'Daughter-in-law': 'Невестка / Сноха',
+  'Stepfather': 'Отчим',
+  'Stepmother': 'Мачеха',
+  'Stepson': 'Пасынок',
+  'Stepdaughter': 'Падчерица',
+};
+
+/**
+ * Localizes kinship relation terms into Russian or English.
+ */
+export function localizeKinshipTerm(term?: string | null, language: 'en' | 'ru' = 'en'): string {
+  if (!term) return '';
+  if (language === 'ru') {
+    return KINSHIP_TERMS_RU[term] || term;
+  }
+  return term;
+}
+
+/**
+ * Localizes kinship categories into readable strings.
+ */
+export function localizeKinshipCategory(category?: KinshipCategory | string | null, language: 'en' | 'ru' = 'en'): string {
+  if (!category) return '';
+  if (language === 'ru') {
+    switch (category) {
+      case 'SELF': return 'Я / Корень';
+      case 'SPOUSE_PARTNER': return 'Супруг(а) / Партнёр';
+      case 'DIRECT_ANCESTOR': return 'Прямой предок';
+      case 'DIRECT_DESCENDANT': return 'Прямой потомок';
+      case 'COLLATERAL': return 'Боковая ветвь';
+      case 'AFFINITY': return 'Свойство / Родство по браку';
+      case 'DISTANT': return 'Дальнее родство';
+      case 'UNKNOWN': return 'Неизвестно';
+      case 'SIBLING': return 'Брат / Сестра';
+      case 'IN_LAW': return 'Свойство / Родство по браку';
+      case 'STEP': return 'Сводное родство';
+      default: return String(category).replace('_', ' ');
+    }
+  }
+  return String(category).replace('_', ' ');
+}
+

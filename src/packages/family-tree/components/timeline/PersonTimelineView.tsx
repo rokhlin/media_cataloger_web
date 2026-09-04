@@ -1,4 +1,5 @@
 import { memo, useState, useMemo, useEffect } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { usePersonTimeline } from '../../hooks/usePersonTimeline.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import type { PersonEventRecord } from '../../types/event.types.js';
@@ -12,19 +13,8 @@ interface PersonTimelineViewProps {
   personName: string;
 }
 
-const CATEGORY_FILTERS = [
-  { id: 'ALL', label: 'All Events' },
-  { id: 'MILESTONES', label: '💍 Milestones' },
-  { id: 'RELATIONSHIP', label: '💞 Relationships' },
-  { id: 'GRADUATION', label: '🎓 Education' },
-  { id: 'RELOCATION', label: '📍 Relocation' },
-  { id: 'TRAVEL', label: '✈️ Travel' },
-  { id: 'CAREER', label: '💼 Career' },
-  { id: 'MILITARY', label: '🎖️ Military' },
-  { id: 'CUSTOM', label: '📝 Custom' },
-];
-
 export const PersonTimelineView = memo(({ personId, personName }: PersonTimelineViewProps) => {
+  const { t } = useLanguage();
   const { lifeFactsConfig } = useFamilyTreeStore();
   const {
     events,
@@ -150,10 +140,22 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     return result;
   }, [events, relativeEvents, lifeFactsConfig, personId]);
 
+  const categoryFilters = useMemo(() => [
+    { id: 'ALL', label: t('filterCategoryAll') },
+    { id: 'MILESTONES', label: t('filterCategoryMilestones') },
+    { id: 'RELATIONSHIP', label: t('filterCategoryRelationships') },
+    { id: 'GRADUATION', label: t('filterCategoryEducation') },
+    { id: 'RELOCATION', label: t('filterCategoryRelocation') },
+    { id: 'TRAVEL', label: t('filterCategoryTravel') },
+    { id: 'CAREER', label: t('filterCategoryCareer') },
+    { id: 'MILITARY', label: t('filterCategoryMilitary') },
+    { id: 'CUSTOM', label: t('filterCategoryCustom') },
+  ], [t]);
+
   // Only show filter buttons for categories that exist for this person
   const availableCategories = useMemo(() => {
     if (allAvailableEvents.length === 0) return [];
-    return CATEGORY_FILTERS.filter((cat) => {
+    return categoryFilters.filter((cat) => {
       if (cat.id === 'ALL') return true;
       if (cat.id === 'MILESTONES') {
         return allAvailableEvents.some((e: PersonEventRecord) =>
@@ -162,7 +164,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
       }
       return allAvailableEvents.some((e: PersonEventRecord) => e.event_type === cat.id);
     });
-  }, [allAvailableEvents]);
+  }, [allAvailableEvents, categoryFilters]);
 
   const filteredEvents = useMemo(() => {
     if (activeCategory === 'ALL') return allAvailableEvents;
@@ -211,10 +213,10 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Chronological Life Story & Timeline
+              {t('timelineChronologicalTitle')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              {events.length} milestones & life facts recorded for {personName}
+              {events.length} {t('timelineMilestonesCount')} {personName}
             </div>
           </div>
 
@@ -236,7 +238,7 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
             }}
             onClick={handleOpenAdd}
           >
-            ➕ Add Life Fact
+            ➕ {t('btnAddFact')}
           </button>
         </div>
 
@@ -275,16 +277,16 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 4px 16px 0', position: 'relative' }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-            Loading timeline facts...
+            {t('loadingTimelineFacts')}
           </div>
         ) : filteredEvents.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>📜</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-              No facts recorded in this category
+              {t('noFactsRecordedInCategory')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Click &quot;Add Life Fact&quot; above to document graduations, trips, moves, or anecdotes!
+              {t('clickAddFactToDocument')}
             </div>
           </div>
         ) : (

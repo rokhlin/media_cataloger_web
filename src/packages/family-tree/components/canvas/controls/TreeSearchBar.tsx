@@ -1,6 +1,8 @@
 import { memo, useState, useEffect, useRef } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
+import { useLanguage } from '../../../../../i18n/LanguageContext.js';
+import { localizeKinshipTerm } from '../../../utils/kinshipUtils.js';
 import type { AutocompletePersonItem } from '../../../types/tree.types.js';
 
 export const TreeSearchBar = memo(() => {
@@ -9,6 +11,7 @@ export const TreeSearchBar = memo(() => {
   const [isOpen, setIsOpen] = useState(false);
   const { fitView } = useReactFlow();
   const { selectPerson, setHighlightedPersonId, activeTreeId } = useFamilyTreeStore();
+  const { language, t } = useLanguage();
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -88,7 +91,7 @@ export const TreeSearchBar = memo(() => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search family member..."
+          placeholder={t('searchRelativesPlaceholder')}
           style={{
             background: 'transparent',
             border: 'none',
@@ -188,7 +191,7 @@ export const TreeSearchBar = memo(() => {
                   </div>
                   {p.birthYear && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                      {p.isLiving ? `b. ${p.birthYear}` : `Lifespan info`}
+                      {p.isLiving ? `${t('bornPrefix')} ${p.birthYear}` : t('statusDeceased')}
                     </div>
                   )}
                 </div>
@@ -207,7 +210,7 @@ export const TreeSearchBar = memo(() => {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {p.kinshipTerm}
+                  {localizeKinshipTerm(p.kinshipTerm, language)}
                 </span>
               )}
             </div>

@@ -3,6 +3,7 @@ import { useReactFlow } from '@xyflow/react';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
 import type { TreeGraphData } from '../../../types/tree.types.js';
 import { FlagsManager } from '../../../../../services/featureFlagsContext.js';
+import { useLanguage } from '../../../../../i18n/LanguageContext.js';
 
 interface CanvasToolbarProps {
   graphData: TreeGraphData | null;
@@ -51,6 +52,8 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
     transition: 'all 0.15s ease',
   };
 
+  const { t } = useLanguage();
+
   return (
     <div
       style={{
@@ -71,16 +74,16 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
     >
       {!hideTopScreenZoomActions && (
         <div className="family-tree-top-zoom-actions tree-top-zoom-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" style={buttonStyle} onClick={() => zoomIn({ duration: 300 })} title="Zoom In">
-            ➕ Zoom In
+          <button type="button" style={buttonStyle} onClick={() => zoomIn({ duration: 300 })} title={t('toolbarZoomIn')}>
+            ➕ {t('toolbarZoomIn').split(' ')[0]}
           </button>
 
-          <button type="button" style={buttonStyle} onClick={() => zoomOut({ duration: 300 })} title="Zoom Out">
-            ➖ Zoom Out
+          <button type="button" style={buttonStyle} onClick={() => zoomOut({ duration: 300 })} title={t('toolbarZoomOut')}>
+            ➖ {t('toolbarZoomOut').split(' ')[0]}
           </button>
 
-          <button type="button" style={buttonStyle} onClick={() => fitView({ duration: 500, padding: 0.2 })} title="Fit Tree View">
-            🔍 Fit View
+          <button type="button" style={buttonStyle} onClick={() => fitView({ duration: 500, padding: 0.2 })} title={t('toolbarFitView')}>
+            🔍 {t('toolbarFitView')}
           </button>
         </div>
       )}
@@ -94,17 +97,17 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
           color: 'var(--accent-color, #a855f7)',
         }}
         onClick={handleFocusRoot}
-        title="Focus on Root ('ME') Person"
+        title={t('toolbarCenterRoot')}
       >
-        ⭐ Focus ME
+        ⭐ {t('hudMe')}
       </button>
 
-      <button type="button" style={buttonStyle} onClick={toggleDirection} title="Toggle Layout Direction (Vertical / Horizontal)">
-        {layoutDirection === 'TB' ? '⬇️ Vertical' : '➡️ Horizontal'}
+      <button type="button" style={buttonStyle} onClick={toggleDirection} title={layoutDirection === 'TB' ? t('toolbarLayoutHorizontal') : t('toolbarLayoutVertical')}>
+        {layoutDirection === 'TB' ? '⬇️ ' + t('toolbarLayoutVertical') : '➡️ ' + t('toolbarLayoutHorizontal')}
       </button>
 
-      <button type="button" style={buttonStyle} onClick={onRecalculateLayout} title="Rearrange Layout">
-        🔄 Re-layout
+      <button type="button" style={buttonStyle} onClick={onRecalculateLayout} title={t('toolbarRecalculate')}>
+        🔄 {t('toolbarRecalculate')}
       </button>
 
       <button
@@ -112,9 +115,9 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         id="toolbar-tree-settings-btn"
         style={buttonStyle}
         onClick={() => setActiveSubTab('settings')}
-        title="Open Tree Settings, Styles, Badges & CSV Backup"
+        title={t('tabTreeSettings')}
       >
-        ⚙️ Settings
+        ⚙️ {t('tabTreeSettings')}
       </button>
 
       <button
@@ -127,9 +130,9 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
           boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
         }}
         onClick={onAddMember}
-        title="Add New Person to Family Tree"
+        title={t('toolbarAddMember')}
       >
-        ➕ Add Person
+        ➕ {t('toolbarAddMember')}
       </button>
     </div>
   );
