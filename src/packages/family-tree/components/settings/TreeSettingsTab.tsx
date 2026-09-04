@@ -1,9 +1,18 @@
 import React, { useState, useRef } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import { exportTreeToCSV, parseTreeFromCSV, getSampleTreeCSV } from '../../utils/csvTreeService.js';
 import { formatTreeDate } from '../../utils/dateUtils.js';
 import type { TreeGraphData, DateFormatStyle } from '../../types/tree.types.js';
+import type { PersonEventRecord } from '../../types/event.types.js';
+import {
+  exportTreeDiagram,
+  exportPersonTimeline,
+  type ExportImageFormat,
+  type ExportQualityPreset,
+  type ExportBackgroundStyle,
+} from '../../utils/treeExportService.js';
 
 interface TreeSettingsTabProps {
   graphData: TreeGraphData | null;
@@ -57,6 +66,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
   // Expandable sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    exportMedia: true,
     viewStyles: true,
     celebrations: true,
     dateFormats: true,
@@ -66,6 +76,137 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // ---------------------------------------------------------------------------
+  // Export Tree & Timeline State & Handlers
+  // ---------------------------------------------------------------------------
+  const [exportTab, setExportTab] = useState<'tree' | 'timeline'>('tree');
+  const [exportFormat, setExportFormat] = useState<ExportImageFormat>('png');
+  const [exportQuality, setExportQuality] = useState<ExportQualityPreset>('high');
+  const [exportBg, setExportBg] = useState<ExportBackgroundStyle>('theme');
+  const [selectedExportPersonId, setSelectedExportPersonId] = useState<string>(() => {
+    return graphData?.root_person_id || graphData?.persons?.[0]?.id || '';
+  });
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
+  const [previewEvents, setPreviewEvents] = useState<PersonEventRecord[]>([]);
+  const timelineCaptureRef = useRef<HTMLDivElement>(null);
+
+  // Load preview events when selected person changes
+  React.useEffect(() => {
+    const personId = selectedExportPersonId || graphData?.root_person_id || graphData?.persons?.[0]?.id;
+    if (!personId) return;
+    let cancelled = false;
+    async function loadEvents() {
+      try {
+        const res = await fetch(`/api/family-tree/persons/${personId}/timeline`);
+        if (res.ok && !cancelled) {
+          const evts = await res.json();
+          setPreviewEvents(evts);
+        }
+      } catch (err) {
+        console.error('Failed to load timeline events for export preview', err);
+      }
+    }
+    loadEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedExportPersonId, graphData?.root_person_id, graphData?.persons]);
+
+  const reactFlow = useReactFlow();
+
+  const handleExecuteExportTree = async () => {
+    setIsExporting(true);
+    setExportFeedback({ type: 'info', message: t('exportExporting') });
+    try {
+      const nodes = reactFlow?.getNodes ? reactFlow.getNodes() : [];
+      const canvasSubtab = document.getElementById('canvas-subtab-container');
+      let target = canvasSubtab?.querySelector('.react-flow__viewport') as HTMLElement ||
+        document.querySelector('.react-flow__viewport') as HTMLElement ||
+        canvasSubtab?.querySelector('.react-flow') as HTMLElement ||
+        document.querySelector('.react-flow') as HTMLElement;
+
+      if (!target) {
+        throw new Error(language === 'ru' ? 'Холст древа не найден для экспорта' : 'Family tree canvas element not found for export');
+      }
+
+      const filename = await exportTreeDiagram({
+        containerEl: target,
+        nodes,
+        treeId: activeTreeId || 'family_tree',
+        format: exportFormat,
+        quality: exportQuality,
+        backgroundStyle: exportBg,
+      });
+
+      setExportFeedback({
+        type: 'success',
+        message: `${t('exportSuccess')} (${filename})`,
+      });
+    } catch (err: any) {
+      console.error('Tree export error:', err);
+      setExportFeedback({
+        type: 'error',
+        message: `${t('exportError')}: ${err?.message || err}`,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExecuteExportTimeline = async () => {
+    const targetPersonId = selectedExportPersonId || graphData?.root_person_id || graphData?.persons?.[0]?.id;
+    const person = graphData?.persons?.find((p) => p.id === targetPersonId);
+    if (!person) {
+      alert(t('exportSelectPersonPlaceholder'));
+      return;
+    }
+
+    setIsExporting(true);
+    setExportFeedback({ type: 'info', message: t('exportExporting') });
+    try {
+      let eventsToExport = previewEvents;
+      if (eventsToExport.length === 0) {
+        const res = await fetch(`/api/family-tree/persons/${person.id}/timeline`);
+        if (res.ok) {
+          eventsToExport = await res.json();
+          setPreviewEvents(eventsToExport);
+        }
+      }
+
+      // Small delay so capture container is freshly painted
+      await new Promise((r) => setTimeout(r, 60));
+
+      const target = timelineCaptureRef.current;
+      if (!target) {
+        throw new Error(language === 'ru' ? 'Контейнер хроники не готов' : 'Timeline capture container not ready');
+      }
+
+      const personFullName = `${person.first_name || ''} ${person.last_name || ''}`.trim() || 'Person';
+      const filename = await exportPersonTimeline({
+        timelineEl: target,
+        personName: personFullName,
+        personId: person.id,
+        format: exportFormat,
+        quality: exportQuality,
+        backgroundStyle: exportBg,
+      });
+
+      setExportFeedback({
+        type: 'success',
+        message: `${t('exportSuccess')} (${filename})`,
+      });
+    } catch (err: any) {
+      console.error('Timeline export error:', err);
+      setExportFeedback({
+        type: 'error',
+        message: `${t('exportError')}: ${err?.message || err}`,
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -321,6 +462,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             onClick={() => {
               const allOpen = Object.values(expandedSections).every(Boolean);
               setExpandedSections({
+                exportMedia: !allOpen,
                 viewStyles: !allOpen,
                 celebrations: !allOpen,
                 dateFormats: !allOpen,
@@ -367,6 +509,519 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             {t('btnBackToCanvas')}
           </button>
         </div>
+      </div>
+
+      {/* Quick Navigation Section Pills */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '2px 0' }}>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, exportMedia: true }));
+            document.getElementById('section-export-tree-timeline')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(236, 72, 153, 0.25))',
+            border: '1px solid var(--primary-color, #6366f1)',
+            color: 'var(--text-primary)',
+            padding: '6px 14px',
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          🖼️ {t('exportSectionTitle')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, viewStyles: true }));
+            document.getElementById('section-header-view-styles')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'var(--nav-tab-bg)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          🎨 {t('settingsViewStylesTitle')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, celebrations: true }));
+            document.getElementById('section-header-celebrations')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'var(--nav-tab-bg)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          🎂 {t('settingsCelebrationsTitle')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, dateFormats: true }));
+            document.getElementById('section-header-date-formats')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'var(--nav-tab-bg)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          📅 {t('settingsDateFormatsTitle')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, lifeFacts: true }));
+            document.getElementById('section-header-life-facts')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'var(--nav-tab-bg)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          🧬 {t('settingsLifeFactsTitle')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpandedSections((prev) => ({ ...prev, csvBackup: true }));
+            document.getElementById('section-header-csv-backup')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          style={{
+            background: 'var(--nav-tab-bg)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-primary)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          💾 {t('settingsCsvBackupTitle')}
+        </button>
+      </div>
+
+      {/* =================================================================== */}
+      {/* SECTION 1: EXPORT TO PNG / JPG / SVG FOR TREE AND TIMELINE          */}
+      {/* =================================================================== */}
+      <div style={cardStyle} id="section-export-tree-timeline">
+        <div
+          style={sectionHeaderStyle}
+          onClick={() => toggleSection('exportMedia')}
+          id="section-header-export-media"
+        >
+          <div>
+            <div style={sectionTitleStyle}>
+              <span>🖼️</span> {t('exportSectionTitle') || 'Export to PNG/JPG/SVG for Tree and Timeline'}
+              <span className="badge-pill badge-pill-accent" style={{ fontSize: 10, padding: '2px 8px', marginLeft: 6 }}>NEW</span>
+            </div>
+            <div style={sectionSubtextStyle}>
+              {t('exportSectionDesc')}
+            </div>
+          </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              transform: expandedSections.exportMedia ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s ease',
+              display: 'inline-block',
+              marginLeft: 12,
+            }}
+          >
+            ▼
+          </span>
+        </div>
+
+        {expandedSections.exportMedia && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 4 }}>
+            {/* Subtabs: Export Tree | Export Timeline */}
+            <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-color)', paddingBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setExportTab('tree')}
+                style={{
+                  background: exportTab === 'tree' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                  color: exportTab === 'tree' ? '#ffffff' : 'var(--text-primary)',
+                  border: exportTab === 'tree' ? 'none' : '1px solid var(--border-color)',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                  boxShadow: exportTab === 'tree' ? '0 2px 8px rgba(99, 102, 241, 0.35)' : undefined,
+                }}
+              >
+                <span>🌳</span>
+                <span>{t('exportTabTree')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExportTab('timeline')}
+                style={{
+                  background: exportTab === 'timeline' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                  color: exportTab === 'timeline' ? '#ffffff' : 'var(--text-primary)',
+                  border: exportTab === 'timeline' ? 'none' : '1px solid var(--border-color)',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                  boxShadow: exportTab === 'timeline' ? '0 2px 8px rgba(99, 102, 241, 0.35)' : undefined,
+                }}
+              >
+                <span>⏳</span>
+                <span>{t('exportTabTimeline')}</span>
+              </button>
+            </div>
+
+            {/* Export Configuration Controls */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              {/* Format Selection */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {t('exportFormatLabel')}
+                </label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['png', 'jpeg', 'svg'] as ExportImageFormat[]).map((fmt) => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      onClick={() => setExportFormat(fmt)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: exportFormat === fmt ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                        background: exportFormat === fmt ? 'rgba(99, 102, 241, 0.2)' : 'var(--input-bg)',
+                        color: exportFormat === fmt ? 'var(--primary-color, #818cf8)' : 'var(--text-primary)',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {fmt === 'jpeg' ? 'JPG' : fmt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quality Preset */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {t('exportQualityLabel')}
+                </label>
+                <select
+                  value={exportQuality}
+                  onChange={(e) => setExportQuality(e.target.value as ExportQualityPreset)}
+                  style={{
+                    width: '100%',
+                    padding: '7px 10px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--input-bg)',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="high">{t('exportQualityHigh')}</option>
+                  <option value="ultra">{t('exportQualityUltra')}</option>
+                  <option value="standard">{t('exportQualityStandard')}</option>
+                </select>
+              </div>
+
+              {/* Background Style */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {t('exportBackgroundLabel')}
+                </label>
+                <select
+                  value={exportBg}
+                  onChange={(e) => setExportBg(e.target.value as ExportBackgroundStyle)}
+                  style={{
+                    width: '100%',
+                    padding: '7px 10px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--input-bg)',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="theme">{t('exportBgTheme')}</option>
+                  <option value="dark">{t('exportBgDark')}</option>
+                  <option value="light">{t('exportBgLight')}</option>
+                  {exportFormat !== 'jpeg' && <option value="transparent">{t('exportBgTransparent')}</option>}
+                </select>
+              </div>
+            </div>
+
+            {/* TAB 1: TREE EXPORT DETAILS */}
+            {exportTab === 'tree' && (
+              <div
+                style={{
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 10,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 14,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)' }}>
+                  <span>ℹ️</span>
+                  <span>{t('exportCurrentSettingsNotice')}</span>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span className="badge-pill badge-pill-accent">
+                    Style: {nodeViewStyle.toUpperCase()}
+                  </span>
+                  <span className="badge-pill badge-pill-success">
+                    {graphData?.persons?.length || 0} {t('countPersonsSuffix')}
+                  </span>
+                  <span className="badge-pill badge-pill-accent">
+                    {graphData?.unions?.length || 0} {t('countUnionsSuffix')}
+                  </span>
+                  <span className="badge-pill badge-pill-success">
+                    Celebration Badges: {celebrationConfig.showBirthday ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={handleExecuteExportTree}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px 22px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                  }}
+                >
+                  <span>💾</span>
+                  <span>{isExporting ? t('exportExporting') : `${t('exportBtnExportTree')} (${exportFormat.toUpperCase()})`}</span>
+                </button>
+              </div>
+            )}
+
+            {/* TAB 2: TIMELINE EXPORT DETAILS */}
+            {exportTab === 'timeline' && (
+              <div
+                style={{
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 10,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 14,
+                }}
+              >
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    {language === 'ru' ? 'Персона для экспорта' : 'Person to Export'}
+                  </label>
+                  <select
+                    value={selectedExportPersonId}
+                    onChange={(e) => setSelectedExportPersonId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      maxWidth: 360,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--input-bg)',
+                      color: 'var(--text-primary)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {graphData?.persons?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.first_name} {p.last_name || ''} {p.birth_date ? `(${p.birth_date.slice(0, 4)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Timeline Render & Capture Preview Container */}
+                <div
+                  ref={timelineCaptureRef}
+                  className="timeline-export-capture-container"
+                  style={{
+                    background: exportBg === 'dark' ? '#0f172a' : exportBg === 'light' ? '#ffffff' : 'var(--card-bg-solid, #1e293b)',
+                    color: exportBg === 'light' ? '#0f172a' : '#f8fafc',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 12,
+                    padding: 20,
+                    maxWidth: 720,
+                  }}
+                >
+                  {(() => {
+                    const activePerson = graphData?.persons?.find((p) => p.id === selectedExportPersonId) || graphData?.persons?.[0];
+                    if (!activePerson) return <p>No person selected</p>;
+                    const pName = `${activePerson.first_name || ''} ${activePerson.last_name || ''}`.trim();
+                    return (
+                      <div>
+                        {/* Person Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12 }}>
+                          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#ffffff', fontWeight: 700 }}>
+                            {activePerson.first_name?.[0] || '👤'}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 18, fontWeight: 700 }}>{pName}</div>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>
+                              {activePerson.birth_date ? `* ${activePerson.birth_date}` : ''} {activePerson.death_date ? `✝ ${activePerson.death_date}` : ''}
+                            </div>
+                          </div>
+                          <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 12, background: 'rgba(99, 102, 241, 0.25)', color: '#818cf8' }}>
+                            {previewEvents.length} {t('timelineMilestonesCount')}
+                          </div>
+                        </div>
+
+                        {/* Chronological events list */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {previewEvents.length === 0 ? (
+                            <div style={{ padding: '12px 0', opacity: 0.6, fontSize: 12 }}>
+                              {t('noFactsRecordedInCategory')}
+                            </div>
+                          ) : (
+                            previewEvents.map((evt, i) => (
+                              <div
+                                key={evt.id || i}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 12,
+                                  padding: '10px 14px',
+                                  borderRadius: 8,
+                                  background: 'rgba(255, 255, 255, 0.04)',
+                                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                                }}
+                              >
+                                <span style={{ fontSize: 16 }}>{evt.event_type === 'BIRTH' ? '👶' : evt.event_type === 'MARRIAGE' ? '💍' : evt.event_type === 'DEATH' ? '🕯️' : '📌'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{evt.title}</span>
+                                    <span style={{ fontSize: 11, opacity: 0.7 }}>{evt.event_date || ''}</span>
+                                  </div>
+                                  {evt.description && (
+                                    <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                                      {evt.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={handleExecuteExportTimeline}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px 22px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                  }}
+                >
+                  <span>💾</span>
+                  <span>{isExporting ? t('exportExporting') : `${t('exportBtnExportTimeline')} (${exportFormat.toUpperCase()})`}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Status Feedback banner */}
+            {exportFeedback && (
+              <div
+                style={{
+                  fontSize: 12,
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background:
+                    exportFeedback.type === 'success'
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : exportFeedback.type === 'error'
+                      ? 'rgba(239, 68, 68, 0.15)'
+                      : 'rgba(99, 102, 241, 0.15)',
+                  color:
+                    exportFeedback.type === 'success'
+                      ? '#10b981'
+                      : exportFeedback.type === 'error'
+                      ? '#ef4444'
+                      : 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                {exportFeedback.message}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------------- */}
@@ -1268,3 +1923,4 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
     </div>
   );
 };
+

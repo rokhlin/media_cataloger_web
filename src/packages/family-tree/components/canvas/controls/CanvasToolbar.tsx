@@ -112,6 +112,26 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
 
       <button
         type="button"
+        id="toolbar-export-tree-btn"
+        style={{
+          ...buttonStyle,
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2))',
+          border: '1px solid var(--primary-color, #6366f1)',
+          color: 'var(--text-primary)',
+        }}
+        onClick={() => {
+          setActiveSubTab('settings');
+          setTimeout(() => {
+            document.getElementById('section-export-tree-timeline')?.scrollIntoView({ behavior: 'smooth' });
+          }, 60);
+        }}
+        title="Export to PNG/JPG/SVG for Tree and Timeline"
+      >
+        🖼️ {t('exportQuickBtn')} (PNG/JPG/SVG)
+      </button>
+
+      <button
+        type="button"
         id="toolbar-tree-settings-btn"
         style={buttonStyle}
         onClick={() => setActiveSubTab('settings')}

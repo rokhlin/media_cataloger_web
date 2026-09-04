@@ -61,7 +61,7 @@
 - [x] **Internationalization (i18n)**: Multi-language interface and localization support (EN/RU).
 - [x] **Theme System**: Dark, Light, and custom theme presets with glassmorphism design.
 - [x] **Calendar Timeline View**: View photos and events on chronological timeline groupings by capture date/time.
-- [ ] **Timeline in Calendar**: chow calendar with photos in stack in it, If in one date is more than 10 photos, show badge with number of photos. 
+- [x] **Timeline in Calendar**: show calendar with photos in stack in it, If in one date is more than 10 photos, show badge with number of photos. 
 - [ ] **Album Management**: Create, curate, and share custom photo and video albums.
 - [x] **Family Tree**: Interactive genealogy / family relationship visualization connected to recognized faces.
 - [ ] **Photo Stories**: Dynamic story creation and presentation from photo series.
@@ -104,7 +104,7 @@ Do the same for all components. Do not change functionality. Add tests.
         - DD.MM.YYYY, MM.YYYY
         - MM/DD/YYYY, MM/YYYY
 - [x] **Russian language support**: Add Russian language support for the UI. 
-- [ ] **Export to PNG/JPG/SVG for Tree and Timeline** : Add in tree settings the section with ability to export tree and timeline to PNG/JPG/SVG. Export options: Export Tree, Export Timeline. Tree should be exported with current settings and with items shown, e.g. node style, celebration badges, etc. Export with high quality. 
+- [x] **Export to PNG/JPG/SVG for Tree and Timeline** : Add in tree settings the section with ability to export tree and timeline to PNG/JPG/SVG. Export options: Export Tree, Export Timeline. Tree should be exported with current settings and with items shown, e.g. node style, celebration badges, etc. Export with high quality. 
 - [ ] **Kinship in media gallery configuration**: add option to configure facts including in media gallery for chained person( only own facts, own and closest family members, all). add only facts which date is close (birtday, marriage, anniversary, death) and config for period before date.
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.

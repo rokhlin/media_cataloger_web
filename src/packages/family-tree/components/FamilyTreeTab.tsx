@@ -163,17 +163,21 @@ export const FamilyTreeTab = () => {
         <div
           className="family-tree-content-viewport"
           id="family-tree-content-viewport"
+          style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
         >
-          {activeSubTab === 'settings' ? (
-            <TreeSettingsTab
-              graphData={graphData}
-              refreshGraph={refreshGraph}
-              createPerson={createPerson}
-              createUnion={createUnion}
-              addChildToUnion={addChildToUnion}
-              onBackToCanvas={() => setActiveSubTab('canvas')}
-            />
-          ) : (
+          <div
+            id="canvas-subtab-container"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: activeSubTab === 'canvas' ? 2 : 1,
+              pointerEvents: activeSubTab === 'canvas' ? 'auto' : 'none',
+              opacity: 1,
+            }}
+          >
             <TreeCanvas
               graphData={graphData}
               isLoading={isLoading}
@@ -186,7 +190,31 @@ export const FamilyTreeTab = () => {
                 }
               }}
             />
-          )}
+          </div>
+
+          <div
+            id="settings-subtab-container"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: activeSubTab === 'settings' ? 3 : 0,
+              display: activeSubTab === 'settings' ? 'block' : 'none',
+              background: 'var(--bg-main, #0f172a)',
+              overflowY: 'auto',
+            }}
+          >
+            <TreeSettingsTab
+              graphData={graphData}
+              refreshGraph={refreshGraph}
+              createPerson={createPerson}
+              createUnion={createUnion}
+              addChildToUnion={addChildToUnion}
+              onBackToCanvas={() => setActiveSubTab('canvas')}
+            />
+          </div>
 
           {/* Error Banner */}
           {error && !isLoading && (

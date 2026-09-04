@@ -843,6 +843,49 @@ export interface FamilyTreeTranslations {
   btnCollapseAllSections: string;
   btnExpandAllSections: string;
   btnBackToCanvas: string;
+
+  // Timeline in Calendar keys
+  calendarViewSubtab: string;
+  timelineListSubtab: string;
+  calendarMonthPrev: string;
+  calendarMonthNext: string;
+  calendarToday: string;
+  calendarPhotosThisMonth: string;
+  calendarPhotosOnDate: string;
+  calendarMorePhotosBadge: string;
+  calendarDayModalTitle: string;
+  calendarEmptyDay: string;
+  calendarWeekdayMon: string;
+  calendarWeekdayTue: string;
+  calendarWeekdayWed: string;
+  calendarWeekdayThu: string;
+  calendarWeekdayFri: string;
+  calendarWeekdaySat: string;
+  calendarWeekdaySun: string;
+
+  // Tree and Timeline Export keys
+  exportSectionTitle: string;
+  exportSectionDesc: string;
+  exportTabTree: string;
+  exportTabTimeline: string;
+  exportFormatLabel: string;
+  exportQualityLabel: string;
+  exportQualityStandard: string;
+  exportQualityHigh: string;
+  exportQualityUltra: string;
+  exportBackgroundLabel: string;
+  exportBgTheme: string;
+  exportBgDark: string;
+  exportBgLight: string;
+  exportBgTransparent: string;
+  exportCurrentSettingsNotice: string;
+  exportBtnExportTree: string;
+  exportBtnExportTimeline: string;
+  exportSelectPersonPlaceholder: string;
+  exportExporting: string;
+  exportSuccess: string;
+  exportError: string;
+  exportQuickBtn: string;
 }
 
 export type TranslationDictionary = HeaderTranslations &

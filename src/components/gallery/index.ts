@@ -23,4 +23,10 @@ export {
   default as MetadataEditorModal,
   type MetadataEditorModalProps,
 } from './MetadataEditorModal';
+export {
+  default as TimelineCalendarView,
+  type TimelineCalendarViewProps,
+  getMediaDate,
+  formatDateKey,
+} from './TimelineCalendarView';
 export { default } from './MediaGallery';

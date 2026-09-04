@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useEffect } from 'react';
+import { memo, useState, useMemo, useEffect, useRef } from 'react';
 import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { usePersonTimeline } from '../../hooks/usePersonTimeline.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
@@ -7,6 +7,7 @@ import { FactCard } from './FactCard.js';
 import { AddEditFactModal } from './AddEditFactModal.js';
 import { GalleryPhotoPicker } from './GalleryPhotoPicker.js';
 import { filterRelativeEvents, deduplicateTimelineEvents } from '../../utils/timelineDeduplication.js';
+import { exportPersonTimeline, type ExportImageFormat } from '../../utils/treeExportService.js';
 
 interface PersonTimelineViewProps {
   personId: string;
@@ -31,6 +32,8 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [factToEdit, setFactToEdit] = useState<PersonEventRecord | null>(null);
   const [pinTargetEventId, setPinTargetEventId] = useState<string | null>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,8 +209,27 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     setPinTargetEventId(null);
   };
 
+  const handleQuickExport = async (format: ExportImageFormat) => {
+    setIsExportMenuOpen(false);
+    try {
+      await exportPersonTimeline({
+        timelineEl: timelineContainerRef.current,
+        personName,
+        personId,
+        format,
+        quality: 'high',
+      });
+    } catch (err) {
+      console.error('Quick timeline export failed:', err);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div
+      ref={timelineContainerRef}
+      className="person-timeline-container"
+      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+    >
       {/* Header with "+ Add Life Fact" and Filter Pills */}
       <div style={{ padding: '0 0 14px', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -220,26 +242,96 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
             </div>
           </div>
 
-          <button
-            type="button"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
-            }}
-            onClick={handleOpenAdd}
-          >
-            ➕ {t('btnAddFact')}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Quick Export Button */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                style={{
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                title={t('exportQuickBtn')}
+              >
+                <span>🖼️</span>
+                <span>{t('exportQuickBtn')}</span>
+                <span style={{ fontSize: 9 }}>▼</span>
+              </button>
+
+              {isExportMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: 4,
+                    zIndex: 50,
+                    background: 'var(--card-bg-solid, #1e293b)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 8,
+                    boxShadow: 'var(--shadow-modal)',
+                    minWidth: 140,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('png')}
+                  >
+                    PNG ({t('exportQualityHigh')})
+                  </button>
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('jpeg')}
+                  >
+                    JPG
+                  </button>
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('svg')}
+                  >
+                    SVG
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+              }}
+              onClick={handleOpenAdd}
+            >
+              ➕ {t('btnAddFact')}
+            </button>
+          </div>
         </div>
 
         {/* Filter Pills with multiline support fitting width of screen */}
