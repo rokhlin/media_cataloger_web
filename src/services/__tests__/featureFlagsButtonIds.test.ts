@@ -53,9 +53,11 @@ describe('Feature Flags for Buttons & Button IDs Toggling', () => {
     assert.strictEqual(FlagsManager.getFlag(testFlagKey), undefined);
   });
 
-  it('should verify /data/feature_flags.json presets contain buttonIds array', () => {
-    const jsonPath = path.resolve(process.cwd(), 'data', 'feature_flags.json');
-    assert.ok(fs.existsSync(jsonPath), '/data/feature_flags.json must exist');
+  it('should verify feature flag presets contain buttonIds array', () => {
+    const assetsPath = path.resolve(process.cwd(), 'assets', 'default-feature-flags.json');
+    const dataPath = path.resolve(process.cwd(), 'data', 'feature_flags.json');
+    const jsonPath = fs.existsSync(assetsPath) ? assetsPath : dataPath;
+    assert.ok(fs.existsSync(jsonPath), 'feature flag presets file must exist');
 
     const content = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
     assert.ok(Array.isArray(content), 'Presets must be an array');

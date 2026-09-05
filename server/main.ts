@@ -45,6 +45,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Ensure data/feature_flags.json exists from default-feature-flags.json if missing
+  configService.ensureFeatureFlagsFile();
+
   // Serve static files from /data if directory exists (e.g. data/feature_flags.json)
   const dataDir = path.resolve(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {

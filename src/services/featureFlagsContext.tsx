@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { FeatureFlag, FeatureFlagsContextValue } from '../models/featureFlags';
 
-import defaultFeatureFlagsPresets from '../../data/feature_flags.json';
+import defaultFeatureFlagsPresets from '../assets/default-feature-flags.json';
 
 export const STORAGE_KEY = 'media_cataloger_feature_flags';
 export const STYLE_ELEMENT_ID = 'feature-flags-dynamic-styles';

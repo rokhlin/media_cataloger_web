@@ -28,6 +28,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/assets ./assets
 
 # Default volume mount points
 RUN mkdir -p /app/data/config /app/media_input /app/media_output

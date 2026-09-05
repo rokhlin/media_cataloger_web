@@ -75,6 +75,13 @@ describe('FaceRegistryUI Component & Feature Flag', () => {
 
   it('should verify data/feature_flags.json includes face_registry_dropdown preset', () => {
     const jsonPath = path.resolve('data/feature_flags.json');
+    if (!fs.existsSync(jsonPath)) {
+      const defaultPath = path.resolve('assets/default-feature-flags.json');
+      if (fs.existsSync(defaultPath)) {
+        fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
+        fs.copyFileSync(defaultPath, jsonPath);
+      }
+    }
     assert.ok(fs.existsSync(jsonPath), 'data/feature_flags.json must exist');
 
     const flags = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));

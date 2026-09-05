@@ -87,9 +87,13 @@ describe('FeatureFlags Persistence in SettingsService', () => {
     }, /Feature flags must be an array/);
   });
 
-  it('should verify repository /data/feature_flags.json exists and contains default presets', () => {
+  it('should verify assets/default-feature-flags.json exists and ensureFeatureFlagsFile populates data/feature_flags.json', () => {
+    const assetsPath = path.resolve(process.cwd(), 'assets', 'default-feature-flags.json');
+    assert.ok(fs.existsSync(assetsPath), 'assets/default-feature-flags.json must exist');
+
+    configService.ensureFeatureFlagsFile();
     const repoFlagsPath = path.resolve(process.cwd(), 'data', 'feature_flags.json');
-    assert.ok(fs.existsSync(repoFlagsPath), '/data/feature_flags.json must exist in repo root');
+    assert.ok(fs.existsSync(repoFlagsPath), 'data/feature_flags.json must be ensured');
 
     const content = JSON.parse(fs.readFileSync(repoFlagsPath, 'utf-8'));
     assert.ok(Array.isArray(content), 'File should contain a JSON array');
