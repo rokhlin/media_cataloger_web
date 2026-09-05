@@ -80,7 +80,7 @@ export const TreeSearchBar = memo(() => {
           alignItems: 'center',
           background: 'var(--card-bg-solid)',
           border: '1px solid var(--border-color)',
-          borderRadius: 10,
+          borderRadius: 12,
           padding: '6px 12px',
           backdropFilter: 'blur(12px)',
           boxShadow: 'var(--shadow-card)',
@@ -97,8 +97,9 @@ export const TreeSearchBar = memo(() => {
             border: 'none',
             outline: 'none',
             color: 'var(--text-primary)',
-            fontSize: 13,
+            fontSize: 12,
             width: '100%',
+            padding: '7px 12px',
           }}
         />
         {query && (

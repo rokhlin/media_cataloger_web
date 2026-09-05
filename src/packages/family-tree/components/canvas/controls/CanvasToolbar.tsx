@@ -106,7 +106,7 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         {layoutDirection === 'TB' ? '⬇️ ' + t('toolbarLayoutVertical') : '➡️ ' + t('toolbarLayoutHorizontal')}
       </button>
 
-      <button type="button" style={buttonStyle} onClick={onRecalculateLayout} title={t('toolbarRecalculate')}>
+      <button id="toolbar-recalculate-tree-btn" type="button" style={buttonStyle} onClick={onRecalculateLayout} title={t('toolbarRecalculate')}>
         🔄 {t('toolbarRecalculate')}
       </button>
 
