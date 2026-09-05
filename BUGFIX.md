@@ -51,6 +51,7 @@ Each bug is categorized by component and marked with its current status.
 - [x] 🟡 **Export to CSV with facts data**: Extended tree CSV export and import to include a dedicated `# FACTS` section storing person life events (`person_id`, `event_type`, `title`, `description`, `event_date`, `event_place`, `is_private`). Updated backend `getTreeGraph` to return `facts` from `ft_person_events`, updated frontend `TreeSettingsTab.tsx` import workflow, and expanded sample CSV template and test suites.
   - **Fixed in**: v0.4.0
   - **Files**: `server/family-tree/family-tree.service.ts`, `server/family-tree/types/family-tree.types.ts`, `src/packages/family-tree/types/tree.types.ts`, `csvTreeService.ts`, `TreeSettingsTab.tsx`, `csvTreeService.test.ts`
+- [ ] 🔴 **Import from csv: validation**: Import from CSV is not validating the data before importing. This is causing a lot of issues with the tree data. Need co compare Importing IDs and existing IDs Export Does not keep the structure. I need to add to an existing tree. all items of the inporting Tree, but with checking the existing IDs. if exists update only changed data of person or event etc. if not create. All changes should be tracked in the history of the tree.
 ---
 
 ## 🖼️ UI / UX & Visual Features

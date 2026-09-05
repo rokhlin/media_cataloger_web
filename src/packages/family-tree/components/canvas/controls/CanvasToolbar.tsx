@@ -115,7 +115,7 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
         id="toolbar-export-tree-btn"
         style={{
           ...buttonStyle,
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2))',
+          background: 'var(--nav-tab-active-bg)',
           border: '1px solid var(--primary-color, #6366f1)',
           color: 'var(--text-primary)',
         }}
@@ -132,19 +132,9 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
 
       <button
         type="button"
-        id="toolbar-tree-settings-btn"
-        style={buttonStyle}
-        onClick={() => setActiveSubTab('settings')}
-        title={t('tabTreeSettings')}
-      >
-        ⚙️ {t('tabTreeSettings')}
-      </button>
-
-      <button
-        type="button"
         style={{
           ...buttonStyle,
-          background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+          background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
           border: 'none',
           color: '#ffffff',
           boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',

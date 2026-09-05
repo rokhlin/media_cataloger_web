@@ -492,7 +492,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
             type="button"
             onClick={onBackToCanvas}
             style={{
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
               color: '#ffffff',
               border: 'none',
               borderRadius: 10,
@@ -664,7 +664,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 type="button"
                 onClick={() => setExportTab('tree')}
                 style={{
-                  background: exportTab === 'tree' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                  background: exportTab === 'tree' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                   color: exportTab === 'tree' ? '#ffffff' : 'var(--text-primary)',
                   border: exportTab === 'tree' ? 'none' : '1px solid var(--border-color)',
                   borderRadius: 8,
@@ -687,7 +687,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 type="button"
                 onClick={() => setExportTab('timeline')}
                 style={{
-                  background: exportTab === 'timeline' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                  background: exportTab === 'timeline' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                   color: exportTab === 'timeline' ? '#ffffff' : 'var(--text-primary)',
                   border: exportTab === 'timeline' ? 'none' : '1px solid var(--border-color)',
                   borderRadius: 8,
@@ -725,7 +725,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                         padding: '6px 12px',
                         borderRadius: 6,
                         border: exportFormat === fmt ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                        background: exportFormat === fmt ? 'rgba(99, 102, 241, 0.2)' : 'var(--input-bg)',
+                        background: exportFormat === fmt ? 'var(--nav-tab-active-bg)' : 'var(--input-bg)',
                         color: exportFormat === fmt ? 'var(--primary-color, #818cf8)' : 'var(--text-primary)',
                         fontWeight: 700,
                         fontSize: 12,
@@ -832,7 +832,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   onClick={handleExecuteExportTree}
                   style={{
                     alignSelf: 'flex-start',
-                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
@@ -899,7 +899,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   className="timeline-export-capture-container"
                   style={{
                     background: exportBg === 'dark' ? '#0f172a' : exportBg === 'light' ? '#ffffff' : 'var(--card-bg-solid, #1e293b)',
-                    color: exportBg === 'light' ? '#0f172a' : '#f8fafc',
+                    color: exportBg === 'light' ? '#0f172a' : exportBg === 'dark' ? '#f8fafc' : 'var(--text-primary)',
                     border: '1px solid var(--border-color)',
                     borderRadius: 12,
                     padding: 20,
@@ -913,7 +913,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     return (
                       <div>
                         {/* Person Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
                           <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#ffffff', fontWeight: 700 }}>
                             {activePerson.first_name?.[0] || '👤'}
                           </div>
@@ -923,7 +923,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                               {activePerson.birth_date ? `* ${activePerson.birth_date}` : ''} {activePerson.death_date ? `✝ ${activePerson.death_date}` : ''}
                             </div>
                           </div>
-                          <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 12, background: 'rgba(99, 102, 241, 0.25)', color: '#818cf8' }}>
+                          <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 12, background: 'var(--nav-tab-active-bg)', color: 'var(--primary-color, #818cf8)' }}>
                             {previewEvents.length} {t('timelineMilestonesCount')}
                           </div>
                         </div>
@@ -944,8 +944,8 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                                   gap: 12,
                                   padding: '10px 14px',
                                   borderRadius: 8,
-                                  background: 'rgba(255, 255, 255, 0.04)',
-                                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                                  background: exportBg === 'light' ? 'rgba(0, 0, 0, 0.03)' : 'var(--nav-tab-bg)',
+                                  border: '1px solid var(--border-color)',
                                 }}
                               >
                                 <span style={{ fontSize: 16 }}>{evt.event_type === 'BIRTH' ? '👶' : evt.event_type === 'MARRIAGE' ? '💍' : evt.event_type === 'DEATH' ? '🕯️' : '📌'}</span>
@@ -975,7 +975,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   onClick={handleExecuteExportTimeline}
                   style={{
                     alignSelf: 'flex-start',
-                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
@@ -1007,13 +1007,13 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                       ? 'rgba(16, 185, 129, 0.15)'
                       : exportFeedback.type === 'error'
                       ? 'rgba(239, 68, 68, 0.15)'
-                      : 'rgba(99, 102, 241, 0.15)',
+                      : 'var(--nav-tab-active-bg)',
                   color:
                     exportFeedback.type === 'success'
-                      ? '#10b981'
+                      ? 'var(--success-color, #10b981)'
                       : exportFeedback.type === 'error'
-                      ? '#ef4444'
-                      : 'var(--text-primary)',
+                      ? 'var(--error-color, #ef4444)'
+                      : 'var(--primary-color, #6366f1)',
                   border: '1px solid var(--border-color)',
                 }}
               >
@@ -1062,7 +1062,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               onClick={() => setNodeViewStyle('default')}
               style={{
                 border: nodeViewStyle === 'default' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                background: nodeViewStyle === 'default' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                background: nodeViewStyle === 'default' ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
                 borderRadius: 12,
                 padding: 16,
                 cursor: 'pointer',
@@ -1076,7 +1076,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                   {t('settingsStyleDefault')}
                 </span>
-                <input type="radio" checked={nodeViewStyle === 'default'} readOnly />
+                <input type="radio" checked={nodeViewStyle === 'default'} readOnly style={{ accentColor: 'var(--primary-color)' }} />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 {t('settingsStyleDefaultDesc')}
@@ -1109,7 +1109,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               onClick={() => setNodeViewStyle('circle')}
               style={{
                 border: nodeViewStyle === 'circle' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                background: nodeViewStyle === 'circle' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                background: nodeViewStyle === 'circle' ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
                 borderRadius: 12,
                 padding: 16,
                 cursor: 'pointer',
@@ -1123,7 +1123,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                   {t('settingsStyleCircle')}
                 </span>
-                <input type="radio" checked={nodeViewStyle === 'circle'} readOnly />
+                <input type="radio" checked={nodeViewStyle === 'circle'} readOnly style={{ accentColor: 'var(--primary-color)' }} />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 {t('settingsStyleCircleDesc')}
@@ -1154,7 +1154,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               onClick={() => setNodeViewStyle('square')}
               style={{
                 border: nodeViewStyle === 'square' ? '2px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                background: nodeViewStyle === 'square' ? 'rgba(99, 102, 241, 0.08)' : 'var(--nav-tab-bg)',
+                background: nodeViewStyle === 'square' ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
                 borderRadius: 12,
                 padding: 16,
                 cursor: 'pointer',
@@ -1168,7 +1168,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                   {t('settingsStyleSquare')}
                 </span>
-                <input type="radio" checked={nodeViewStyle === 'square'} readOnly />
+                <input type="radio" checked={nodeViewStyle === 'square'} readOnly style={{ accentColor: 'var(--primary-color)' }} />
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 {t('settingsStyleSquareDesc')}
@@ -1223,7 +1223,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 type="checkbox"
                 checked={celebrationConfig.enabled}
                 onChange={(e) => setCelebrationConfig({ enabled: e.target.checked })}
-                style={{ width: 16, height: 16 }}
+                style={{ width: 16, height: 16, accentColor: 'var(--primary-color)' }}
               />
               {t('settingsEnableCelebrations')}
             </label>
@@ -1259,6 +1259,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={celebrationConfig.showBirthday}
                     onChange={(e) => setCelebrationConfig({ showBirthday: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>{t('settingsShowBirthdays')}</span>
                 </label>
@@ -1268,6 +1269,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={celebrationConfig.showAnniversary}
                     onChange={(e) => setCelebrationConfig({ showAnniversary: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>{t('settingsShowAnniversaries')}</span>
                 </label>
@@ -1277,6 +1279,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={celebrationConfig.showMemorial}
                     onChange={(e) => setCelebrationConfig({ showMemorial: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>{t('settingsShowMemorials')}</span>
                 </label>
@@ -1295,7 +1298,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   max={30}
                   value={celebrationConfig.daysThreshold}
                   onChange={(e) => setCelebrationConfig({ daysThreshold: parseInt(e.target.value, 10) })}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', accentColor: 'var(--primary-color)' }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-secondary)' }}>
                   <span>{language === 'ru' ? '0 (В день события)' : '0 (Day of event only)'}</span>
@@ -1318,7 +1321,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                         flex: 1,
                         background: celebrationConfig.badgeStyle === style ? 'var(--primary-color, #6366f1)' : 'var(--nav-tab-bg)',
                         color: celebrationConfig.badgeStyle === style ? '#ffffff' : 'var(--text-primary)',
-                        border: '1px solid var(--border-color)',
+                        border: celebrationConfig.badgeStyle === style ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
                         borderRadius: 8,
                         padding: '6px 12px',
                         fontSize: 12,
@@ -1411,7 +1414,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                         height: 26,
                         borderRadius: '50%',
                         background: c.value,
-                        border: celebrationConfig.badgeColor === c.value ? '3px solid #ffffff' : '1px solid rgba(0,0,0,0.2)',
+                        border: celebrationConfig.badgeColor === c.value ? '3px solid var(--text-primary)' : '1px solid var(--border-color)',
                         boxShadow: celebrationConfig.badgeColor === c.value ? '0 0 8px ' + c.value : undefined,
                         cursor: 'pointer',
                       }}
@@ -1442,6 +1445,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                         fontSize: 16,
                         background: celebrationConfig.customIcon === ico ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
                         border: celebrationConfig.customIcon === ico ? '1px solid var(--primary-color)' : '1px solid var(--border-color)',
+                        color: celebrationConfig.customIcon === ico ? 'var(--primary-color)' : 'var(--text-primary)',
                         borderRadius: 6,
                         padding: '4px 8px',
                         cursor: 'pointer',
@@ -1574,7 +1578,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               </div>
             </div>
 
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(99, 102, 241, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--nav-tab-active-bg)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-color)' }}>
               💡 <strong>Smart Parser:</strong> {t('datePickerHint')}
             </div>
           </div>
@@ -1625,6 +1629,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showOwnFacts}
                     onChange={(e) => setLifeFactsConfig({ showOwnFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>👤 {t('settingsOwnFacts')}</span>
                 </label>
@@ -1634,6 +1639,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showParentsFacts}
                     onChange={(e) => setLifeFactsConfig({ showParentsFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>👨‍👩‍👧 {t('labelParents')}</span>
                 </label>
@@ -1643,6 +1649,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showSiblingsFacts}
                     onChange={(e) => setLifeFactsConfig({ showSiblingsFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>👫 {t('labelSiblings')}</span>
                 </label>
@@ -1652,6 +1659,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showChildrenFacts}
                     onChange={(e) => setLifeFactsConfig({ showChildrenFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>👶 {t('labelChildren')}</span>
                 </label>
@@ -1661,6 +1669,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showGrandparentsFacts}
                     onChange={(e) => setLifeFactsConfig({ showGrandparentsFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>👴 {language === 'ru' ? 'Дедушки и бабушки' : "Grandparents' Facts"}</span>
                 </label>
@@ -1670,6 +1679,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                     type="checkbox"
                     checked={lifeFactsConfig.showSpousesFacts}
                     onChange={(e) => setLifeFactsConfig({ showSpousesFacts: e.target.checked })}
+                    style={{ accentColor: 'var(--primary-color)' }}
                   />
                   <span>💍 {t('sectionSpousesPartners')}</span>
                 </label>
@@ -1701,6 +1711,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                       <input
                         type="checkbox"
                         checked={isChecked}
+                        style={{ accentColor: 'var(--primary-color)' }}
                         onChange={(e) => {
                           const current = lifeFactsConfig.includedFactTypes || [];
                           const next = e.target.checked
@@ -1882,12 +1893,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                         ? 'rgba(16, 185, 129, 0.15)'
                         : importStatusType === 'error'
                         ? 'rgba(239, 68, 68, 0.15)'
-                        : 'rgba(99, 102, 241, 0.15)',
+                        : 'var(--nav-tab-active-bg)',
                     color:
                       importStatusType === 'success'
-                        ? '#10b981'
+                        ? 'var(--success-color, #10b981)'
                         : importStatusType === 'error'
-                        ? '#ef4444'
+                        ? 'var(--error-color, #ef4444)'
                         : 'var(--text-primary)',
                     border: '1px solid var(--border-color)',
                   }}
@@ -1902,7 +1913,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                   disabled={isImporting}
                   onClick={handleExecuteImport}
                   style={{
-                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,

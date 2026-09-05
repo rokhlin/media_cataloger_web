@@ -108,7 +108,7 @@ export const FamilyTreeTab = () => {
               id="subtab-family-tree-canvas"
               onClick={() => setActiveSubTab('canvas')}
               style={{
-                background: activeSubTab === 'canvas' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                background: activeSubTab === 'canvas' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                 color: activeSubTab === 'canvas' ? '#ffffff' : 'var(--text-primary)',
                 border: activeSubTab === 'canvas' ? 'none' : '1px solid var(--border-color)',
                 borderRadius: 8,
@@ -132,7 +132,7 @@ export const FamilyTreeTab = () => {
               id="subtab-family-tree-settings"
               onClick={() => setActiveSubTab('settings')}
               style={{
-                background: activeSubTab === 'settings' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                background: activeSubTab === 'settings' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                 color: activeSubTab === 'settings' ? '#ffffff' : 'var(--text-primary)',
                 border: activeSubTab === 'settings' ? 'none' : '1px solid var(--border-color)',
                 borderRadius: 8,
@@ -202,7 +202,10 @@ export const FamilyTreeTab = () => {
               left: 0,
               zIndex: activeSubTab === 'settings' ? 3 : 0,
               display: activeSubTab === 'settings' ? 'block' : 'none',
-              background: 'var(--bg-main, #0f172a)',
+              backgroundColor: 'var(--bg-color)',
+              backgroundImage:
+                'radial-gradient(circle at 15% 15%, var(--bg-radial-1, rgba(99, 102, 241, 0.12)) 0%, transparent 45%), radial-gradient(circle at 85% 85%, var(--bg-radial-2, rgba(168, 85, 247, 0.12)) 0%, transparent 45%)',
+              color: 'var(--text-primary)',
               overflowY: 'auto',
             }}
           >

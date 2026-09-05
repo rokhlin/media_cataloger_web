@@ -65,12 +65,11 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(content.includes('activeSubTab === \'settings\''), 'FamilyTreeTab should toggle TreeSettingsTab');
   });
 
-  it('should verify CanvasToolbar.tsx has a shortcut to open Tree Settings', () => {
+  it('should verify CanvasToolbar.tsx does not duplicate Settings button since navigation has it', () => {
     const toolbarPath = path.join(componentsDir, 'canvas', 'controls', 'CanvasToolbar.tsx');
-    const content = fs.readFileSync(toolbarPath, 'utf8');
+    const toolbarContent = fs.readFileSync(toolbarPath, 'utf8');
 
-    assert.ok(content.includes('toolbar-tree-settings-btn'), 'CanvasToolbar should have Settings button');
-    assert.ok(content.includes('setActiveSubTab(\'settings\')'), 'Clicking Settings button should open settings');
+    assert.ok(!toolbarContent.includes('toolbar-tree-settings-btn'), 'CanvasToolbar should not have duplicate Settings button');
   });
 
   it('should verify PersonCardNode.tsx renders spouse details and click action', () => {
@@ -140,5 +139,17 @@ describe('Family Tree Settings & UI Features', () => {
     const servicePath = path.resolve(componentsDir, '..', '..', '..', '..', 'server', 'family-tree', 'family-tree.service.ts');
     const serviceContent = fs.readFileSync(servicePath, 'utf8');
     assert.ok(serviceContent.includes('cleanUpOrphanedUnions'), 'FamilyTreeService should have cleanUpOrphanedUnions');
+  });
+
+  it('should verify TreeSettingsTab and FamilyTreeTab use theme tokens instead of hardcoded dark backgrounds', () => {
+    const tabPath = path.join(componentsDir, 'FamilyTreeTab.tsx');
+    const tabContent = fs.readFileSync(tabPath, 'utf8');
+    assert.ok(!tabContent.includes('--bg-main, #0f172a'), 'FamilyTreeTab should not hardcode dark --bg-main');
+    assert.ok(tabContent.includes('var(--bg-color)'), 'FamilyTreeTab settings container should adapt to theme --bg-color');
+
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const settingsContent = fs.readFileSync(settingsPath, 'utf8');
+    assert.ok(settingsContent.includes('var(--primary-gradient'), 'TreeSettingsTab should use --primary-gradient');
+    assert.ok(settingsContent.includes('var(--nav-tab-active-bg)'), 'TreeSettingsTab should use --nav-tab-active-bg');
   });
 });
