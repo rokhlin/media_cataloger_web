@@ -4,6 +4,7 @@ import {
   exportTreeToCSV,
   parseTreeFromCSV,
   getSampleTreeCSV,
+  validateTreeCSV,
 } from '../csvTreeService.js';
 import type { TreeGraphData } from '../../types/tree.types.js';
 
@@ -151,4 +152,90 @@ describe('Family Tree csvTreeService', () => {
     assert.ok(parsed.unions.length >= 1);
     assert.ok(parsed.facts && parsed.facts.length >= 2);
   });
+
+  it('validates CSV and generates accurate diff against existing graph', () => {
+    const csv = exportTreeToCSV(mockGraphData);
+    const parsed = parseTreeFromCSV(csv);
+    const validation = validateTreeCSV(parsed, mockGraphData);
+
+    assert.strictEqual(validation.isValid, true);
+    assert.strictEqual(validation.errors.length, 0);
+    assert.strictEqual(validation.diff.personsUnchanged, 3);
+    assert.strictEqual(validation.diff.personsToCreate.length, 0);
+    assert.strictEqual(validation.diff.personsToUpdate.length, 0);
+    assert.strictEqual(validation.diff.unionsUnchanged, 1);
+    assert.strictEqual(validation.diff.factsUnchanged, 2);
+  });
+
+  it('detects duplicate person IDs in CSV', () => {
+    const badCsv = `# PERSONS
+id,first_name,last_name,gender
+p1,John,Smith,MALE
+p1,Another,Person,FEMALE
+# UNIONS
+`;
+    const parsed = parseTreeFromCSV(badCsv);
+    const validation = validateTreeCSV(parsed, null);
+
+    assert.strictEqual(validation.isValid, false);
+    assert.ok(validation.errors.some((e) => e.includes('Duplicate person ID "p1"')));
+  });
+
+  it('detects unknown partner and child references in unions', () => {
+    const badCsv = `# PERSONS
+id,first_name,last_name,gender
+p1,John,Smith,MALE
+# UNIONS
+id,union_type,partner_ids,children
+u1,MARRIAGE,p1;ghost_partner,ghost_child:BIOLOGICAL:1
+`;
+    const parsed = parseTreeFromCSV(badCsv);
+    const validation = validateTreeCSV(parsed, null);
+
+    assert.strictEqual(validation.isValid, false);
+    assert.ok(validation.errors.some((e) => e.includes('unknown partner ID "ghost_partner"')));
+    assert.ok(validation.errors.some((e) => e.includes('unknown child ID "ghost_child"')));
+  });
+
+  it('detects modified fields when diffing with an existing graph', () => {
+    const modifiedCsv = `# PERSONS
+id,first_name,last_name,gender,bio
+p1,John,Smith,MALE,Updated bio information
+p_new,Sarah,Connor,FEMALE,Resistance leader
+# UNIONS
+id,union_type,partner_ids,children
+u1,MARRIAGE,p1,
+`;
+    const parsed = parseTreeFromCSV(modifiedCsv);
+    const validation = validateTreeCSV(parsed, mockGraphData);
+
+    assert.strictEqual(validation.isValid, true);
+    assert.strictEqual(validation.diff.personsToCreate.length, 1);
+    assert.strictEqual(validation.diff.personsToCreate[0].id, 'p_new');
+    assert.strictEqual(validation.diff.personsToUpdate.length, 1);
+    assert.strictEqual(validation.diff.personsToUpdate[0].id, 'p1');
+    assert.ok(validation.diff.personsToUpdate[0].changedFields?.includes('bio'));
+  });
+
+  it('detects partner_ids changes in existing union when diffing with graph', () => {
+    // mockGraphData has u1 with partners p1 and p2.
+    // In this CSV, u1 has partners p1, p2, AND a new partner p3.
+    const partnerChangedCsv = `# PERSONS
+id,first_name,last_name,gender
+p1,John,Smith,MALE
+p2,Mary,Smith,FEMALE
+p3,Alice,Smith,FEMALE
+# UNIONS
+id,union_type,partner_ids,children
+u1,MARRIAGE,p1;p2;p3,
+`;
+    const parsed = parseTreeFromCSV(partnerChangedCsv);
+    const validation = validateTreeCSV(parsed, mockGraphData);
+
+    assert.strictEqual(validation.isValid, true);
+    assert.strictEqual(validation.diff.unionsToUpdate.length, 1);
+    assert.strictEqual(validation.diff.unionsToUpdate[0].id, 'u1');
+    assert.ok(validation.diff.unionsToUpdate[0].changedFields?.includes('partner_ids'));
+  });
 });
+

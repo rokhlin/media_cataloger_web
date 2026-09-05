@@ -2,9 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
-import { exportTreeToCSV, parseTreeFromCSV, getSampleTreeCSV } from '../../utils/csvTreeService.js';
+import { exportTreeToCSV, parseTreeFromCSV, getSampleTreeCSV, validateTreeCSV, type CsvValidationResult } from '../../utils/csvTreeService.js';
 import { formatTreeDate } from '../../utils/dateUtils.js';
-import type { TreeGraphData, DateFormatStyle } from '../../types/tree.types.js';
+import type { TreeGraphData, DateFormatStyle, TreeHistoryRecord } from '../../types/tree.types.js';
 import type { PersonEventRecord } from '../../types/event.types.js';
 import {
   exportTreeDiagram,
@@ -18,8 +18,12 @@ interface TreeSettingsTabProps {
   graphData: TreeGraphData | null;
   refreshGraph: () => Promise<void>;
   createPerson?: (data: any) => Promise<any>;
+  updatePerson?: (id: string, data: any) => Promise<any>;
   createUnion?: (data: any) => Promise<any>;
+  updateUnion?: (id: string, data: any) => Promise<any>;
   addChildToUnion?: (unionId: string, data: { person_id: string; filiation?: any; birth_order?: number }) => Promise<any>;
+  recordTreeHistory?: (actionType: string, description: string, details?: any) => Promise<any>;
+  getTreeHistory?: (treeId?: string, limit?: number) => Promise<TreeHistoryRecord[]>;
   onBackToCanvas: () => void;
 }
 
@@ -39,8 +43,12 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   graphData,
   refreshGraph,
   createPerson,
+  updatePerson,
   createUnion,
+  updateUnion,
   addChildToUnion,
+  recordTreeHistory,
+  getTreeHistory,
   onBackToCanvas,
 }) => {
   const { language, t } = useLanguage();
@@ -59,10 +67,27 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   // CSV Import State
   const [csvText, setCsvText] = useState('');
   const [importStats, setImportStats] = useState<{ personsCount: number; unionsCount: number; factsCount?: number; errors: string[] } | null>(null);
+  const [validationResult, setValidationResult] = useState<CsvValidationResult | null>(null);
+  const [showDiffDetails, setShowDiffDetails] = useState(false);
+  const [historyList, setHistoryList] = useState<TreeHistoryRecord[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
   const [importStatusType, setImportStatusType] = useState<'info' | 'success' | 'error'>('info');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load tree history on mount or treeId change
+  React.useEffect(() => {
+    if (getTreeHistory && activeTreeId) {
+      setIsLoadingHistory(true);
+      getTreeHistory(activeTreeId, 25)
+        .then((items) => {
+          if (Array.isArray(items)) setHistoryList(items);
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingHistory(false));
+    }
+  }, [getTreeHistory, activeTreeId]);
 
   // Expandable sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -252,16 +277,37 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
       if (text) {
         setCsvText(text);
         const parsed = parseTreeFromCSV(text);
+        const validation = validateTreeCSV(parsed, graphData);
+        setValidationResult(validation);
         setImportStats({
           personsCount: parsed.persons.length,
           unionsCount: parsed.unions.length,
           factsCount: parsed.facts?.length || 0,
-          errors: [],
+          errors: validation.errors,
         });
-        setImportStatusMessage(
-          `File loaded: ${parsed.persons.length} persons, ${parsed.unions.length} unions${parsed.facts?.length ? `, and ${parsed.facts.length} facts` : ''} detected.`
-        );
-        setImportStatusType('info');
+
+        if (!validation.isValid) {
+          setImportStatusMessage(
+            language === 'ru'
+              ? `Ошибки валидации CSV (${validation.errors.length}): исправьте ошибки перед импортом.`
+              : `CSV Validation Failed (${validation.errors.length} error(s)): please resolve errors before importing.`
+          );
+          setImportStatusType('error');
+        } else if (validation.warnings.length > 0) {
+          setImportStatusMessage(
+            language === 'ru'
+              ? `CSV проверен с ${validation.warnings.length} предупреждениями. Готов к синхронизации.`
+              : `CSV validated with ${validation.warnings.length} warning(s). Ready to merge.`
+          );
+          setImportStatusType('info');
+        } else {
+          setImportStatusMessage(
+            language === 'ru'
+              ? `CSV полностью валиден. Персоны: +${validation.diff.personsToCreate.length} новых, ${validation.diff.personsToUpdate.length} обновлений.`
+              : `CSV is fully valid. Persons: +${validation.diff.personsToCreate.length} new, ${validation.diff.personsToUpdate.length} to update.`
+          );
+          setImportStatusType('info');
+        }
       }
     };
     reader.readAsText(file);
@@ -275,24 +321,81 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
     }
 
     const parsed = parseTreeFromCSV(csvText);
-    if (parsed.persons.length === 0) {
-      setImportStatusMessage('No valid persons found in the CSV to import.');
+    const validation = validateTreeCSV(parsed, graphData);
+    setValidationResult(validation);
+
+    if (!validation.isValid) {
+      setImportStatusMessage(`Cannot import: ${validation.errors.join('; ')}`);
       setImportStatusType('error');
       return;
     }
 
     setIsImporting(true);
-    setImportStatusMessage('Importing family tree records...');
+    setImportStatusMessage(
+      language === 'ru'
+        ? 'Синхронизация данных: сопоставление ID и сохранение связей...'
+        : 'Reconciling IDs and applying incremental updates...'
+    );
     setImportStatusType('info');
 
     try {
-      // Map old CSV person IDs to new generated IDs
+      // Map old CSV person IDs to existing or newly created IDs
       const idMap = new Map<string, string>();
 
-      // 1. Create Persons
+      let personsCreated = 0;
+      let personsUpdated = 0;
+      let personsUnchanged = 0;
+
+      let unionsCreated = 0;
+      let unionsUpdated = 0;
+      let unionsUnchanged = 0;
+
+      let factsCreated = 0;
+      let factsUpdated = 0;
+
+      // Build quick lookup maps for current graph
+      const existingPersonMap = new Map<string, any>();
+      const existingSecondaryMap = new Map<string, any>();
+      if (graphData?.persons) {
+        for (const ep of graphData.persons) {
+          existingPersonMap.set(ep.id, ep);
+          const nameKey = `${(ep.first_name || '').trim()} ${(ep.last_name || '').trim()} ${(ep.birth_date || '').trim()}`.toLowerCase();
+          if (nameKey.trim()) existingSecondaryMap.set(nameKey, ep);
+        }
+      }
+
+      // 1. Reconcile Persons
       for (const p of parsed.persons) {
-        if (createPerson) {
+        const nameKey = `${(p.first_name || '').trim()} ${(p.last_name || '').trim()} ${(p.birth_date || '').trim()}`.toLowerCase();
+        const existing = existingPersonMap.get(p.id) || (nameKey.trim() ? existingSecondaryMap.get(nameKey) : undefined);
+
+        if (existing) {
+          idMap.set(p.id, existing.id);
+
+          // Compute changed fields
+          const changedData: Record<string, any> = {};
+          if ((p.first_name || '') !== (existing.first_name || '')) changedData.first_name = p.first_name;
+          if ((p.middle_name || '') !== (existing.middle_name || '')) changedData.middle_name = p.middle_name || null;
+          if ((p.last_name || '') !== (existing.last_name || '')) changedData.last_name = p.last_name || null;
+          if ((p.maiden_name || '') !== (existing.maiden_name || '')) changedData.maiden_name = p.maiden_name || null;
+          if (p.gender && p.gender !== existing.gender) changedData.gender = p.gender;
+          if ((p.birth_date || '') !== (existing.birth_date || '')) changedData.birth_date = p.birth_date || null;
+          if ((p.birth_place || '') !== (existing.birth_place || '')) changedData.birth_place = p.birth_place || null;
+          const existingLiving = existing.is_living === 1 || existing.is_living === true;
+          if (Boolean(p.is_living) !== existingLiving) changedData.is_living = p.is_living;
+          if ((p.death_date || '') !== (existing.death_date || '')) changedData.death_date = p.death_date || null;
+          if ((p.death_place || '') !== (existing.death_place || '')) changedData.death_place = p.death_place || null;
+          if ((p.bio || '') !== (existing.bio || '')) changedData.bio = p.bio || null;
+
+          if (Object.keys(changedData).length > 0 && updatePerson) {
+            await updatePerson(existing.id, changedData);
+            personsUpdated++;
+          } else {
+            personsUnchanged++;
+          }
+        } else if (createPerson) {
           const created = await createPerson({
+            id: p.id,
             tree_id: activeTreeId,
             first_name: p.first_name,
             middle_name: p.middle_name,
@@ -308,77 +411,195 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
           });
           if (created && created.id) {
             idMap.set(p.id, created.id);
+            personsCreated++;
           }
         }
       }
 
-      // 2. Create Unions and link children
-      for (const u of parsed.unions) {
-        const partner1Id = idMap.get(u.partner1_id || u.partner_ids[0]);
-        const partner2Id = (u.partner2_id || u.partner_ids[1]) ? idMap.get(u.partner2_id || u.partner_ids[1]) : undefined;
+      // Map any existing person IDs so union references match
+      if (graphData?.persons) {
+        for (const ep of graphData.persons) {
+          if (!idMap.has(ep.id)) {
+            idMap.set(ep.id, ep.id);
+          }
+        }
+      }
 
-        if (partner1Id && createUnion) {
-          const union = await createUnion({
+      // 2. Reconcile Unions
+      const existingUnionMap = new Map<string, any>();
+      const existingPartnersUnionMap = new Map<string, any>();
+      if (graphData?.unions) {
+        for (const eu of graphData.unions) {
+          existingUnionMap.set(eu.id, eu);
+          const partnerKey = [...(eu.partner_ids || [])].sort().join(';');
+          if (partnerKey) existingPartnersUnionMap.set(partnerKey, eu);
+        }
+      }
+
+      for (const u of parsed.unions) {
+        const mappedPartners = u.partner_ids.map((pid) => idMap.get(pid) || pid).filter(Boolean);
+        const partnerKey = [...mappedPartners].sort().join(';');
+        const existingUnion = (u.id && existingUnionMap.get(u.id)) || (partnerKey ? existingPartnersUnionMap.get(partnerKey) : undefined);
+
+        let targetUnionId = existingUnion?.id;
+
+        if (existingUnion) {
+          const unionChanges: Record<string, any> = {};
+          if (u.union_type && u.union_type !== existingUnion.union_type) unionChanges.union_type = u.union_type;
+          if ((u.start_date || '') !== (existingUnion.start_date || '')) unionChanges.start_date = u.start_date || null;
+          if ((u.start_place || '') !== (existingUnion.start_place || '')) unionChanges.start_place = u.start_place || null;
+          if ((u.end_date || '') !== (existingUnion.end_date || '')) unionChanges.end_date = u.end_date || null;
+          if ((u.notes || '') !== (existingUnion.notes || '')) unionChanges.notes = u.notes || null;
+
+          const existingPartnerSet = new Set(existingUnion.partner_ids || []);
+          const hasPartnerChanges = mappedPartners.length !== (existingUnion.partner_ids || []).length ||
+            mappedPartners.some((pid) => !existingPartnerSet.has(pid));
+          if (hasPartnerChanges && mappedPartners.length > 0) {
+            unionChanges.partner_ids = mappedPartners;
+          }
+
+          if (Object.keys(unionChanges).length > 0 && updateUnion) {
+            await updateUnion(existingUnion.id, unionChanges);
+            unionsUpdated++;
+          } else {
+            unionsUnchanged++;
+          }
+        } else if (createUnion && mappedPartners.length > 0) {
+          const createdU = await createUnion({
+            id: u.id,
             tree_id: activeTreeId,
-            partner_1_id: partner1Id,
-            partner_2_id: partner2Id,
+            partner_ids: mappedPartners,
             union_type: u.union_type || 'MARRIAGE',
             start_date: u.start_date,
             end_date: u.end_date,
             start_place: u.start_place,
             notes: u.notes,
           });
+          if (createdU && createdU.id) {
+            targetUnionId = createdU.id;
+            unionsCreated++;
+          }
+        }
 
-          if (union && union.id && u.children && addChildToUnion) {
-            for (const childRef of u.children) {
-              const mappedChildId = idMap.get(childRef.person_id);
-              if (mappedChildId) {
-                await addChildToUnion(union.id, {
-                  person_id: mappedChildId,
-                  filiation: childRef.filiation,
-                  birth_order: childRef.birth_order,
-                });
-              }
+        // Attach children to this union
+        if (targetUnionId && u.children && u.children.length > 0 && addChildToUnion) {
+          const existingChildSet = new Set((existingUnion?.children || []).map((c: any) => c.person_id));
+          for (const childRef of u.children) {
+            const mappedChildId = idMap.get(childRef.person_id) || childRef.person_id;
+            if (mappedChildId && !existingChildSet.has(mappedChildId)) {
+              await addChildToUnion(targetUnionId, {
+                person_id: mappedChildId,
+                filiation: childRef.filiation,
+                birth_order: childRef.birth_order,
+              });
+              existingChildSet.add(mappedChildId);
             }
           }
         }
       }
 
-      // 3. Create Facts if present in CSV
+      // 3. Reconcile Facts / Events
       if (parsed.facts && parsed.facts.length > 0) {
+        const existingFactsMap = new Map<string, any>();
+        const existingFactKeyMap = new Map<string, any>();
+        if (graphData?.facts) {
+          for (const ef of graphData.facts) {
+            existingFactsMap.set(ef.id, ef);
+            const fKey = `${ef.person_id}:${ef.event_type}:${(ef.title || '').trim().toLowerCase()}`;
+            existingFactKeyMap.set(fKey, ef);
+          }
+        }
+
         for (const f of parsed.facts) {
           const targetPersonId = idMap.get(f.person_id) || f.person_id;
-          if (targetPersonId) {
+          if (!targetPersonId) continue;
+
+          const fKey = `${targetPersonId}:${f.event_type}:${(f.title || '').trim().toLowerCase()}`;
+          const existingFact = (f.id && existingFactsMap.get(f.id)) || existingFactKeyMap.get(fKey);
+
+          if (existingFact) {
+            const factChanges: Record<string, any> = {};
+            if ((f.description || '') !== (existingFact.description || '')) factChanges.description = f.description || null;
+            if ((f.event_date || '') !== (existingFact.event_date || '')) factChanges.event_date = f.event_date || null;
+            if ((f.end_date || '') !== (existingFact.end_date || '')) factChanges.end_date = f.end_date || null;
+            if ((f.location_name || '') !== (existingFact.location_name || '')) factChanges.location_name = f.location_name || null;
+
+            if (Object.keys(factChanges).length > 0) {
+              try {
+                await fetch(`/api/family-tree/events/${existingFact.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(factChanges),
+                });
+                factsUpdated++;
+              } catch {
+                // ignore
+              }
+            }
+          } else {
             try {
-              await fetch(`/api/family-tree/persons/${targetPersonId}/timeline`, {
+              const res = await fetch(`/api/family-tree/persons/${targetPersonId}/events`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  id: f.id,
                   event_type: f.event_type,
                   title: f.title,
                   description: f.description,
                   event_date: f.event_date,
                   end_date: f.end_date,
-                  date_is_approximate: f.date_is_approximate,
+                  date_is_approximate: f.date_is_approximate ? 1 : 0,
                   location_name: f.location_name,
                   relationship_target_name: f.relationship_target_name,
                   relationship_status: f.relationship_status,
                 }),
               });
+              if (res.ok) {
+                const createdEvt = await res.json().catch(() => null);
+                if (createdEvt && createdEvt.id) {
+                  existingFactsMap.set(createdEvt.id, createdEvt);
+                  existingFactKeyMap.set(fKey, createdEvt);
+                }
+                factsCreated++;
+              }
             } catch {
-              // ignore fact error on import
+              // ignore
             }
           }
         }
       }
 
+      // 4. Record Audit Log in Tree History
+      const historyDesc = `CSV Import: ${personsCreated} persons created, ${personsUpdated} persons updated (${personsUnchanged} unchanged); ${unionsCreated} unions created, ${unionsUpdated} unions updated; ${factsCreated} facts created, ${factsUpdated} facts updated.`;
+      if (recordTreeHistory) {
+        await recordTreeHistory('CSV_IMPORT', historyDesc, {
+          personsCreated,
+          personsUpdated,
+          personsUnchanged,
+          unionsCreated,
+          unionsUpdated,
+          unionsUnchanged,
+          factsCreated,
+          factsUpdated,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       await refreshGraph();
+      if (getTreeHistory) {
+        const hist = await getTreeHistory(activeTreeId, 25);
+        if (Array.isArray(hist)) setHistoryList(hist);
+      }
+
       setImportStatusMessage(
-        `Import successful! Added ${parsed.persons.length} persons, ${parsed.unions.length} unions${parsed.facts?.length ? `, and ${parsed.facts.length} facts` : ''}.`
+        language === 'ru'
+          ? `Импорт завершен успешно! Персоны: +${personsCreated} создано, ${personsUpdated} обновлено (${personsUnchanged} без изменений). Союзы: +${unionsCreated} создано, ${unionsUpdated} обновлено. События: +${factsCreated} создано, ${factsUpdated} обновлено.`
+          : `Import complete! Persons: +${personsCreated} created, ${personsUpdated} updated (${personsUnchanged} unchanged). Unions: +${unionsCreated} created, ${unionsUpdated} updated. Facts: +${factsCreated} created, ${factsUpdated} updated.`
       );
       setImportStatusType('success');
       setCsvText('');
       setImportStats(null);
+      setValidationResult(null);
     } catch (err: any) {
       setImportStatusMessage(`Import error: ${err?.message || 'Failed to import tree'}`);
       setImportStatusType('error');
@@ -1881,8 +2102,138 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
                 </button>
               </div>
 
-              {/* Import Status / Preview */}
-              {importStatusMessage && (
+              {/* Validation & Diff Review Card */}
+              {validationResult && (
+                <div
+                  style={{
+                    background: validationResult.isValid ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                    border: `1px solid ${validationResult.isValid ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+                    borderRadius: 10,
+                    padding: 14,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: validationResult.isValid ? '#10b981' : '#ef4444' }}>
+                      {validationResult.isValid
+                        ? `✅ ${language === 'ru' ? 'Проверка пройдена' : 'Validation Passed'}`
+                        : `❌ ${language === 'ru' ? 'Ошибки валидации' : 'Validation Failed'} (${validationResult.errors.length})`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowDiffDetails((prev) => !prev)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--primary-color, #6366f1)',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {showDiffDetails
+                        ? (language === 'ru' ? 'Скрыть детали' : 'Hide details')
+                        : (language === 'ru' ? 'Показать детали изменений' : 'Show change details')}
+                    </button>
+                  </div>
+
+                  {/* Errors */}
+                  {validationResult.errors.length > 0 && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.15)', borderRadius: 6, padding: '8px 12px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: '#ef4444', marginBottom: 4 }}>
+                        {language === 'ru' ? 'Блокирующие ошибки:' : 'Blocking Errors:'}
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#ef4444' }}>
+                        {validationResult.errors.map((err, idx) => (
+                          <li key={idx} style={{ marginBottom: 2 }}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Warnings */}
+                  {validationResult.warnings.length > 0 && (
+                    <div style={{ background: 'rgba(245, 158, 11, 0.12)', borderRadius: 6, padding: '8px 12px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: '#f59e0b', marginBottom: 4 }}>
+                        {language === 'ru' ? 'Предупреждения:' : 'Warnings:'}
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: '#f59e0b' }}>
+                        {validationResult.warnings.map((warn, idx) => (
+                          <li key={idx} style={{ marginBottom: 2 }}>{warn}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Diff Summary Badges */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: 4, background: 'var(--nav-tab-bg)', border: '1px solid var(--border-color)' }}>
+                        👤 <strong>{language === 'ru' ? 'Персоны' : 'Persons'}:</strong> +{validationResult.diff.personsToCreate.length} {language === 'ru' ? 'новых' : 'new'}, ✏️ {validationResult.diff.personsToUpdate.length} {language === 'ru' ? 'обновлений' : 'update'}, ⚪ {validationResult.diff.personsUnchanged} {language === 'ru' ? 'без изм.' : 'unchanged'}
+                      </span>
+                      <span style={{ padding: '3px 8px', borderRadius: 4, background: 'var(--nav-tab-bg)', border: '1px solid var(--border-color)' }}>
+                        💍 <strong>{language === 'ru' ? 'Союзы' : 'Unions'}:</strong> +{validationResult.diff.unionsToCreate.length} {language === 'ru' ? 'новых' : 'new'}, ✏️ {validationResult.diff.unionsToUpdate.length} {language === 'ru' ? 'обновлений' : 'update'}, ⚪ {validationResult.diff.unionsUnchanged} {language === 'ru' ? 'без изм.' : 'unchanged'}
+                      </span>
+                      <span style={{ padding: '3px 8px', borderRadius: 4, background: 'var(--nav-tab-bg)', border: '1px solid var(--border-color)' }}>
+                        📜 <strong>{language === 'ru' ? 'События' : 'Facts'}:</strong> +{validationResult.diff.factsToCreate.length} {language === 'ru' ? 'новых' : 'new'}, ✏️ {validationResult.diff.factsToUpdate.length} {language === 'ru' ? 'обновлений' : 'update'}, ⚪ {validationResult.diff.factsUnchanged} {language === 'ru' ? 'без изм.' : 'unchanged'}
+                      </span>
+                    </div>
+
+                    {/* Granular Diff Review List */}
+                    {showDiffDetails && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          maxHeight: 180,
+                          overflowY: 'auto',
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 6,
+                          padding: 10,
+                          fontSize: 11,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                        }}
+                      >
+                        {validationResult.diff.personsToUpdate.map((p, idx) => (
+                          <div key={`p-up-${idx}`} style={{ color: 'var(--primary-color)' }}>
+                            ✏️ <strong>Person "{p.name}"</strong>: {p.details}
+                          </div>
+                        ))}
+                        {validationResult.diff.unionsToUpdate.map((u, idx) => (
+                          <div key={`u-up-${idx}`} style={{ color: '#0ea5e9' }}>
+                            ✏️ <strong>Union</strong>: {u.details}
+                          </div>
+                        ))}
+                        {validationResult.diff.factsToUpdate.map((f, idx) => (
+                          <div key={`f-up-${idx}`} style={{ color: '#f59e0b' }}>
+                            ✏️ <strong>Fact "{f.name}"</strong>: {f.details}
+                          </div>
+                        ))}
+                        {validationResult.diff.personsToCreate.map((p, idx) => (
+                          <div key={`p-cr-${idx}`} style={{ color: '#10b981' }}>
+                            + <strong>New Person "{p.name}"</strong>: {p.details}
+                          </div>
+                        ))}
+                        {validationResult.diff.personsToUpdate.length === 0 &&
+                          validationResult.diff.personsToCreate.length === 0 &&
+                          validationResult.diff.unionsToUpdate.length === 0 &&
+                          validationResult.diff.unionsToCreate.length === 0 && (
+                            <div style={{ color: 'var(--text-muted)' }}>
+                              {language === 'ru' ? 'Все данные совпадают с текущим древом (нет изменений).' : 'All records match current tree (no changes).'}
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Import Status Message */}
+              {importStatusMessage && !validationResult && (
                 <div
                   style={{
                     fontSize: 12,
@@ -1910,24 +2261,143 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
               {importStats && importStats.personsCount > 0 && (
                 <button
                   type="button"
-                  disabled={isImporting}
+                  disabled={isImporting || (validationResult !== null && !validationResult.isValid)}
                   onClick={handleExecuteImport}
                   style={{
-                    background: 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
+                    background:
+                      validationResult !== null && !validationResult.isValid
+                        ? 'var(--border-color)'
+                        : 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
                     padding: '10px 16px',
                     fontSize: 13,
                     fontWeight: 700,
-                    cursor: 'pointer',
+                    cursor: validationResult !== null && !validationResult.isValid ? 'not-allowed' : 'pointer',
                     marginTop: 'auto',
+                    boxShadow: validationResult !== null && !validationResult.isValid ? 'none' : '0 2px 8px rgba(99, 102, 241, 0.3)',
                   }}
+                  title={
+                    validationResult !== null && !validationResult.isValid
+                      ? 'Resolve validation errors to enable import'
+                      : 'Commit import and merge changes'
+                  }
                 >
-                  {isImporting ? '...' : `${t('btnCommitCsvImport')} (${importStats.personsCount} ${language === 'ru' ? 'персон' : 'persons'}, ${importStats.unionsCount} ${language === 'ru' ? 'союзов' : 'unions'})`}
+                  {isImporting
+                    ? '...'
+                    : `${t('btnCommitCsvImport')} (${importStats.personsCount} ${language === 'ru' ? 'персон' : 'persons'}, ${importStats.unionsCount} ${language === 'ru' ? 'союзов' : 'unions'})`}
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Tree History & Audit Log Sub-Section */}
+        {expandedSections.csvBackup && (
+          <div
+            style={{
+              marginTop: 16,
+              borderTop: '1px solid var(--border-color)',
+              paddingTop: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📜</span> {language === 'ru' ? 'История изменений и журнал древа' : 'Tree History & Audit Trail'}
+                {historyList.length > 0 && (
+                  <span style={{ fontSize: 11, background: 'var(--nav-tab-active-bg)', padding: '2px 6px', borderRadius: 10, color: 'var(--text-secondary)' }}>
+                    {historyList.length}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (getTreeHistory && activeTreeId) {
+                    setIsLoadingHistory(true);
+                    try {
+                      const items = await getTreeHistory(activeTreeId, 25);
+                      if (Array.isArray(items)) setHistoryList(items);
+                    } finally {
+                      setIsLoadingHistory(false);
+                    }
+                  }
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 6,
+                  color: 'var(--text-secondary)',
+                  fontSize: 11,
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                🔄 {isLoadingHistory ? '...' : (language === 'ru' ? 'Обновить историю' : 'Refresh History')}
+              </button>
+            </div>
+
+            {historyList.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
+                {language === 'ru'
+                  ? 'История изменений пока пуста. После импорта CSV или обновлений здесь будут сохраняться записи аудита.'
+                  : 'No tree history recorded yet. When CSV is imported or entities updated, audit events will appear here.'}
+              </div>
+            ) : (
+              <div
+                style={{
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {historyList.map((h) => (
+                  <div
+                    key={h.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      fontSize: 12,
+                      borderBottom: '1px solid var(--border-color)',
+                      paddingBottom: 6,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            background: h.action_type === 'CSV_IMPORT' ? 'rgba(99, 102, 241, 0.2)' : 'var(--nav-tab-active-bg)',
+                            color: h.action_type === 'CSV_IMPORT' ? 'var(--primary-color, #6366f1)' : 'var(--text-primary)',
+                          }}
+                        >
+                          {h.action_type}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {h.created_at ? new Date(h.created_at).toLocaleString() : ''}
+                        </span>
+                      </div>
+                      <div style={{ color: 'var(--text-primary)', fontSize: 12 }}>{h.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

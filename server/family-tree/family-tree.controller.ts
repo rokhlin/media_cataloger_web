@@ -21,6 +21,7 @@ import {
   UnlinkFaceDto,
   QuickAddRelativeDto,
   PhotoKinshipDto,
+  RecordTreeHistoryDto,
 } from './dto/family-tree.dto.js';
 
 @ApiTags('family-tree')
@@ -90,6 +91,19 @@ export class FamilyTreeController {
   @ApiOperation({ summary: 'Get complete graph nodes and edges for a specific tree' })
   async getTreeGraph(@Param('id') id: string) {
     return this.treeService.getTreeGraph(id);
+  }
+
+  @Get('trees/:id/history')
+  @ApiOperation({ summary: 'Get chronological history and audit logs for a tree' })
+  async getTreeHistory(@Param('id') id: string, @Query('limit') limit?: string) {
+    const num = limit ? parseInt(limit, 10) : 50;
+    return this.treeService.getTreeHistory(id, num);
+  }
+
+  @Post('trees/:id/history')
+  @ApiOperation({ summary: 'Record an audit log or history event for a tree' })
+  async recordTreeHistory(@Param('id') id: string, @Body() body: RecordTreeHistoryDto) {
+    return this.treeService.recordTreeHistory(id, body.action_type, body.description, body.details);
   }
 
   // ---------------------------------------------------------------------------

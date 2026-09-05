@@ -12,6 +12,7 @@ import type {
   TreeGraphPerson,
   TreeGraphUnion,
   PersonEventRecord,
+  TreeHistoryRecord,
 } from './types/family-tree.types.js';
 import type {
   CreateTreeDto,
@@ -145,7 +146,14 @@ export class FamilyTreeService {
     const treeId = dto.tree_id || this.getOrCreateDefaultTree().id;
     this.getTreeById(treeId);
 
-    const personId = `p_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let personId = `p_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (dto.id && dto.id.trim()) {
+      const cleanId = dto.id.trim();
+      const existing = db.prepare('SELECT id FROM ft_persons WHERE id = ?').get(cleanId);
+      if (!existing) {
+        personId = cleanId;
+      }
+    }
     const isLiving = dto.is_living === false || dto.is_living === 0 ? 0 : 1;
     const customAttrStr =
       typeof dto.custom_attributes === 'object'
@@ -556,7 +564,14 @@ export class FamilyTreeService {
     const treeId = dto.tree_id || this.getOrCreateDefaultTree().id;
     this.getTreeById(treeId);
 
-    const unionId = `u_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let unionId = `u_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (dto.id && dto.id.trim()) {
+      const cleanId = dto.id.trim();
+      const existing = db.prepare('SELECT id FROM ft_unions WHERE id = ?').get(cleanId);
+      if (!existing) {
+        unionId = cleanId;
+      }
+    }
     const unionType = dto.union_type || 'MARRIAGE';
 
     db.prepare(`
@@ -654,6 +669,13 @@ export class FamilyTreeService {
     const updated = this.getUnionById(id);
     this.eventsService.propagateUnionEvents(updated);
 
+    if (dto.partner_ids !== undefined) {
+      const childRows = db.prepare('SELECT person_id FROM ft_child_relations WHERE union_id = ?').all(id) as Array<{ person_id: string }>;
+      for (const cr of childRows) {
+        this.eventsService.propagateChildBornEvents(cr.person_id, id);
+      }
+    }
+
     return updated;
   }
 
@@ -681,6 +703,11 @@ export class FamilyTreeService {
 
     const union = this.getUnionById(unionId);
     this.eventsService.propagateUnionEvents(union);
+
+    const childRows = db.prepare('SELECT person_id FROM ft_child_relations WHERE union_id = ?').all(unionId) as Array<{ person_id: string }>;
+    for (const cr of childRows) {
+      this.eventsService.propagateChildBornEvents(cr.person_id, unionId);
+    }
   }
 
   public removePartnerFromUnion(unionId: string, personId: string): void {
@@ -892,5 +919,40 @@ export class FamilyTreeService {
       root_person_id: tree.root_person_id,
       facts,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tree History & Audit
+  // ---------------------------------------------------------------------------
+
+  public recordTreeHistory(
+    treeId: string,
+    actionType: string,
+    description: string,
+    details?: any,
+  ): TreeHistoryRecord {
+    const db = this.dbService.getDb();
+    const id = `hist_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const detailsStr = details ? (typeof details === 'string' ? details : JSON.stringify(details)) : null;
+
+    db.prepare(`
+      INSERT INTO ft_tree_history (id, tree_id, action_type, description, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, treeId, actionType, description, detailsStr);
+
+    return db.prepare('SELECT * FROM ft_tree_history WHERE id = ?').get(id) as TreeHistoryRecord;
+  }
+
+  public getTreeHistory(treeId: string, limit: number = 50): TreeHistoryRecord[] {
+    const db = this.dbService.getDb();
+    const tId = treeId || this.getOrCreateDefaultTree().id;
+    return db
+      .prepare(`
+        SELECT * FROM ft_tree_history
+        WHERE tree_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `)
+      .all(tId, limit) as TreeHistoryRecord[];
   }
 }

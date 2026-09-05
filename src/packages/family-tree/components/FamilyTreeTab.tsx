@@ -39,10 +39,13 @@ export const FamilyTreeTab = () => {
     deletePerson,
     quickAddRelative,
     createUnion,
+    updateUnion,
     addChildToUnion,
     linkFace,
     unlinkFace,
     setRootPerson,
+    recordTreeHistory,
+    getTreeHistory,
   } = useFamilyTreeData(activeTreeId);
 
   const [isCreatePersonOpen, setIsCreatePersonOpen] = useState(false);
@@ -213,8 +216,12 @@ export const FamilyTreeTab = () => {
               graphData={graphData}
               refreshGraph={refreshGraph}
               createPerson={createPerson}
+              updatePerson={updatePerson}
               createUnion={createUnion}
+              updateUnion={updateUnion}
               addChildToUnion={addChildToUnion}
+              recordTreeHistory={recordTreeHistory}
+              getTreeHistory={getTreeHistory}
               onBackToCanvas={() => setActiveSubTab('canvas')}
             />
           </div>

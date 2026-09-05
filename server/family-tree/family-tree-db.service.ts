@@ -199,6 +199,20 @@ export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy 
 
       CREATE INDEX IF NOT EXISTS idx_ft_event_media_pins_event ON ft_event_media_pins(event_id);
       CREATE INDEX IF NOT EXISTS idx_ft_event_media_pins_filepath ON ft_event_media_pins(media_file_path);
+
+      -- 9. Tree Change History & Audit Logs
+      CREATE TABLE IF NOT EXISTS ft_tree_history (
+        id TEXT PRIMARY KEY,
+        tree_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (tree_id) REFERENCES ft_trees(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ft_tree_history_tree ON ft_tree_history(tree_id);
+      CREATE INDEX IF NOT EXISTS idx_ft_tree_history_date ON ft_tree_history(created_at);
     `);
 
     const safeAddColumn = (table: string, column: string, type: string) => {

@@ -244,3 +244,13 @@ export interface AutocompletePersonItem {
   isLiving: boolean;
   mediaPersonId?: string | null;
 }
+
+export interface TreeHistoryRecord {
+  id: string;
+  tree_id: string;
+  action_type: string;
+  description: string;
+  details?: string | null;
+  created_at: string;
+}
+

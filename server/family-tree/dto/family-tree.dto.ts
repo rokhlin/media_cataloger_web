@@ -46,6 +46,10 @@ export class UpdateTreeDto {
 export class CreatePersonDto {
   @IsOptional()
   @IsString()
+  id?: string;
+
+  @IsOptional()
+  @IsString()
   tree_id?: string;
 
   @IsOptional()
@@ -169,6 +173,10 @@ export class UpdatePersonDto {
 export class CreateUnionDto {
   @IsOptional()
   @IsString()
+  id?: string;
+
+  @IsOptional()
+  @IsString()
   tree_id?: string;
 
   @IsArray()
@@ -247,6 +255,10 @@ export class UpdateChildRelationDto {
 }
 
 export class CreateEventDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsString()
   event_type: EventType;
 
@@ -461,4 +473,15 @@ export class UnlinkFaceDto {
   @IsOptional()
   @IsString()
   media_face_id?: string;
+}
+
+export class RecordTreeHistoryDto {
+  @IsString()
+  action_type: string;
+
+  @IsString()
+  description: string;
+
+  @IsOptional()
+  details?: any;
 }

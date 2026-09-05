@@ -116,6 +116,16 @@ export interface TreeGraphData {
   facts?: PersonEventRecord[];
 }
 
+export interface TreeHistoryRecord {
+  id: string;
+  tree_id: string;
+  action_type: string;
+  description: string;
+  details?: string | null;
+  created_at: string;
+}
+
+
 export interface KinshipInfo {
   primaryTerm: string;
   category: KinshipCategory;

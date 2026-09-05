@@ -40,6 +40,14 @@
     - db error
 - [x] **Test Coverage**: Comprehensive unit and integration test suites covering Kinship, Family Tree, Settings, Config, Thumbnails, i18n, Themes, and Cache.
 - [x] **Docker / Host Decoupling**: Separate application core dependencies from local host environment for robust Docker deployment.
+- [ ] **Caching strategies: controls section**: Rename `Execution controls` tab insettings to `File metadata operations`. Change UI accordingly. Add `Caching strategy` section to control cache
+- [ ] **Cahcing strategies**: Review current caching strategies and implement more efficient caching where needed. Main requirement to increase the system performance and reduce the response time of the application:
+    -  Media library mostly is static and doesnt have a lot of realtime changes. So we should keep fast caching, allow to user trigger a mannual caching for the specific folder or for all. 
+    - Define Daily caching automation: for the mediafiles added on a last time. Store last cached datetime, schedule the next recache. and do it onl for the new/changed that time files.
+    - Add controls to run caching manually in `Caching strategy` section.
+- [ ] **Caching strategies: on duplicates removing**: after remove duplicates, recalculate the cache for the remaining files.
+- [ ] **Caching strategies: on folder remove**: after remove folder, recalculate the cache for the remaining files. It's also make sense for the folders rename operation.
+
 
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.

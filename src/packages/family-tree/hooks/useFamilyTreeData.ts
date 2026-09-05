@@ -208,6 +208,35 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     await fetchGraph();
   };
 
+  const recordTreeHistory = async (actionType: string, description: string, details?: any) => {
+    try {
+      const treeId = activeTreeId || 'default_tree';
+      const res = await fetch(`/api/family-tree/trees/${treeId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_type: actionType, description, details }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const getTreeHistory = async (treeId: string = activeTreeId, limit: number = 30) => {
+    try {
+      const tId = treeId || 'default_tree';
+      const res = await fetch(`/api/family-tree/trees/${tId}/history?limit=${limit}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  };
+
   return {
     graphData,
     trees,
@@ -226,5 +255,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     linkFace,
     unlinkFace,
     setRootPerson,
+    recordTreeHistory,
+    getTreeHistory,
   };
-}
+};
