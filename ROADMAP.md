@@ -1,25 +1,28 @@
 # Project Roadmap
 
-## 🚀 Completed Features (v0.3.0)
+## 🚀 Completed Features (v0.7.0)
 
 - **Standalone Web & Server Architecture**: Decoupled `media_cataloger_web` into a dedicated full-stack TypeScript application powered by **NestJS** backend and **React 19 (Vite)** frontend with OpenAPI/Swagger at `/api/docs`.
 - **High-Performance SQLite Database**: Embedded SQLite (`better-sqlite3`) in Write-Ahead Logging (WAL) mode for sub-millisecond query performance on low-power hardware.
+- **Authentication & RBAC**: Multi-user account management, role-based access control, JWT session guards, and encrypted private Vault folder.
 - **Cross-Machine AI Engine Integration**: `CatalogerClientService` proxying execution controls, scan triggers, worker status, and real-time streaming logs to the Python AI service (`media_cataloger`).
-- **Interactive Family Tree Explorer**: Layered graph visualization powered by `@xyflow/react` and **ELK.js (Eclipse Layout Kernel)** in a dedicated Web Worker (`elk-layout.worker.ts`) with horizontal/vertical layouts and branch folding.
-- **Automated Kinship Calculation**: `KinshipEngineService` calculating multi-generational biological and non-biological family relationships.
-- **Life Events & Person Timeline**: `FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`, and gallery photo attachment picker.
-- **Graph Integrity & Validation**: `GraphIntegrityService` detecting cycles and validating kinship consistency.
-- **Face-to-Tree Linking**: `FaceLinkModal` and `PersonDetailDrawer` linking recognized media faces to tree persons.
-- **Rich Media Gallery & Lightbox**: Virtualized media grid with chunked infinite scrolling, multi-source folder aggregation, timeline grouping, and full-screen Lightbox with localized EXIF/AI sidecar inspector.
+- **Interactive Family Tree Explorer**: Layered graph visualization powered by `@xyflow/react` and **ELK.js (Eclipse Layout Kernel)** in a dedicated Web Worker (`elk-layout.worker.ts`) with horizontal/vertical layouts, sub-tree branch folding, and navigation controls.
+- **Automated Kinship Calculation**: `KinshipEngineService` and `kinshipUtils.ts` calculating multi-generational biological and non-biological family relationships (including affinity/in-law relationships).
+- **Life Events, Facts Deduplication & Person Timeline**: `FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`, and gallery photo attachment picker.
+- **Tree Settings & Data Management**: Node styling (Default, Circle, Square with mourning styling), celebration badges, CSV export/import with `# FACTS` section, and high-resolution export to PNG/JPG/SVG.
+- **Timeline Calendar View**: Chronological calendar view with photo stack visualization and badges for dates with dense media capture (>10 photos).
+- **Similar & Duplicate File Manager**: `DuplicatesManagerTab` with background duplicate discovery, visual side-by-side comparator, exact/perceptual thresholding, and batch deletion.
+- **Metadata Editing & In-Viewer Editor**: `MetadataEditorModal` with atomic persistence in SQLite and bidirectional sidecar JSON file synchronization.
+- **Rich Media Gallery & Lightbox**: Virtualized media grid with chunked infinite scrolling, multi-source folder aggregation, timeline grouping, and full-screen Lightbox with localized EXIF/AI sidecar inspector and HTTP 206 video streaming.
 - **Inline Person Tagging**: On-media face tagging and person assignment with automatic bidirectional sidecar JSON synchronization.
 - **Client-Side Media Cache & Aggregator**: `MediaCacheService` (IndexedDB with memory fallback) and `MediaOrganizationWorker` for instant client-side folder and timeline grouping.
 - **Automatic Thumbnail Service**: On-the-fly Sharp thumbnail generation, multi-tier disk caching, and native Apple HEIC/HEIF photo conversion (`heic-convert`).
 - **Face Registry Management**: Face crop catalog, person name assignment, face re-assignment, and face clustering (`FacesService`).
-- **Admin Panel & Feature Flags**: Diagnostics dashboard, system metrics, dynamic runtime feature flag toggles, and configuration export/import.
+- **Admin Panel & Feature Flags**: Diagnostics dashboard, system metrics, dynamic runtime feature flag toggles (`data/feature_flags.json`), and configuration export/import.
 - **App Settings & Filesystem Browser**: Directory picker modal and cross-platform path normalization in `AppConfigService`.
 - **Theme Engine**: 12 curated glassmorphism presets and dynamic custom theme builder.
 - **Internationalization (i18n)**: 100% key parity English 🇬🇧 and Russian 🇷🇺 interface localization.
-- **Developer Tooling & Testing**: Multi-architecture Docker images (`docker-publish.yml`), `run.ps1`/`run.sh` runners, and comprehensive test suite with 79 tests.
+- **Developer Tooling & Testing**: Comprehensive unit and integration test suites covering Kinship, Family Tree, Settings, Config, Thumbnails, i18n, Themes, and Cache.
 
 ---
 

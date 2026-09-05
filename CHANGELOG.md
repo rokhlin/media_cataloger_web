@@ -6,58 +6,107 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.4.0] - Unreleased
+## [0.8.0] - Unreleased
 
 ### Added
-- **Native Apple HEIC/HEIF Image Support**:
-  - Direct conversion and thumbnail extraction for `.heic` and `.heif` media via `heic-convert` in `ThumbnailService` and `MediaService`.
-  - Comprehensive unit test coverage for HEIC/HEIF buffer conversion and error recovery.
-- **Interactive Family Tree Explorer (`src/packages/family-tree/`)**:
-  - Layered graph visualization powered by `@xyflow/react` and **ELK.js (Eclipse Layout Kernel)** computed in a dedicated Web Worker (`elk-layout.worker.ts`) with horizontal (LR) and vertical (TB) layouts and branch folding.
-  - Automated Kinship Calculation Engine (`KinshipEngineService`) resolving complex multi-generation biological and non-biological family relationships.
-  - Life Events & Timeline system (`FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`) with gallery photo attachment picker.
-  - Graph integrity & cycle detection service (`GraphIntegrityService`) preventing circular parentage anomalies.
-  - Interactive modals: `PersonDetailDrawer`, `FaceLinkModal`, and `QuickAddRelativeModal` (with spouse dropdown and unknown second parent options for child addition).
-- **Metadata Editing & In-Viewer Editor (`MetadataEditorModal`)**:
-  - Full support for viewing, modifying, and persisting metadata (summaries EN/RU, descriptions EN/RU, environment, lighting, weather, time of day, location, capture date, camera make/model/lens, OCR text, audio transcriptions, and tag chips).
-  - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
-  - Automatic bidirectional synchronization with on-disk sidecar JSON files.
-  - Interactive multi-tab in-viewer metadata editor modal in `MediaGallery` with instant reactive UI refresh and 100% English 🇬🇧 and Russian 🇷🇺 localization.
 - **Advanced Caching Strategies & Management System**:
-  - Renamed `Execution controls` settings tab to `File metadata operations` (`tabFileMetadataOperations`) with full English and Russian localization.
-  - Implemented `Caching strategy` control section in `SystemSettings` featuring cache metrics (item count, memory footprint, hit rate, last cache time, next scheduled run).
+  - Renamed `Execution controls` settings tab to `File metadata operations` (`tabFileMetadataOperations`) with full English 🇬🇧 and Russian 🇷🇺 localization.
+  - Implemented `Caching strategy` control section in `SystemSettings` featuring real-time cache metrics (item count, memory footprint, hit rate, last cache time, next scheduled run).
   - High-performance caching for static media libraries with manual single-folder or global recache triggers (`/api/media/cache/recache`).
   - Automated daily recaching background job (`checkScheduledAutomation`) with configurable time-of-day scheduling and incremental-only modes.
   - In-place warm cache recalculation on duplicate file deletion (`recalculateCacheAfterDeletion`), avoiding cold cache drops across both server and client IndexedDB.
   - Dynamic cache recalculation on folder removal and rename operations (`recalculateCacheAfterFolderChange`).
   - Added dedicated navigation link button to **Tree Settings** (`tab-settings-tree`) inside `SystemSettings` tabs navigation, automatically switching to the Family Tree screen and activating the Tree Settings subtab.
-- **Developer Guidelines & Rules Documentation**:
-  - `.agents/rules/jest-testing-for-js-ts.md`: Strict testing requirements, mock isolation, and Jest best practices.
-  - `.agents/rules/nest-js-development-best-practices.md`: Modular backend architecture and clean service standards.
-  - `.agents/rules/react-js-development.md`: Modern React 19 standards, hook architecture, and accessibility.
-  - `.agents/rules/roadmap_and_changelog.md`: Automated GitHub tag synchronization, version grouping, and dynamic `[future_tag_version]` tracking.
-  - `.agents/rules/database_migrations.md`: Comprehensive SQLite schema evolution, migration, and persistence rules.
+
+---
+
+## [0.7.0] - 2026-09-05
+
+### Added
+- **Interactive Family Tree Explorer (`src/packages/family-tree/`)**:
+  - Layered graph visualization powered by `@xyflow/react` and **ELK.js (Eclipse Layout Kernel)** computed in a dedicated Web Worker (`elk-layout.worker.ts`) with horizontal (LR) and vertical (TB) layouts, sub-tree branch folding, and navigation controls.
+  - Automated Kinship Calculation Engine (`kinshipUtils.ts`, `KinshipEngineService`) resolving complex multi-generation biological and non-biological family relationships (including in-laws and step-relations).
+  - Life Events & Timeline system (`FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`) with gallery photo attachment picker and category filtering.
+  - Graph integrity & cycle detection service (`GraphIntegrityService`) preventing circular parentage anomalies.
+  - Tree settings management (`TreeSettingsTab`) with node styling options (Default, Circle, Square with mourning styling for deceased individuals), celebration badges (birthdays, anniversaries, weddings), and configurable date formats (dropdown selector).
+  - Tree and timeline high-resolution export to PNG, JPG, and SVG (`treeExportService.ts`).
+  - CSV Tree Import and Export with dedicated `# FACTS` lifecycle events section, syntax validation, entity reconciliation, and audit history (`ft_tree_history`).
+  - Interactive modals and navigation: `PersonDetailDrawer`, `FaceLinkModal`, `QuickAddRelativeModal`, `CanvasToolbar`, and `TreeSearchBar`.
+- **Timeline Calendar View (`TimelineCalendarView`)**:
+  - Chronological calendar view with photo stack visualization and badges for dates with dense media capture (>10 photos).
+- **UI Modularization & Component Architecture**:
+  - Centralized component styling system (`screens/` directory separation, `VaultScreen`, `ViewSwitcherButtonGroup` dropdown/button modes controlled by feature flags).
+  - Automatic `data/feature_flags.json` initialization from assets template on startup.
+- **Native Apple HEIC/HEIF Image Support**:
+  - Direct conversion and thumbnail extraction for `.heic` and `.heif` media via `heic-convert` in `ThumbnailService` and `MediaService`.
+  - Comprehensive unit test coverage for HEIC/HEIF buffer conversion and error recovery.
 
 ### Fixed
 - **Family Tree Life Story Facts Deduplication**:
   - Resolved duplicated facts appearing on a person's timeline when exploring with relatives enabled (spouses, parents, siblings, children).
   - Prevented reciprocal `MARRIAGE` and `DIVORCE` events from spouses from duplicating the person's own union records.
   - Filtered out a spouse's marriages to third parties (different spouses) and children with other spouses from being wrongly rendered on the person's life story.
-  - Eliminated duplicate child birth facts where parent's `CHILD_BORN` event and the child's `BIRTH` event were both rendered simultaneously.
+  - Eliminated duplicate child birth facts where parent's `CHILD_BORN` event and child's `BIRTH` event were both rendered simultaneously.
   - Preserved single display of parents' marriage and divorce on child timelines.
   - Added unit test suite `timelineDeduplication.test.ts` verifying exact lifecycle event filtering.
-- **Duplicates Manager Card & Checkbox Selection**:
-  - Fixed issue where clicking a duplicate item checkbox or thumbnail image immediately closed Duplicates Manager and returned to the Media gallery tab.
-  - Added `e.stopPropagation()` on checkbox click to prevent event bubbling to parent click handlers.
-  - Added direct selection toggle on duplicate card/image clicks so clicking either the checkbox or card marks duplicate files for deletion.
-  - Added dedicated in-place Full Preview Lightbox modal with zoom button (`dup-item-zoom-btn`), metadata view, mark/unmark actions, and Esc key dismiss without leaving the tab.
-  - Removed disruptive `setActiveTab('main')` redirect from `App.tsx`.
-- **Video Preview & HTTP Range Streaming**:
-  - Implemented HTTP 206 Partial Content and `Range` header streaming in `server/media/media.controller.ts` (`streamFileSafely`) for seamless buffering, scrubbing, and seeking of video files.
-  - Added `Accept-Ranges: bytes` and byte-range slice stream creation.
-  - Mapped `.mov` and `.m4v` to `video/mp4` MIME type for native browser demuxer compatibility.
-  - Added `<video>` element support with controls, high-resolution extracted poster frame, and metadata in `DuplicatesManagerTab` preview modal and side-by-side visual comparator.
-  - Enhanced `MediaViewerModal` with extracted first-frame poster (`/api/media/thumbnail?size=1920`), `playsInline`, `preload="metadata"`, and graceful fallback with direct download button when browser engines cannot decode specific video codecs (e.g. HEVC in `.mov`).
+- **Child Node Delete Action & Toolbar Display**:
+  - Corrected conditional render logic in `CanvasToolbar` and `FamilyTreeTab` so child node delete/remove buttons always display when selected.
+- **Filter Facts Category Responsiveness**:
+  - Changed category pill container to wrap responsively (`flexWrap: 'wrap'`) and dynamically filter to categories present in active life events.
+- **Canvas Top Actions Decluttering**:
+  - Introduced `hide_top_screen_zoom_actions` feature flag in `CanvasToolbar` to hide duplicate top zoom buttons while preserving bottom-left canvas controls.
+- **Duplicates Manager Selection & Video Streaming**:
+  - Added `e.stopPropagation()` on duplicate item checkboxes and cards to prevent accidental closing of Duplicates Manager and redirection to gallery tab.
+  - Added dedicated in-place Full Preview Lightbox modal with zoom button (`dup-item-zoom-btn`), metadata view, and keyboard navigation.
+  - Implemented HTTP 206 Partial Content and `Range` header streaming in `server/media/media.controller.ts` for smooth video buffering, scrubbing, and seeking.
+
+---
+
+## [0.6.0] - 2026-09-02
+
+### Added
+- **Similar & Duplicate File Manager (`DuplicatesManagerTab`)**:
+  - Dedicated duplicate and burst photo cleanup pipeline and background scanning service (`duplicates.service.ts`).
+  - Configurable similarity threshold and duplicate detection criteria (exact hash/size match vs perceptual similarity).
+  - Side-by-side visual comparison, metadata inspector, and batch file deletion/relocation.
+  - Asynchronous organization and duplicate calculation via `mediaOrganization.worker.ts`.
+- **Standalone Media Viewer Modal (`MediaViewerModal`)**:
+  - Extracted standalone full-screen lightbox modal with deep image inspection, zoom controls, and EXIF/metadata drawer.
+- **System Settings Overhaul (`SystemSettings`)**:
+  - Replaced legacy modal with a comprehensive full-page tabbed settings interface (`SystemSettings.tsx` and `SystemSettings.css`).
+  - Complete internationalization (i18n) for all settings controls.
+- **Face Registry Management Component (`FaceRegistry`)**:
+  - Dedicated UI for assigning, merging, and managing detected faces across media libraries.
+- **Documentation & Integration Guides**:
+  - Added comprehensive technical guides for AI engine integration, security, authentication setup, and SQLite schema migrations.
+
+---
+
+## [0.5.0] - 2026-09-01
+
+### Added
+- **Authentication & Role-Based Access Control (RBAC)**:
+  - User authentication system with JWT sessions, password hashing, and route guards (`AuthGuard`, `RolesGuard`).
+  - Multi-user management tab (`UserManagementTab`) with admin controls for role assignment and account creation/deletion.
+  - Interactive login modal (`LoginModal`) and user profile status in `Header`.
+- **Encrypted Secret Vault (`VaultModal`, `AdminVaultTab`)**:
+  - Secure encrypted private vault folder protected by PIN/password.
+  - Strict exclusion of vault media assets from general indexing and global search queries.
+- **Metadata Editing & In-Viewer Editor (`MetadataEditorModal`)**:
+  - Multi-tab in-viewer metadata editor modal in `MediaGallery` with instant reactive UI refresh and 100% English 🇬🇧 and Russian 🇷🇺 localization.
+  - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
+  - Automatic bidirectional synchronization with on-disk sidecar JSON files.
+
+---
+
+## [0.4.0] - 2026-09-01
+
+### Added
+- **Foundational Project Architecture & Guidelines**:
+  - Modular NestJS backend structure with services, controllers, and dependency injection.
+  - Standardized development rules: `.agents/rules/jest-testing-for-js-ts.md`, `.agents/rules/nest-js-development-best-practices.md`, `.agents/rules/react-js-development.md`, `.agents/rules/roadmap_and_changelog.md`, and `.agents/rules/database_migrations.md`.
+  - Initial `ROADMAP.md` and `CHANGELOG.md` tracking setup.
+  - Extended unit testing infrastructure for config, media, and thumbnail services.
 
 ---
 
