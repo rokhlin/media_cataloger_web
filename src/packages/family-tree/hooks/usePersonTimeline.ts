@@ -5,6 +5,7 @@ import type {
   UpdateEventInput,
   PinMediaInput,
 } from '../types/event.types.js';
+import { notifyFamilyTreeUpdated } from '../state/useFamilyTreeStore.js';
 
 export function usePersonTimeline(personId: string | null) {
   const [events, setEvents] = useState<PersonEventRecord[]>([]);
@@ -47,6 +48,7 @@ export function usePersonTimeline(personId: string | null) {
     }
     const created = await res.json();
     await fetchTimeline();
+    notifyFamilyTreeUpdated();
     return created;
   };
 
@@ -62,6 +64,7 @@ export function usePersonTimeline(personId: string | null) {
     }
     const updated = await res.json();
     await fetchTimeline();
+    notifyFamilyTreeUpdated();
     return updated;
   };
 
@@ -74,6 +77,7 @@ export function usePersonTimeline(personId: string | null) {
       throw new Error(err.message || 'Failed to delete event');
     }
     await fetchTimeline();
+    notifyFamilyTreeUpdated();
   };
 
   const pinMediaToEvent = async (eventId: string, data: PinMediaInput) => {

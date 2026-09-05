@@ -8,6 +8,7 @@ import { AppConfigService } from '../config/config.service.js';
 export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FamilyTreeDatabaseService.name);
   private db: Database | null = null;
+  private currentDbPath: string | null = null;
 
   constructor(@Inject(AppConfigService) private readonly config: AppConfigService) {}
 
@@ -20,33 +21,55 @@ export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy 
   }
 
   public getDb(): Database {
-    if (!this.db) {
+    const desiredPath = this.config.familyTreeDbPath;
+    if (!this.db || !this.db.open || this.currentDbPath !== desiredPath) {
       this.initDb();
     }
+    return this.db!;
+  }
+
+  public reconnect(): Database {
+    this.logger.warn('Reconnecting Family Tree SQLite database connection...');
+    this.close();
+    this.initDb();
     return this.db!;
   }
 
   public close(): void {
     if (this.db) {
       try {
-        this.db.close();
+        if (this.db.open) {
+          this.db.close();
+        }
       } catch (err) {
         this.logger.error(`Error closing family tree database: ${err}`);
       }
       this.db = null;
+      this.currentDbPath = null;
     }
   }
 
   public initDb(): void {
     try {
+      this.close();
       const dbPath = this.config.familyTreeDbPath;
+      this.currentDbPath = dbPath;
       const dbDir = path.dirname(dbPath);
       if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
       this.db = new DatabaseConstructor(dbPath, { timeout: 30000 });
-      this.db.pragma('journal_mode = WAL');
+      try {
+        this.db.pragma('journal_mode = WAL');
+      } catch (walErr) {
+        this.logger.warn(`WAL mode failed on ${dbPath}, falling back to DELETE mode: ${walErr}`);
+        try {
+          this.db.pragma('journal_mode = DELETE');
+        } catch {
+          // ignore fallback error
+        }
+      }
       this.db.pragma('busy_timeout = 30000');
       this.db.pragma('foreign_keys = ON');
       this.db.pragma('synchronous = NORMAL');
@@ -55,7 +78,7 @@ export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy 
       // Initialize schema
       this.createTables();
       this.ensureDefaultTree();
-      this.logger.log(`Family Tree SQLite database connected in WAL mode at: ${dbPath}`);
+      this.logger.log(`Family Tree SQLite database connected at: ${dbPath}`);
     } catch (err) {
       this.logger.error(`Failed to initialize Family Tree SQLite database: ${err}`);
     }
@@ -213,6 +236,13 @@ export class FamilyTreeDatabaseService implements OnModuleInit, OnModuleDestroy 
 
       CREATE INDEX IF NOT EXISTS idx_ft_tree_history_tree ON ft_tree_history(tree_id);
       CREATE INDEX IF NOT EXISTS idx_ft_tree_history_date ON ft_tree_history(created_at);
+
+      -- 10. Family Tree Settings
+      CREATE TABLE IF NOT EXISTS ft_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
     `);
 
     const safeAddColumn = (table: string, column: string, type: string) => {

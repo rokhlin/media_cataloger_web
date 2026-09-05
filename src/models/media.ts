@@ -30,6 +30,7 @@ export interface FamilyMilestoneContext {
 
 export interface FamilyContextData {
   suggested_caption?: string;
+  summary_description?: string;
   identified_members?: FamilyMemberContext[];
   relationships?: FamilyRelationshipContext[];
   milestones?: FamilyMilestoneContext[];

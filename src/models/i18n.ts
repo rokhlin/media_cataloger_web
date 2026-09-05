@@ -738,6 +738,15 @@ export interface FamilyTreeTranslations {
   settingsLifeFactsDesc: string;
   settingsOwnFacts: string;
   settingsCloseRelativesFacts: string;
+  settingsGalleryKinshipTitle: string;
+  settingsGalleryKinshipDesc: string;
+  galleryFactsEnable: string;
+  galleryFactsScope: string;
+  galleryFactsScopeOwn: string;
+  galleryFactsScopeClosest: string;
+  galleryFactsScopeAll: string;
+  galleryFactsOnlyClose: string;
+  galleryFactsPeriodBefore: string;
   settingsCsvBackupTitle: string;
   settingsCsvBackupDesc: string;
   btnExportCsv: string;

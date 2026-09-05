@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { TreeGraphData, TreeRecord } from '../types/tree.types.js';
+import { notifyFamilyTreeUpdated } from '../state/useFamilyTreeStore.js';
 
 export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
   const [graphData, setGraphData] = useState<TreeGraphData | null>(null);
@@ -54,6 +55,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const created = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return created;
   };
 
@@ -69,6 +71,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const updated = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return updated;
   };
 
@@ -83,6 +86,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(msg);
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const quickAddRelative = async (data: {
@@ -103,6 +107,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const result = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return result;
   };
 
@@ -118,6 +123,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const result = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return result;
   };
 
@@ -133,6 +139,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const result = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return result;
   };
 
@@ -145,6 +152,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(err.message || 'Failed to delete union');
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const addChildToUnion = async (unionId: string, data: { person_id: string; filiation?: string; birth_order?: number }) => {
@@ -158,6 +166,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(err.message || 'Failed to add child to union');
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const removeChildFromUnion = async (unionId: string, personId: string) => {
@@ -169,6 +178,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(err.message || 'Failed to remove child');
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const linkFace = async (data: { tree_person_id: string; media_person_name: string; media_face_id: string; is_primary_avatar?: boolean }) => {
@@ -183,6 +193,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     }
     const result = await res.json();
     await fetchGraph();
+    notifyFamilyTreeUpdated();
     return result;
   };
 
@@ -195,6 +206,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(err.message || 'Failed to unlink face');
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const setRootPerson = async (treeId: string, personId: string) => {
@@ -206,6 +218,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
       throw new Error(err.message || 'Failed to set root person');
     }
     await fetchGraph();
+    notifyFamilyTreeUpdated();
   };
 
   const recordTreeHistory = async (actionType: string, description: string, details?: any) => {

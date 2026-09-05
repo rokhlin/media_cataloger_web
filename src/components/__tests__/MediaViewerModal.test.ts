@@ -94,4 +94,18 @@ describe('MediaViewerModal & Theme Adaptability', () => {
       'MetadataEditorModal must use authFetch to persist metadata'
     );
   });
+
+  it('should verify MediaViewerModal dynamically updates Family Tree Kinship on scope & tree mutations', () => {
+    const modalPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
+    const content = fs.readFileSync(modalPath, 'utf8');
+
+    assert.ok(content.includes('useFamilyTreeStore'), 'MediaViewerModal must use useFamilyTreeStore');
+    assert.ok(content.includes('galleryKinshipFactsConfig'), 'MediaViewerModal must subscribe to galleryKinshipFactsConfig');
+    assert.ok(content.includes('treeDataVersion'), 'MediaViewerModal must subscribe to treeDataVersion');
+    assert.ok(content.includes('/api/family-tree/public/photo-kinship'), 'MediaViewerModal must query /api/family-tree/public/photo-kinship');
+    assert.ok(content.includes('family_tree_updated'), 'MediaViewerModal must listen for family_tree_updated window event');
+    assert.ok(content.includes('gallery_facts_scope: galleryKinshipFactsConfig.scope'), 'MediaViewerModal must pass active gallery_facts_scope');
+    assert.ok(content.includes('seenCoupleKeys'), 'MediaViewerModal must deduplicate reciprocal couple partnership titles');
+  });
 });
+

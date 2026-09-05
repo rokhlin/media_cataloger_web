@@ -6,6 +6,8 @@ import { FamilyTreeDatabaseService } from '../family-tree-db.service.js';
 import { FamilyTreeService } from '../family-tree.service.js';
 import { GraphIntegrityService } from '../graph-integrity.service.js';
 import { FamilyEventsService } from '../family-events.service.js';
+import { KinshipEngineService } from '../kinship-engine.service.js';
+import { FamilyTreePublicService } from '../family-tree-public.service.js';
 
 describe('FamilyEventsService', () => {
   let dbService: FamilyTreeDatabaseService;
@@ -256,4 +258,37 @@ describe('FamilyEventsService', () => {
     assert.strictEqual(p2ChildBorn.length, 1, 'Parent2 should have received CHILD_BORN event');
     assert.ok(p2ChildBorn[0].title.includes('Child1'));
   });
+
+  it('should deduplicate reciprocal partnership milestones and shared events in analyzePhotoKinship', () => {
+    const kinshipService = new KinshipEngineService(dbService);
+    const publicService = new FamilyTreePublicService(dbService, kinshipService, treeService);
+
+    const personA = treeService.createPerson({ tree_id: treeId, first_name: 'Anton', last_name: 'Rokhlin', gender: 'MALE' });
+    const personB = treeService.createPerson({ tree_id: treeId, first_name: 'Oxana', last_name: 'Wagner', gender: 'FEMALE' });
+
+    // Create union between Anton & Oxana
+    treeService.createUnion({
+      tree_id: treeId,
+      partner_ids: [personA.id, personB.id],
+      union_type: 'MARRIAGE',
+      start_date: '2006-09-01',
+    });
+
+    // Analyze photo where Anton is identified, scope CLOSEST_FAMILY (includes Oxana)
+    const result = publicService.analyzePhotoKinship({
+      person_names: ['Anton Rokhlin'],
+      gallery_facts_scope: 'CLOSEST_FAMILY',
+      only_close_events: false,
+    });
+
+    const milestones = result.contextualMilestones;
+    const partnershipMilestones = milestones.filter((m) =>
+      m.title.toLowerCase().includes('partnership') || m.title.toLowerCase().includes('married')
+    );
+
+    // There should ONLY be 1 partnership milestone, NOT 2 reciprocal ones!
+    assert.strictEqual(partnershipMilestones.length, 1, 'Should contain exactly 1 partnership milestone for the couple, no reciprocal duplication');
+    assert.ok(partnershipMilestones[0].personName.includes('Anton Rokhlin'), 'Should attribute the milestone to the photo participant');
+  });
 });
+

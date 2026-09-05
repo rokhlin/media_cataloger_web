@@ -21,6 +21,7 @@ import {
   UnlinkFaceDto,
   QuickAddRelativeDto,
   PhotoKinshipDto,
+  GalleryKinshipFactsConfigDto,
   RecordTreeHistoryDto,
 } from './dto/family-tree.dto.js';
 
@@ -311,6 +312,18 @@ export class FamilyTreeController {
   @ApiOperation({ summary: 'Analyze photo face group, deduce mutual relationships and contextual captions' })
   async analyzePhotoKinship(@Body() body: PhotoKinshipDto) {
     return this.publicService.analyzePhotoKinship(body);
+  }
+
+  @Get('public/gallery-facts-config')
+  @ApiOperation({ summary: 'Get persistent configuration for Kinship facts in media gallery' })
+  async getGalleryKinshipFactsConfig() {
+    return this.publicService.getGalleryKinshipFactsConfig();
+  }
+
+  @Post('public/gallery-facts-config')
+  @ApiOperation({ summary: 'Save persistent configuration for Kinship facts in media gallery' })
+  async saveGalleryKinshipFactsConfig(@Body() body: GalleryKinshipFactsConfigDto) {
+    return this.publicService.saveGalleryKinshipFactsConfig(body);
   }
 
   @Get('public/autocomplete')

@@ -9,7 +9,7 @@ import type {
   PhotoKinshipResponse,
   AutocompletePersonItem,
 } from './types/family-tree.types.js';
-import type { PhotoKinshipDto } from './dto/family-tree.dto.js';
+import type { PhotoKinshipDto, GalleryKinshipFactsConfigDto } from './dto/family-tree.dto.js';
 
 @Injectable()
 export class FamilyTreePublicService {
@@ -341,12 +341,16 @@ export class FamilyTreePublicService {
     const defaultTree = this.treeService.getOrCreateDefaultTree();
     const rootPersonId = defaultTree.root_person_id || (identifiedPersonsList[0]?.person?.id ?? '');
 
-    const identifiedPersons = identifiedPersonsList.map(({ name, person }) => ({
-      name,
-      treePersonId: person.id,
-      avatarUrl: person.avatar_url || (person.avatar_face_id ? `/api/faces/image/${person.avatar_face_id}` : null),
-      kinshipToRoot: rootPersonId ? this.kinshipService.calculateKinship(rootPersonId, person.id) : null,
-    }));
+    const identifiedPersons = identifiedPersonsList.map(({ name, person }) => {
+      const k = rootPersonId ? this.kinshipService.calculateKinship(rootPersonId, person.id) : null;
+      return {
+        name,
+        treePersonId: person.id,
+        avatarUrl: person.avatar_url || (person.avatar_face_id ? `/api/faces/image/${person.avatar_face_id}` : null),
+        kinshipToRoot: k,
+        kinship: k?.primaryTerm || null,
+      };
+    });
 
     // Pairwise relationships
     const relationships: PhotoKinshipResponse['relationships'] = [];
@@ -363,7 +367,10 @@ export class FamilyTreePublicService {
           kinshipAtoB: kAtoB.primaryTerm,
           kinshipBtoA: kBtoA.primaryTerm,
           category: kAtoB.category,
-        });
+          person1: pA.name,
+          person2: pB.name,
+          relationship: kAtoB.primaryTerm,
+        } as any);
       }
     }
 
@@ -373,29 +380,33 @@ export class FamilyTreePublicService {
 
     if (identifiedPersonsList.length === 0) {
       suggestedCaption = 'Photo without recognized family members.';
-      summaryDescription = 'No known family members detected.';
     } else if (identifiedPersonsList.length === 1) {
-      const p = identifiedPersons[0];
-      const term = p.kinshipToRoot?.primaryTerm;
-      const relationContext = term && term !== 'Self' && term !== 'Unrelated / Unknown' ? ` (${term})` : '';
-      suggestedCaption = `Portrait of ${p.name}${relationContext}.`;
-      summaryDescription = `Single person photograph of ${p.name}.`;
+      const single = identifiedPersonsList[0];
+      const k = rootPersonId ? this.kinshipService.calculateKinship(rootPersonId, single.person.id) : null;
+      if (k && k.category === 'SELF') {
+        suggestedCaption = `Portrait of ${single.name} (Myself).`;
+      } else if (k && k.primaryTerm) {
+        suggestedCaption = `Portrait of my ${k.primaryTerm}, ${single.name}.`;
+      } else {
+        suggestedCaption = `Portrait of ${single.name}.`;
+      }
+      summaryDescription = `Single-person portrait featuring ${single.name}.`;
     } else if (identifiedPersonsList.length === 2) {
       const p1 = identifiedPersonsList[0];
       const p2 = identifiedPersonsList[1];
       const rel = relationships[0];
 
-      if (rel.category === 'SPOUSE_PARTNER') {
+      if (rel && rel.category === 'SPOUSE_PARTNER') {
         suggestedCaption = `Photo of ${p1.name} and spouse ${p2.name}.`;
         summaryDescription = `Spouses ${p1.name} and ${p2.name}.`;
-      } else if (rel.category === 'COLLATERAL' && (rel.kinshipAtoB.includes('Brother') || rel.kinshipAtoB.includes('Sister') || rel.kinshipAtoB.includes('Sibling'))) {
+      } else if (rel && rel.category === 'COLLATERAL' && (rel.kinshipAtoB.includes('Brother') || rel.kinshipAtoB.includes('Sister') || rel.kinshipAtoB.includes('Sibling'))) {
         suggestedCaption = `Siblings ${p1.name} and ${p2.name} together.`;
         summaryDescription = `Brother/sister photo of ${p1.name} and ${p2.name}.`;
-      } else if (rel.category === 'DIRECT_ANCESTOR' || rel.category === 'DIRECT_DESCENDANT') {
+      } else if (rel && (rel.category === 'DIRECT_ANCESTOR' || rel.category === 'DIRECT_DESCENDANT')) {
         suggestedCaption = `${p1.name} with ${rel.kinshipAtoB.toLowerCase()} ${p2.name}.`;
         summaryDescription = `Generational portrait of ${p1.name} and ${p2.name} (${rel.kinshipAtoB}).`;
       } else {
-        suggestedCaption = `Photo of ${p1.name} and ${p2.name} (${rel.kinshipAtoB}).`;
+        suggestedCaption = `Photo of ${p1.name} and ${p2.name}${rel ? ` (${rel.kinshipAtoB})` : ''}.`;
         summaryDescription = `Family gathering featuring ${p1.name} and ${p2.name}.`;
       }
     } else {
@@ -417,28 +428,154 @@ export class FamilyTreePublicService {
       summaryDescription = `Multi-person family portrait with ${identifiedPersons.length} identified members.`;
     }
 
-    // Contextual Milestones
+    // Contextual Milestones (Configurable Kinship in Media Gallery)
     const contextualMilestones: PhotoKinshipResponse['contextualMilestones'] = [];
     const db = this.dbService.getDb();
-    for (const { name, person } of identifiedPersonsList) {
-      const evts = db
-        .prepare(`
-          SELECT event_type, title, event_date, location_name
-          FROM ft_person_events
-          WHERE person_id = ?
-          ORDER BY event_date DESC
-          LIMIT 2
-        `)
-        .all(person.id) as Array<any>;
 
-      for (const e of evts) {
-        contextualMilestones.push({
-          personName: name,
-          eventType: e.event_type,
-          title: e.title,
-          date: e.event_date,
-          location: e.location_name,
-        });
+    const storedConfig = this.getGalleryKinshipFactsConfig();
+    const isConfigEnabled = dto.enabled !== undefined ? dto.enabled : (storedConfig.enabled !== false);
+
+    if (isConfigEnabled) {
+      const scope = dto.gallery_facts_scope || storedConfig.scope || 'CLOSEST_FAMILY';
+      const onlyClose = dto.only_close_events !== undefined ? dto.only_close_events : (storedConfig.onlyCloseEvents ?? true);
+      const periodDays = dto.period_before_days !== undefined ? dto.period_before_days : (storedConfig.periodBeforeDays ?? 7);
+      const allowedTypes = (dto.close_event_types || storedConfig.closeEventTypes || ['BIRTH', 'MARRIAGE', 'ANNIVERSARY', 'DEATH']).map((t) => t.toUpperCase());
+
+      // Determine reference date (media capture date or today)
+      let referenceDate = new Date();
+      if (dto.media_date) {
+        const parsedMedia = new Date(dto.media_date);
+        if (!isNaN(parsedMedia.getTime())) {
+          referenceDate = parsedMedia;
+        }
+      }
+
+      // Build list of target persons
+      interface TargetPersonInfo {
+        id: string;
+        name: string;
+        relationTerm?: string;
+      }
+      const targetMap = new Map<string, TargetPersonInfo>();
+
+      for (const { name, person } of identifiedPersonsList) {
+        targetMap.set(person.id, { id: person.id, name, relationTerm: 'Self' });
+
+        if (scope === 'CLOSEST_FAMILY') {
+          const imm = this.getImmediateFamily(person);
+          for (const parent of imm.parents) {
+            if (!targetMap.has(parent.id)) {
+              targetMap.set(parent.id, { id: parent.id, name: parent.name, relationTerm: parent.relation });
+            }
+          }
+          for (const spouse of imm.spouses) {
+            if (!targetMap.has(spouse.id)) {
+              targetMap.set(spouse.id, { id: spouse.id, name: spouse.name, relationTerm: spouse.relation });
+            }
+          }
+          for (const child of imm.children) {
+            if (!targetMap.has(child.id)) {
+              targetMap.set(child.id, { id: child.id, name: child.name, relationTerm: child.relation });
+            }
+          }
+          for (const sibling of imm.siblings) {
+            if (!targetMap.has(sibling.id)) {
+              targetMap.set(sibling.id, { id: sibling.id, name: sibling.name, relationTerm: sibling.relation });
+            }
+          }
+        }
+      }
+
+      if (scope === 'ALL' && identifiedPersonsList.length > 0) {
+        const treeId = identifiedPersonsList[0].person.tree_id;
+        const allPersons = db.prepare('SELECT id, first_name, last_name FROM ft_persons WHERE tree_id = ?').all(treeId) as PersonRecord[];
+        for (const p of allPersons) {
+          if (!targetMap.has(p.id)) {
+            const pName = [p.first_name, p.last_name].filter(Boolean).join(' ');
+            targetMap.set(p.id, { id: p.id, name: pName || 'Relative', relationTerm: 'Relative' });
+          }
+        }
+      }
+
+      const seenEventIds = new Set<string>();
+      const seenUnionKeys = new Set<string>();
+      const seenReciprocalCoupleKeys = new Set<string>();
+      const seenSharedTitleKeys = new Set<string>();
+      const seenChildBornKeys = new Set<string>();
+
+      for (const target of targetMap.values()) {
+        const evts = db
+          .prepare(`
+            SELECT id, event_type, title, event_date, location_name, source_node_id, source_event_id
+            FROM ft_person_events
+            WHERE person_id = ?
+            ORDER BY event_date DESC
+          `)
+          .all(target.id) as Array<any>;
+
+        for (const e of evts) {
+          const upperType = (e.event_type || '').toUpperCase();
+          if (onlyClose) {
+            if (!allowedTypes.includes(upperType)) continue;
+            const closeCheck = this.isEventDateClose(e.event_date, referenceDate, periodDays);
+            if (!closeCheck.isClose) continue;
+          }
+
+          if (e.id && seenEventIds.has(e.id)) continue;
+
+          // 1. Union duplicate check (by source_node_id or reciprocal partner title)
+          if (upperType === 'MARRIAGE' || upperType === 'DIVORCE' || upperType === 'ANNIVERSARY') {
+            if (e.source_node_id) {
+              const unionKey = `${upperType}_${e.source_node_id}_${e.event_date || ''}`;
+              if (seenUnionKeys.has(unionKey)) continue;
+              seenUnionKeys.add(unionKey);
+            }
+
+            const titleLower = (e.title || '').trim().toLowerCase();
+            const partnerMatch = titleLower
+              .replace(/^(partnership with|married to|married|divorced from|divorced|separated from|брак с|партнерство с|развод с)\s+/i, '')
+              .trim();
+            if (partnerMatch && partnerMatch !== titleLower) {
+              const coupleKey = [target.name.toLowerCase().trim(), partnerMatch].sort().join('___') + '_' + (e.event_date || '') + '_' + upperType;
+              if (seenReciprocalCoupleKeys.has(coupleKey)) continue;
+              seenReciprocalCoupleKeys.add(coupleKey);
+            }
+          }
+
+          // 2. Child birth vs CHILD_BORN deduplication
+          if (upperType === 'CHILD_BORN') {
+            const childKey = `child_born_${(e.source_node_id || e.title || '').toLowerCase().trim()}_${e.event_date || ''}`;
+            if (seenChildBornKeys.has(childKey)) continue;
+            seenChildBornKeys.add(childKey);
+          } else if (upperType === 'BIRTH') {
+            const birthKey = `child_born_${(target.id || target.name).toLowerCase().trim()}_${e.event_date || ''}`;
+            if (seenChildBornKeys.has(birthKey)) continue;
+            seenChildBornKeys.add(birthKey);
+          }
+
+          // 3. Exact same title & date duplicate across different relatives
+          const sharedKey = `${upperType}_${(e.title || '').toLowerCase().trim()}_${e.event_date || ''}`;
+          if (seenSharedTitleKeys.has(sharedKey)) continue;
+          seenSharedTitleKeys.add(sharedKey);
+
+          if (e.id) seenEventIds.add(e.id);
+
+          const personLabel = target.relationTerm && target.relationTerm !== 'Self'
+            ? `${target.name} (${target.relationTerm})`
+            : target.name;
+
+          contextualMilestones.push({
+            personName: personLabel,
+            eventType: e.event_type,
+            title: e.title,
+            date: e.event_date,
+            location: e.location_name,
+          });
+
+          if (!onlyClose && contextualMilestones.filter((m) => m.personName.startsWith(target.name)).length >= 2) {
+            break;
+          }
+        }
       }
     }
 
@@ -449,6 +586,131 @@ export class FamilyTreePublicService {
       summaryDescription,
       contextualMilestones,
     };
+  }
+
+  /**
+   * Evaluates if a given event date is close to the reference date (e.g. within periodBeforeDays).
+   * Supports annual recurring celebrations (birthdays, wedding anniversaries, memorials)
+   * as well as direct proximity.
+   */
+  public isEventDateClose(
+    eventDateStr: string | null | undefined,
+    refDate: Date,
+    periodBeforeDays: number = 7,
+  ): { isClose: boolean; daysUntil: number; celebrationYear?: number } {
+    if (!eventDateStr || typeof eventDateStr !== 'string') {
+      return { isClose: false, daysUntil: 9999 };
+    }
+
+    const s = eventDateStr.trim();
+    let month: number | undefined;
+    let day: number | undefined;
+    let year: number | undefined;
+
+    // Matches YYYY-MM-DD or YYYY-MM
+    const isoMatch = s.match(/^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/);
+    if (isoMatch) {
+      year = parseInt(isoMatch[1], 10);
+      month = isoMatch[2] ? parseInt(isoMatch[2], 10) : undefined;
+      day = isoMatch[3] ? parseInt(isoMatch[3], 10) : undefined;
+    } else {
+      // Matches DD.MM.YYYY
+      const dotMatch = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if (dotMatch) {
+        day = parseInt(dotMatch[1], 10);
+        month = parseInt(dotMatch[2], 10);
+        year = parseInt(dotMatch[3], 10);
+      } else {
+        // Matches MM/DD/YYYY
+        const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (slashMatch) {
+          month = parseInt(slashMatch[1], 10);
+          day = parseInt(slashMatch[2], 10);
+          year = parseInt(slashMatch[3], 10);
+        } else {
+          const d = new Date(s);
+          if (!isNaN(d.getTime())) {
+            year = d.getFullYear();
+            month = d.getMonth() + 1;
+            day = d.getDate();
+          }
+        }
+      }
+    }
+
+    if (!month || !day) {
+      return { isClose: false, daysUntil: 9999 };
+    }
+
+    const currentYear = refDate.getFullYear();
+    const today = new Date(currentYear, refDate.getMonth(), refDate.getDate());
+
+    // 1. Annual celebration recurrence check
+    let targetYear = currentYear;
+    let annualEventDate = new Date(targetYear, month - 1, day);
+    let diffDays = Math.round((annualEventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      targetYear = currentYear + 1;
+      annualEventDate = new Date(targetYear, month - 1, day);
+      diffDays = Math.round((annualEventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    if (diffDays >= 0 && diffDays <= periodBeforeDays) {
+      return { isClose: true, daysUntil: diffDays, celebrationYear: targetYear };
+    }
+
+    // 2. Exact event date proximity check if year exists
+    if (year) {
+      const exactEventDate = new Date(year, month - 1, day);
+      const exactDiffDays = Math.round((exactEventDate.getTime() - refDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (exactDiffDays >= 0 && exactDiffDays <= periodBeforeDays) {
+        return { isClose: true, daysUntil: exactDiffDays, celebrationYear: year };
+      }
+    }
+
+    return { isClose: false, daysUntil: diffDays };
+  }
+
+  /**
+   * Retrieves persistent configuration for Kinship facts in media gallery.
+   */
+  public getGalleryKinshipFactsConfig(): GalleryKinshipFactsConfigDto {
+    try {
+      const db = this.dbService.getDb();
+      const row = db.prepare('SELECT value FROM ft_settings WHERE key = ?').get('gallery_kinship_facts_config') as { value: string } | undefined;
+      if (row && row.value) {
+        return JSON.parse(row.value);
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      enabled: true,
+      scope: 'CLOSEST_FAMILY',
+      onlyCloseEvents: true,
+      periodBeforeDays: 7,
+      closeEventTypes: ['BIRTH', 'MARRIAGE', 'ANNIVERSARY', 'DEATH'],
+    };
+  }
+
+  /**
+   * Saves persistent configuration for Kinship facts in media gallery.
+   */
+  public saveGalleryKinshipFactsConfig(dto: GalleryKinshipFactsConfigDto): GalleryKinshipFactsConfigDto {
+    const current = this.getGalleryKinshipFactsConfig();
+    const merged = { ...current, ...dto };
+    try {
+      const db = this.dbService.getDb();
+      db.prepare(`
+        INSERT INTO ft_settings (key, value, updated_at)
+        VALUES ('gallery_kinship_facts_config', ?, datetime('now', 'localtime'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).run(JSON.stringify(merged));
+    } catch {
+      // ignore
+    }
+    return merged;
   }
 
   /**

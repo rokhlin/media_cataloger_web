@@ -946,6 +946,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           const photoKinship = this.familyTreePublicService.analyzePhotoKinship({
             person_names: faceNames,
             media_file_path: filePath,
+            media_date: mediaDate || captureDate || (mtime ? new Date(mtime * 1000).toISOString() : undefined),
           });
 
           if (photoKinship.identifiedPersons.length > 0) {
@@ -956,9 +957,13 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
                 name: p.name,
                 tree_person_id: p.treePersonId,
                 kinship: p.kinshipToRoot?.primaryTerm || null,
+                kinshipToRoot: p.kinshipToRoot?.primaryTerm || null,
                 category: p.kinshipToRoot?.category || null,
               })),
               relationships: photoKinship.relationships.map((r) => ({
+                person1: r.personA,
+                person2: r.personB,
+                relationship: r.kinshipAtoB,
                 person_a: r.personA,
                 person_b: r.personB,
                 kinship: r.kinshipAtoB,
@@ -1461,6 +1466,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         const photoKinship = this.familyTreePublicService.analyzePhotoKinship({
           person_names: faceNames,
           media_file_path: resolved,
+          media_date: dbMeta?.media_date || dbMeta?.capture_date || (mtime ? new Date(mtime * 1000).toISOString() : undefined),
         });
         if (photoKinship.identifiedPersons.length > 0) {
           item.family_context = {
@@ -1470,9 +1476,13 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
               name: p.name,
               tree_person_id: p.treePersonId,
               kinship: p.kinshipToRoot?.primaryTerm || null,
+              kinshipToRoot: p.kinshipToRoot?.primaryTerm || null,
               category: p.kinshipToRoot?.category || null,
             })),
             relationships: photoKinship.relationships.map((r) => ({
+              person1: r.personA,
+              person2: r.personB,
+              relationship: r.kinshipAtoB,
               person_a: r.personA,
               person_b: r.personB,
               kinship: r.kinshipAtoB,

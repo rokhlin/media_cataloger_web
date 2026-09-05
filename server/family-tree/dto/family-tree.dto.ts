@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import type {
   LivingPrivacyMode,
@@ -459,6 +459,54 @@ export class PhotoKinshipDto {
   @IsOptional()
   @IsString()
   media_file_path?: string;
+
+  @IsOptional()
+  @IsString()
+  media_date?: string;
+
+  @IsOptional()
+  @IsString()
+  gallery_facts_scope?: 'OWN' | 'CLOSEST_FAMILY' | 'ALL';
+
+  @IsOptional()
+  @IsBoolean()
+  only_close_events?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  period_before_days?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  close_event_types?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+}
+
+export class GalleryKinshipFactsConfigDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  scope?: 'OWN' | 'CLOSEST_FAMILY' | 'ALL';
+
+  @IsOptional()
+  @IsBoolean()
+  onlyCloseEvents?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  periodBeforeDays?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  closeEventTypes?: string[];
 }
 
 export class UnlinkFaceDto {

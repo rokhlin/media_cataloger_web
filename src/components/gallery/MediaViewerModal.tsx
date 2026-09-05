@@ -3,10 +3,12 @@ import type {
   GalleryMediaFile,
   DetectedFaceRecord,
   PersonItem,
+  FamilyContextData,
 } from '../../models';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../services/authContext';
 import { useVault } from '../../services/vaultContext';
+import { useFamilyTreeStore } from '../../packages/family-tree/state/useFamilyTreeStore';
 import MetadataEditorModal from './MetadataEditorModal';
 import './MediaViewerModal.css';
 
@@ -60,6 +62,7 @@ export default function MediaViewerModal({
   const { t, language } = useLanguage();
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
   const { addVaultItem, removeVaultItem } = useVault();
+  const { galleryKinshipFactsConfig, treeDataVersion } = useFamilyTreeStore();
 
   // Selected media state (can be updated locally on tagging/vault actions)
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(() => {
@@ -318,6 +321,124 @@ export default function MediaViewerModal({
       isMounted = false;
     };
   }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename, authFetch]);
+
+  // Dynamically analyze & refresh photo kinship and contextual milestones
+  useEffect(() => {
+    if (!isOpen || !selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    if (!filePath) return;
+
+    let isMounted = true;
+
+    // Collect all known names and face IDs for the current file
+    const namesSet = new Set<string>();
+    if (Array.isArray(selectedMedia.face_names)) {
+      selectedMedia.face_names.forEach((n) => {
+        if (n && typeof n === 'string' && n.trim()) namesSet.add(n.trim());
+      });
+    }
+    if (Array.isArray(facesForSelected)) {
+      facesForSelected.forEach((f) => {
+        if (f.name && typeof f.name === 'string' && f.name.trim()) namesSet.add(f.name.trim());
+      });
+    }
+    if (selectedMedia.family_context?.identified_members) {
+      selectedMedia.family_context.identified_members.forEach((m) => {
+        if (m.name && typeof m.name === 'string' && m.name.trim()) namesSet.add(m.name.trim());
+      });
+    }
+
+    const faceIds = Array.from(
+      new Set(
+        (facesForSelected || [])
+          .map((f) => f.face_id)
+          .filter((id): id is string => Boolean(id && typeof id === 'string' && !id.startsWith('manual_')))
+      )
+    );
+    const personNames = Array.from(namesSet);
+
+    // If there are no person names or faces, and no existing family context, skip
+    if (personNames.length === 0 && faceIds.length === 0 && !selectedMedia.family_context) {
+      return;
+    }
+
+    const fetchKinship = async () => {
+      try {
+        const fetchFn = authFetch || fetch;
+        const res = await fetchFn('/api/family-tree/public/photo-kinship', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            face_ids: faceIds.length > 0 ? faceIds : undefined,
+            person_names: personNames.length > 0 ? personNames : undefined,
+            media_file_path: filePath,
+            media_date:
+              selectedMedia.media_date ||
+              selectedMedia.capture_date ||
+              (selectedMedia.mtime ? new Date(selectedMedia.mtime * 1000).toISOString() : undefined),
+            gallery_facts_scope: galleryKinshipFactsConfig.scope,
+            only_close_events: galleryKinshipFactsConfig.onlyCloseEvents,
+            period_before_days: galleryKinshipFactsConfig.periodBeforeDays,
+            close_event_types: galleryKinshipFactsConfig.closeEventTypes,
+            enabled: galleryKinshipFactsConfig.enabled,
+          }),
+        });
+
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data && isMounted) {
+            const updatedContext: FamilyContextData = {
+              suggested_caption: data.suggestedCaption || undefined,
+              summary_description: data.summaryDescription || undefined,
+              identified_members: (data.identifiedPersons || []).map((p: any) => ({
+                name: p.name,
+                tree_person_id: p.treePersonId,
+                kinshipToRoot: p.kinshipToRoot?.primaryTerm || p.kinship || null,
+                kinship: p.kinshipToRoot?.primaryTerm || p.kinship || null,
+                category: p.kinshipToRoot?.category || null,
+              })),
+              relationships: (data.relationships || []).map((r: any) => ({
+                person1: r.personA || r.person1 || r.person_a,
+                person2: r.personB || r.person2 || r.person_b,
+                relationship: r.kinshipAtoB || r.relationship || r.kinship,
+              })),
+              milestones: data.contextualMilestones || [],
+            };
+
+            setSelectedMedia((prev) => (prev ? { ...prev, family_context: updatedContext } : null));
+            if (onMediaUpdated && isMounted) {
+              onMediaUpdated({
+                ...selectedMedia,
+                family_context: updatedContext,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not update family kinship context:', err);
+      }
+    };
+
+    fetchKinship();
+
+    const handleTreeUpdated = () => {
+      if (isMounted) fetchKinship();
+    };
+    window.addEventListener('family_tree_updated', handleTreeUpdated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('family_tree_updated', handleTreeUpdated);
+    };
+  }, [
+    isOpen,
+    selectedMedia?.file_path,
+    selectedMedia?.filename,
+    facesForSelected,
+    galleryKinshipFactsConfig,
+    treeDataVersion,
+    authFetch,
+  ]);
 
   // Tag / Link a known or new Person to the selected media file
   const handleTagPerson = async () => {
@@ -757,12 +878,21 @@ export default function MediaViewerModal({
               {Boolean(
                 selectedMedia.family_context?.suggested_caption ||
                   (selectedMedia.family_context?.identified_members &&
-                    selectedMedia.family_context.identified_members.length > 0),
+                    selectedMedia.family_context.identified_members.length > 0) ||
+                  (selectedMedia.family_context?.milestones &&
+                    selectedMedia.family_context.milestones.length > 0)
               ) && (
                 <div className="lightbox-section lightbox-family-context">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <h4 className="lightbox-family-context-title">
                       <span>🌳</span> Family Tree Kinship &amp; Context
+                      <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.75, marginLeft: 6 }}>
+                        ({galleryKinshipFactsConfig.scope === 'ALL'
+                          ? (language === 'ru' ? 'Все родственники' : 'All relatives')
+                          : galleryKinshipFactsConfig.scope === 'OWN'
+                          ? (language === 'ru' ? 'Только свои' : 'Own facts')
+                          : (language === 'ru' ? 'Близкие родственники' : 'Closest family')})
+                      </span>
                     </h4>
                   </div>
 
@@ -775,59 +905,101 @@ export default function MediaViewerModal({
                   {selectedMedia.family_context?.identified_members &&
                     selectedMedia.family_context.identified_members.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                        {selectedMedia.family_context.identified_members.map((m) => (
-                          <button
-                            key={m.name}
-                            type="button"
-                            className="badge-pill"
-                            style={{
-                              background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))',
-                              border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.5))',
-                              color: 'var(--text-primary)',
-                              cursor: onViewInFamilyTree ? 'pointer' : 'default',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.25rem',
-                            }}
-                            onClick={() => {
-                              if (onViewInFamilyTree) {
-                                onClose();
-                                onViewInFamilyTree(m.name);
-                              }
-                            }}
-                            title={onViewInFamilyTree ? `View ${m.name} in Family Tree` : m.name}
-                          >
-                            <span>👤 {m.name}</span>
-                            {m.kinshipToRoot && (
-                              <span style={{ color: 'var(--primary-color)', fontWeight: 700 }}>({m.kinshipToRoot})</span>
-                            )}
-                          </button>
-                        ))}
+                        {selectedMedia.family_context.identified_members.map((m) => {
+                          const kinshipTerm = m.kinshipToRoot || (m as any).kinship;
+                          return (
+                            <button
+                              key={m.name}
+                              type="button"
+                              className="badge-pill"
+                              style={{
+                                background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))',
+                                border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.5))',
+                                color: 'var(--text-primary)',
+                                cursor: onViewInFamilyTree ? 'pointer' : 'default',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                              }}
+                              onClick={() => {
+                                if (onViewInFamilyTree) {
+                                  onClose();
+                                  onViewInFamilyTree(m.name);
+                                }
+                              }}
+                              title={onViewInFamilyTree ? `View ${m.name} in Family Tree` : m.name}
+                            >
+                              <span>👤 {m.name}</span>
+                              {kinshipTerm && (
+                                <span style={{ color: 'var(--primary-color)', fontWeight: 700 }}>({kinshipTerm})</span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
 
                   {selectedMedia.family_context?.relationships &&
                     selectedMedia.family_context.relationships.length > 0 && (
                       <div className="lightbox-family-relationships">
-                        {selectedMedia.family_context.relationships.map((rel, idx) => (
-                          <div key={idx}>
-                            💞 <strong style={{ color: 'var(--text-primary)' }}>{rel.person1}</strong> &amp;{' '}
-                            <strong style={{ color: 'var(--text-primary)' }}>{rel.person2}</strong>: {rel.relationship}
-                          </div>
-                        ))}
+                        {selectedMedia.family_context.relationships.map((rel, idx) => {
+                          const p1 = rel.person1 || (rel as any).personA || (rel as any).person_a;
+                          const p2 = rel.person2 || (rel as any).personB || (rel as any).person_b;
+                          const r = rel.relationship || (rel as any).kinshipAtoB || (rel as any).kinship;
+                          return (
+                            <div key={idx}>
+                              💞 <strong style={{ color: 'var(--text-primary)' }}>{p1}</strong> &amp;{' '}
+                              <strong style={{ color: 'var(--text-primary)' }}>{p2}</strong>: {r}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                  {selectedMedia.family_context?.milestones &&
-                    selectedMedia.family_context.milestones.length > 0 && (
+                  {(() => {
+                    const rawMilestones = selectedMedia.family_context?.milestones;
+                    if (!rawMilestones || rawMilestones.length === 0) return null;
+
+                    const uniqueMilestones: typeof rawMilestones = [];
+                    const seenCoupleKeys = new Set<string>();
+                    const seenSharedKeys = new Set<string>();
+
+                    for (const ms of rawMilestones) {
+                      const pName = (ms.personName || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+                      const title = (ms.title || '').trim();
+                      const titleLower = title.toLowerCase();
+                      const date = (ms.date || '').trim();
+
+                      // Reciprocal couple duplicate check (e.g. "Partnership with Oxana Wagner" on Anton and "Partnership with Anton Rokhlin" on Oxana)
+                      const partnerMatch = titleLower
+                        .replace(/^(partnership with|married to|married|divorced from|divorced|separated from|брак с|партнерство с|развод с)\s+/i, '')
+                        .trim();
+                      if (partnerMatch && partnerMatch !== titleLower) {
+                        const coupleKey = [pName, partnerMatch].sort().join('___') + '_' + date;
+                        if (seenCoupleKeys.has(coupleKey)) continue;
+                        seenCoupleKeys.add(coupleKey);
+                      }
+
+                      // Exact same title & date across different relatives
+                      const sharedKey = `${titleLower}_${date}`;
+                      if (seenSharedKeys.has(sharedKey)) continue;
+                      seenSharedKeys.add(sharedKey);
+
+                      uniqueMilestones.push(ms);
+                    }
+
+                    if (uniqueMilestones.length === 0) return null;
+
+                    return (
                       <div className="lightbox-family-milestones">
-                        {selectedMedia.family_context.milestones.map((ms, idx) => (
+                        {uniqueMilestones.map((ms, idx) => (
                           <div key={idx}>
                             ⭐ {ms.personName}: {ms.title} {ms.date ? `(${ms.date})` : ''}
                           </div>
                         ))}
                       </div>
-                    )}
+                    );
+                  })()}
                 </div>
               )}
 

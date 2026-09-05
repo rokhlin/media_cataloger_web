@@ -5,7 +5,9 @@ import type {
   DateFormatStyle,
   LifeFactsFilterConfig,
   CelebrationBadgeConfig,
+  GalleryKinshipFactsConfig,
 } from '../types/tree.types.js';
+import { DEFAULT_GALLERY_KINSHIP_FACTS_CONFIG } from '../types/tree.types.js';
 
 export interface FamilyTreeState {
   selectedPersonId: string | null;
@@ -33,6 +35,8 @@ export interface FamilyTreeState {
   dateFormatStyle: DateFormatStyle;
   lifeFactsConfig: LifeFactsFilterConfig;
   celebrationConfig: CelebrationBadgeConfig;
+  galleryKinshipFactsConfig: GalleryKinshipFactsConfig;
+  treeDataVersion: number;
 }
 
 const DEFAULT_LIFE_FACTS_CONFIG: LifeFactsFilterConfig = {
@@ -64,7 +68,8 @@ function loadStoredJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
+    if (!raw) return fallback;
+    return { ...fallback, ...JSON.parse(raw) };
   } catch {
     return fallback;
   }
@@ -96,6 +101,8 @@ let globalState: FamilyTreeState = {
   dateFormatStyle: (typeof window !== 'undefined' && localStorage.getItem('ft_dateFormatStyle') as DateFormatStyle) || 'YYYY-MM-DD',
   lifeFactsConfig: loadStoredJson('ft_lifeFactsConfig', DEFAULT_LIFE_FACTS_CONFIG),
   celebrationConfig: loadStoredJson('ft_celebrationConfig', DEFAULT_CELEBRATION_CONFIG),
+  galleryKinshipFactsConfig: loadStoredJson('ft_galleryKinshipFactsConfig', DEFAULT_GALLERY_KINSHIP_FACTS_CONFIG),
+  treeDataVersion: 1,
 };
 
 const listeners = new Set<(state: FamilyTreeState) => void>();
@@ -108,6 +115,17 @@ export function setTreeStore(partial: Partial<FamilyTreeState> | ((prev: FamilyT
   const next = typeof partial === 'function' ? partial(globalState) : partial;
   globalState = { ...globalState, ...next };
   emit();
+}
+
+/**
+ * Notifies all subscribers and external components (like MediaViewerModal and MediaGallery)
+ * that family tree data (members, unions, facts, face links, or kinship settings) has updated.
+ */
+export function notifyFamilyTreeUpdated() {
+  setTreeStore((prev) => ({ treeDataVersion: (prev.treeDataVersion || 1) + 1 }));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('family_tree_updated', { detail: { timestamp: Date.now() } }));
+  }
 }
 
 export function useFamilyTreeStore() {
@@ -264,6 +282,24 @@ export function useFamilyTreeStore() {
     });
   }, []);
 
+  const setGalleryKinshipFactsConfig = useCallback((config: Partial<GalleryKinshipFactsConfig> | ((prev: GalleryKinshipFactsConfig) => GalleryKinshipFactsConfig)) => {
+    setTreeStore((prev) => {
+      const nextConfig = typeof config === 'function' ? config(prev.galleryKinshipFactsConfig) : { ...prev.galleryKinshipFactsConfig, ...config };
+      try {
+        localStorage.setItem('ft_galleryKinshipFactsConfig', JSON.stringify(nextConfig));
+      } catch {
+        // ignore
+      }
+      return {
+        galleryKinshipFactsConfig: nextConfig,
+        treeDataVersion: (prev.treeDataVersion || 1) + 1,
+      };
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('family_tree_updated', { detail: { timestamp: Date.now() } }));
+    }
+  }, []);
+
   return {
     ...state,
     selectPerson,
@@ -287,6 +323,8 @@ export function useFamilyTreeStore() {
     setDateFormatStyle,
     setLifeFactsConfig,
     setCelebrationConfig,
+    setGalleryKinshipFactsConfig,
+    notifyFamilyTreeUpdated,
     setTreeStore,
   };
 }

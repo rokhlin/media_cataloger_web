@@ -33,7 +33,7 @@
 - [x] **Feature Development Guidelines**: Create developer guidelines and standards for contributing new features.
 - [x] **TypeScript Support**: Migrate/add TypeScript support across the frontend and interface definitions.
 - [x] **Modular Architecture & Interface Structuring**: Refactor files, models, and interfaces into clean, structured layers.
-- [ ] **Error handling & recovery**: Handle errors gracefully and provide options for recovery. Define rules for:
+- [x] **Error handling & recovery**: Handle errors gracefully and provide options for recovery. Define rules for:
     - source not available
     - file not exist / deleted
     - transcription error
@@ -50,7 +50,7 @@
     - Add controls to run caching manually in `Caching strategy` section.
 - [x] **Caching strategies: on duplicates removing**: after remove duplicates, recalculate the cache for the remaining files.
 - [x] **Caching strategies: on folder remove**: after remove folder, recalculate the cache for the remaining files. It's also make sense for the folders rename operation.
-
+- [ ] **System Backup**: add to admin panel the section: `System Backups`. Provide functionality to back up and restore. Include to backup configuration data (envs, custom_dirs, custom_names), feature flags, face registry, kinshup data and metadata from db. Add In configuration file/ and in `docker-compose.yml`(optional: if not exist use from envs ) to save backups. Add cron job.
 
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
@@ -99,7 +99,7 @@ Do the same for all components. Do not change functionality. Add tests.
         - Export Styles from Component tree. create a hook that by name provides the specific style.
 - [x] **Feature flags for buttons** : Add in feature flags the functionality to toggle on/off buttons by Id. Add under `CSS Class Names (Optional)` in `Create Feature flag`
 the same input for button id's. It also should be ooptional. User can add buttonIds or clas name or together to toggle feature on/off.
-
+- [ ] **Documentation and Help**: Create One docummentation base that explaim all features. Usercan open help to see all features avaliable. Add help icon in each section to explaim the functionality. Show this help icon on hover. Add the same functionality to the feature flags edit modal. 
 ### Family Tree 
 - [x] **Represent Divorced person**: If couple is divorced, then show connection as striped line and connection icon should reflect the status. add a mechanism to expand and collapse the subtree of the divorced spounse. Only theyr own children. Don't show the subtree of the current partner.
 - [x] **Live facts: Sponse**: Add to life facts option to define maritage and divocing dates and show spounse. In person card if the person has spounse need to add an ability to view and edit spounse ditails: add start and end date if divorced.
@@ -124,8 +124,8 @@ the same input for button id's. It also should be ooptional. User can add button
         - MM/DD/YYYY, MM/YYYY
 - [x] **Russian language support**: Add Russian language support for the UI. 
 - [x] **Export to PNG/JPG/SVG for Tree and Timeline** : Add in tree settings the section with ability to export tree and timeline to PNG/JPG/SVG. Export options: Export Tree, Export Timeline. Tree should be exported with current settings and with items shown, e.g. node style, celebration badges, etc. Export with high quality. 
-- [ ] **Kinship in media gallery configuration**: add option to configure facts including in media gallery for chained person( only own facts, own and closest family members, all). add only facts which date is close (birtday, marriage, anniversary, death) and config for period before date.
-- [ ] **Refactoring: Export to PNG/JPG/SVG** : move **Export to PNG/JPG/SVG for Tree and Timeline** section under csv import export section.
+- [x] **Kinship in media gallery configuration**: add option to configure facts including in media gallery for chained person( only own facts, own and closest family members, all). add only facts which date is close (birtday, marriage, anniversary, death) and config for period before date.
+- [x] **Refactoring: Export to PNG/JPG/SVG** : move **Export to PNG/JPG/SVG for Tree and Timeline** section under csv import export section.
 
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.

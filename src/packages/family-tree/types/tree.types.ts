@@ -48,6 +48,24 @@ export interface CelebrationBadgeConfig {
   contentDisplay?: 'icon_only' | 'icon_and_text';
 }
 
+export type GalleryFactsScope = 'OWN' | 'CLOSEST_FAMILY' | 'ALL';
+
+export interface GalleryKinshipFactsConfig {
+  enabled: boolean;
+  scope: GalleryFactsScope;
+  onlyCloseEvents: boolean;
+  periodBeforeDays: number;
+  closeEventTypes: string[];
+}
+
+export const DEFAULT_GALLERY_KINSHIP_FACTS_CONFIG: GalleryKinshipFactsConfig = {
+  enabled: true,
+  scope: 'CLOSEST_FAMILY',
+  onlyCloseEvents: true,
+  periodBeforeDays: 7,
+  closeEventTypes: ['BIRTH', 'MARRIAGE', 'ANNIVERSARY', 'DEATH'],
+};
+
 export interface TreeRecord {
   id: string;
   name: string;

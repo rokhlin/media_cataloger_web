@@ -173,4 +173,36 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(appContent.includes('onNavigateToTreeSettings={() => {'), 'App.tsx should wire onNavigateToTreeSettings to SettingsScreen');
     assert.ok(appContent.includes('setActiveTab(\'family_tree\')'), 'Should switch activeTab to family_tree');
   });
+
+  it('should verify TreeSettingsTab includes Kinship in media gallery configuration section (Section 5)', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    assert.ok(content.includes('id="section-gallery-kinship"'), 'Should have section-gallery-kinship element');
+    assert.ok(content.includes('galleryKinshipFactsConfig'), 'Should use galleryKinshipFactsConfig state');
+    assert.ok(content.includes('setGalleryKinshipFactsConfig'), 'Should use setGalleryKinshipFactsConfig updater');
+    assert.ok(content.includes('section-header-gallery-kinship'), 'Should have clickable header for gallery kinship');
+    assert.ok(content.includes("scope: 'OWN'"), 'Should have OWN scope selector');
+    assert.ok(content.includes("scope: 'CLOSEST_FAMILY'"), 'Should have CLOSEST_FAMILY scope selector');
+    assert.ok(content.includes("scope: 'ALL'"), 'Should have ALL scope selector');
+    assert.ok(content.includes('period_before_days') || content.includes('periodBeforeDays'), 'Should configure period before days');
+    assert.ok(content.includes('only_close_events') || content.includes('onlyCloseEvents'), 'Should configure only close events');
+    assert.ok(content.includes('BIRTH'), 'Should support BIRTH event type');
+    assert.ok(content.includes('MARRIAGE'), 'Should support MARRIAGE event type');
+    assert.ok(content.includes('ANNIVERSARY'), 'Should support ANNIVERSARY event type');
+    assert.ok(content.includes('DEATH'), 'Should support DEATH event type');
+  });
+
+  it('should verify Refactoring: Export to PNG/JPG/SVG is placed under CSV section in Tree Settings', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    const csvIndex = content.indexOf('id="section-csv-backup"');
+    const exportIndex = content.indexOf('id="section-export-tree-timeline"');
+
+    assert.ok(csvIndex > -1, 'CSV section must exist');
+    assert.ok(exportIndex > -1, 'Export section must exist');
+    assert.ok(exportIndex > csvIndex, 'Export section must be placed after CSV section');
+  });
 });
+
