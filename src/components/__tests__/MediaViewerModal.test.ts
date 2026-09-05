@@ -106,6 +106,11 @@ describe('MediaViewerModal & Theme Adaptability', () => {
     assert.ok(content.includes('family_tree_updated'), 'MediaViewerModal must listen for family_tree_updated window event');
     assert.ok(content.includes('gallery_facts_scope: galleryKinshipFactsConfig.scope'), 'MediaViewerModal must pass active gallery_facts_scope');
     assert.ok(content.includes('seenCoupleKeys'), 'MediaViewerModal must deduplicate reciprocal couple partnership titles');
+    assert.ok(content.includes('CATEGORY_ICONS'), 'MediaViewerModal must have category icons for timeline categories');
+    assert.ok(content.includes('CATEGORY_COLORS'), 'MediaViewerModal must have category colors for timeline categories');
+    assert.ok(content.includes('lightbox-family-milestones-list'), 'MediaViewerModal must render scrollable list of timeline facts');
+    assert.ok(content.includes('ms.description'), 'MediaViewerModal must render fact descriptions if present');
+    assert.ok(content.includes('ms.location'), 'MediaViewerModal must render fact locations if present');
   });
 });
 

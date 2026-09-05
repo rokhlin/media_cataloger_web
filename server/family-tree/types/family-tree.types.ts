@@ -224,11 +224,18 @@ export interface PhotoKinshipResponse {
   suggestedCaption: string;
   summaryDescription: string;
   contextualMilestones: Array<{
+    id?: string;
     personName: string;
     eventType: string;
     title: string;
+    description?: string | null;
     date?: string | null;
+    end_date?: string | null;
+    date_is_approximate?: boolean | number;
     location?: string | null;
+    category?: string;
+    relativeName?: string;
+    relativeRelation?: string;
   }>;
 }
 

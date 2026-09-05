@@ -12,6 +12,38 @@ import { useFamilyTreeStore } from '../../packages/family-tree/state/useFamilyTr
 import MetadataEditorModal from './MetadataEditorModal';
 import './MediaViewerModal.css';
 
+const CATEGORY_ICONS: Record<string, string> = {
+  BIRTH: '👶',
+  DEATH: '🕊️',
+  MARRIAGE: '💍',
+  DIVORCE: '💔',
+  RELATIONSHIP: '💞',
+  CHILD_BORN: '🍼',
+  GRADUATION: '🎓',
+  RELOCATION: '📍',
+  TRAVEL: '✈️',
+  CAREER: '💼',
+  MILITARY: '🎖️',
+  CUSTOM: '📝',
+  ANNIVERSARY: '🥂',
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  BIRTH: '#10b981',
+  DEATH: '#94a3b8',
+  MARRIAGE: '#ec4899',
+  DIVORCE: '#f43f5e',
+  RELATIONSHIP: '#f43f5e',
+  CHILD_BORN: '#38bdf8',
+  GRADUATION: '#f59e0b',
+  RELOCATION: '#8b5cf6',
+  TRAVEL: '#06b6d4',
+  CAREER: '#6366f1',
+  MILITARY: '#14b8a6',
+  CUSTOM: '#a855f7',
+  ANNIVERSARY: '#eab308',
+};
+
 export interface MediaViewerModalProps {
   isOpen?: boolean;
   mediaFile: GalleryMediaFile | null;
@@ -375,7 +407,14 @@ export default function MediaViewerModal({
             media_date:
               selectedMedia.media_date ||
               selectedMedia.capture_date ||
-              (selectedMedia.mtime ? new Date(selectedMedia.mtime * 1000).toISOString() : undefined),
+              (() => {
+                const name = selectedMedia.filename || selectedMedia.file_path || '';
+                const m = name.match(/(\d{4})[-_](\d{2})[-_](\d{2})/);
+                if (m) {
+                  return `${m[1]}-${m[2]}-${m[3]}`;
+                }
+                return selectedMedia.mtime ? new Date(selectedMedia.mtime * 1000).toISOString() : undefined;
+              })(),
             gallery_facts_scope: galleryKinshipFactsConfig.scope,
             only_close_events: galleryKinshipFactsConfig.onlyCloseEvents,
             period_before_days: galleryKinshipFactsConfig.periodBeforeDays,
@@ -991,12 +1030,98 @@ export default function MediaViewerModal({
                     if (uniqueMilestones.length === 0) return null;
 
                     return (
-                      <div className="lightbox-family-milestones">
-                        {uniqueMilestones.map((ms, idx) => (
-                          <div key={idx}>
-                            ⭐ {ms.personName}: {ms.title} {ms.date ? `(${ms.date})` : ''}
-                          </div>
-                        ))}
+                      <div className="lightbox-family-milestones" style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))', paddingTop: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                            ⭐ {language === 'ru' ? 'Хроника событий' : 'Life Timeline Facts'} ({uniqueMilestones.length})
+                          </span>
+                        </div>
+                        <div
+                          className="lightbox-family-milestones-list"
+                          style={{
+                            maxHeight: 280,
+                            overflowY: 'auto',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.4rem',
+                            paddingRight: '4px',
+                          }}
+                        >
+                          {uniqueMilestones.map((ms, idx) => {
+                            const cat = (ms.eventType || ms.type || ms.category || 'CUSTOM').toUpperCase();
+                            const icon = CATEGORY_ICONS[cat] || '⭐';
+                            const color = CATEGORY_COLORS[cat] || '#6366f1';
+                            const approxPrefix = ms.date_is_approximate ? (language === 'ru' ? 'ок. ' : 'circa ') : '';
+                            const dateDisplay = ms.date
+                              ? `${approxPrefix}${ms.date}${ms.end_date ? ` – ${ms.end_date}` : ''}`
+                              : null;
+
+                            return (
+                              <div
+                                key={idx}
+                                style={{
+                                  background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
+                                  border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
+                                  borderRadius: 8,
+                                  padding: '6px 10px',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '2px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <span
+                                      style={{
+                                        background: `${color}25`,
+                                        color: color,
+                                        border: `1px solid ${color}40`,
+                                        borderRadius: 4,
+                                        padding: '1px 6px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                      }}
+                                    >
+                                      <span>{icon}</span>
+                                      <span>{cat}</span>
+                                    </span>
+                                    {ms.personName && (
+                                      <span
+                                        style={{
+                                          color: 'var(--text-primary)',
+                                          fontWeight: 600,
+                                          fontSize: '0.72rem',
+                                        }}
+                                      >
+                                        👤 {ms.personName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {dateDisplay && (
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 500 }}>
+                                      📅 {dateDisplay}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', lineHeight: 1.3 }}>
+                                  {ms.title}
+                                </div>
+                                {ms.description && (
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.35 }}>
+                                    {ms.description}
+                                  </div>
+                                )}
+                                {ms.location && (
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
+                                    <span>📍</span>
+                                    <span>{ms.location}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })()}

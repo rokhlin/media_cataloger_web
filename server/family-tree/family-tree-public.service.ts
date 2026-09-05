@@ -441,14 +441,8 @@ export class FamilyTreePublicService {
       const periodDays = dto.period_before_days !== undefined ? dto.period_before_days : (storedConfig.periodBeforeDays ?? 7);
       const allowedTypes = (dto.close_event_types || storedConfig.closeEventTypes || ['BIRTH', 'MARRIAGE', 'ANNIVERSARY', 'DEATH']).map((t) => t.toUpperCase());
 
-      // Determine reference date (media capture date or today)
-      let referenceDate = new Date();
-      if (dto.media_date) {
-        const parsedMedia = new Date(dto.media_date);
-        if (!isNaN(parsedMedia.getTime())) {
-          referenceDate = parsedMedia;
-        }
-      }
+      // Reference date for close events is always today
+      const referenceDate = new Date();
 
       // Build list of target persons
       interface TargetPersonInfo {
@@ -506,10 +500,13 @@ export class FamilyTreePublicService {
       for (const target of targetMap.values()) {
         const evts = db
           .prepare(`
-            SELECT id, event_type, title, event_date, location_name, source_node_id, source_event_id
+            SELECT id, person_id, event_type, title, description, event_date, end_date, date_is_approximate, location_name, source_node_id, source_event_id
             FROM ft_person_events
             WHERE person_id = ?
-            ORDER BY event_date DESC
+            ORDER BY 
+              CASE WHEN event_date IS NULL OR event_date = '' THEN 1 ELSE 0 END,
+              event_date ASC,
+              created_at ASC
           `)
           .all(target.id) as Array<any>;
 
@@ -565,18 +562,28 @@ export class FamilyTreePublicService {
             : target.name;
 
           contextualMilestones.push({
+            id: e.id,
             personName: personLabel,
             eventType: e.event_type,
             title: e.title,
-            date: e.event_date,
-            location: e.location_name,
+            description: e.description || null,
+            date: e.event_date || null,
+            end_date: e.end_date || null,
+            date_is_approximate: e.date_is_approximate ? 1 : 0,
+            location: e.location_name || null,
+            category: e.event_type,
+            relativeName: target.name,
+            relativeRelation: target.relationTerm !== 'Self' ? target.relationTerm : undefined,
           });
-
-          if (!onlyClose && contextualMilestones.filter((m) => m.personName.startsWith(target.name)).length >= 2) {
-            break;
-          }
         }
       }
+
+      // Sort merged life timeline milestones chronologically
+      contextualMilestones.sort((a, b) => {
+        const d1 = a.date || '9999-99-99';
+        const d2 = b.date || '9999-99-99';
+        return d1.localeCompare(d2);
+      });
     }
 
     return {
@@ -645,31 +652,36 @@ export class FamilyTreePublicService {
     const currentYear = refDate.getFullYear();
     const today = new Date(currentYear, refDate.getMonth(), refDate.getDate());
 
-    // 1. Annual celebration recurrence check
-    let targetYear = currentYear;
-    let annualEventDate = new Date(targetYear, month - 1, day);
-    let diffDays = Math.round((annualEventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    // 1. Annual celebration recurrence check (birthdays, wedding anniversaries, memorials)
+    const candidateYears = [currentYear - 1, currentYear, currentYear + 1];
+    let minDiffAbs = 9999;
+    let bestDiff = 9999;
+    let bestYear = currentYear;
 
-    if (diffDays < 0) {
-      targetYear = currentYear + 1;
-      annualEventDate = new Date(targetYear, month - 1, day);
-      diffDays = Math.round((annualEventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    for (const cy of candidateYears) {
+      const annualDate = new Date(cy, month - 1, day);
+      const diff = Math.round((annualDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (Math.abs(diff) < minDiffAbs) {
+        minDiffAbs = Math.abs(diff);
+        bestDiff = diff;
+        bestYear = cy;
+      }
     }
 
-    if (diffDays >= 0 && diffDays <= periodBeforeDays) {
-      return { isClose: true, daysUntil: diffDays, celebrationYear: targetYear };
+    if (minDiffAbs <= periodBeforeDays) {
+      return { isClose: true, daysUntil: bestDiff, celebrationYear: bestYear };
     }
 
     // 2. Exact event date proximity check if year exists
     if (year) {
       const exactEventDate = new Date(year, month - 1, day);
       const exactDiffDays = Math.round((exactEventDate.getTime() - refDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (exactDiffDays >= 0 && exactDiffDays <= periodBeforeDays) {
+      if (Math.abs(exactDiffDays) <= periodBeforeDays) {
         return { isClose: true, daysUntil: exactDiffDays, celebrationYear: year };
       }
     }
 
-    return { isClose: false, daysUntil: diffDays };
+    return { isClose: false, daysUntil: bestDiff };
   }
 
   /**

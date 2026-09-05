@@ -21,11 +21,19 @@ export interface FamilyRelationshipContext {
 }
 
 export interface FamilyMilestoneContext {
+  id?: string;
   personName: string;
-  type: string;
+  type?: string;
+  eventType?: string;
   title: string;
-  date?: string;
-  location?: string;
+  description?: string | null;
+  date?: string | null;
+  end_date?: string | null;
+  date_is_approximate?: boolean | number;
+  location?: string | null;
+  category?: string;
+  relativeName?: string;
+  relativeRelation?: string;
 }
 
 export interface FamilyContextData {

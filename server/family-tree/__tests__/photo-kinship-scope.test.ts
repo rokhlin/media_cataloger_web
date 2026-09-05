@@ -78,12 +78,28 @@ describe('PhotoKinshipScopeAndDynamicUpdates', () => {
     });
     treeService.addChildToUnion(union.id, { person_id: mia.id });
 
-    // Add Events:
-    // Anton own event
+    // Anton own events
     eventsService.createEvent(anton.id, {
       event_type: 'BIRTH',
       title: 'Anton Birthday',
       event_date: '1985-05-15',
+    });
+    eventsService.createEvent(anton.id, {
+      event_type: 'GRADUATION',
+      title: 'Anton University Degree',
+      description: 'Graduated in Computer Science',
+      event_date: '2007-06-20',
+      location_name: 'Haifa',
+    });
+    eventsService.createEvent(anton.id, {
+      event_type: 'CAREER',
+      title: 'Software Architect at TechCorp',
+      event_date: '2018-02-01',
+    });
+    eventsService.createEvent(anton.id, {
+      event_type: 'TRAVEL',
+      title: 'Family Journey to Japan',
+      event_date: '2019-10-15',
     });
 
     // Oxana event (spouse - closest family)
@@ -126,19 +142,34 @@ describe('PhotoKinshipScopeAndDynamicUpdates', () => {
     }
   });
 
-  it('should return only own facts when gallery_facts_scope is OWN', () => {
+  it('should return only own facts when gallery_facts_scope is OWN with complete uncapped timeline', () => {
     const res = publicService.analyzePhotoKinship({
       person_names: ['Anton Rokhlin'],
       gallery_facts_scope: 'OWN',
       only_close_events: false,
     });
 
-    assert.ok(res.contextualMilestones.length > 0, 'Should have milestones for Anton');
+    // Anton has Birth, Marriage (propagated), Child Born (propagated), Graduation, Career, Travel
+    assert.ok(res.contextualMilestones.length >= 5, 'Should have all timeline events without 2-item cap');
     const personNames = new Set(res.contextualMilestones.map((m) => m.personName));
     assert.strictEqual(personNames.has('Anton Rokhlin'), true);
     assert.strictEqual(personNames.has('Oxana Wagner'), false);
     assert.strictEqual(personNames.has('Mia Rokhlin'), false);
     assert.strictEqual(personNames.has('Dmitry Ivanov'), false);
+
+    const gradEvent = res.contextualMilestones.find((m) => m.eventType === 'GRADUATION');
+    assert.ok(gradEvent, 'Should contain graduation event from Life Timeline');
+    assert.strictEqual(gradEvent.description, 'Graduated in Computer Science');
+    assert.strictEqual(gradEvent.location, 'Haifa');
+
+    // Chronological order verification
+    for (let i = 1; i < res.contextualMilestones.length; i++) {
+      const prevDate = res.contextualMilestones[i - 1].date || '';
+      const currDate = res.contextualMilestones[i].date || '';
+      if (prevDate && currDate) {
+        assert.ok(prevDate <= currDate, `Events must be sorted chronologically: ${prevDate} <= ${currDate}`);
+      }
+    }
   });
 
   it('should return own and immediate family facts when gallery_facts_scope is CLOSEST_FAMILY', () => {
