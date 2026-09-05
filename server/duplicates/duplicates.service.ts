@@ -916,10 +916,10 @@ export class DuplicatesService {
       }
     }
 
-    // Clean up SQLite indices and database records
+    // Clean up SQLite indices, recalculate cache for remaining files, and update groups
     if (deleted.length > 0) {
       this.db.deleteMediaHashes(deleted);
-      this.mediaService.invalidateCache();
+      this.mediaService.recalculateCacheAfterDeletion(deleted);
       this.removeDeletedFromCachedGroups(deleted);
     }
 
@@ -1001,7 +1001,7 @@ export class DuplicatesService {
 
     if (movedPaths.length > 0) {
       this.db.deleteMediaHashes(movedPaths);
-      this.mediaService.invalidateCache();
+      this.mediaService.recalculateCacheAfterDeletion(movedPaths);
       this.removeDeletedFromCachedGroups(movedPaths);
     }
 

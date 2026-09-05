@@ -259,6 +259,162 @@ export class MediaCacheService {
       this.isPrefetching = false;
     }
   }
+
+  /**
+   * Remove deleted files from in-memory cache and IndexedDB
+   */
+  async removeFiles(filePaths: string[]): Promise<void> {
+    if (!filePaths || filePaths.length === 0) return;
+    const targets = new Set(filePaths.map((p) => p.replace(/\\/g, '/').toLowerCase()));
+
+    const db = await this.dbPromise;
+    const tx = db ? db.transaction(STORE_NAME, 'readwrite') : null;
+    const store = tx ? tx.objectStore(STORE_NAME) : null;
+
+    for (const key of Array.from(this.cache.keys())) {
+      const normKey = key.replace(/\\/g, '/').toLowerCase();
+      const item = this.cache.get(key);
+      const normPath = item?.file_path ? item.file_path.replace(/\\/g, '/').toLowerCase() : '';
+      const normName = item?.filename ? item.filename.toLowerCase() : '';
+
+      if (targets.has(normKey) || (normPath && targets.has(normPath)) || (normName && targets.has(normName))) {
+        this.cache.delete(key);
+        if (store) {
+          store.delete(key).catch(() => {});
+        }
+      }
+    }
+
+    this.orderedKeys = this.orderedKeys.filter((k) => this.cache.has(k));
+    this.totalCount = Math.max(0, this.totalCount - filePaths.length);
+
+    if (tx) {
+      await tx.done.catch((e) => console.warn('IndexedDB transaction failed:', e));
+    }
+  }
+
+  /**
+   * Remove files belonging to specified folders from cache and IndexedDB
+   */
+  async removeFolders(folderPaths: string[]): Promise<void> {
+    if (!folderPaths || folderPaths.length === 0) return;
+    const normFolders = folderPaths.map((f) => f.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, ''));
+
+    const db = await this.dbPromise;
+    const tx = db ? db.transaction(STORE_NAME, 'readwrite') : null;
+    const store = tx ? tx.objectStore(STORE_NAME) : null;
+    let removedCount = 0;
+
+    for (const key of Array.from(this.cache.keys())) {
+      const item = this.cache.get(key);
+      const itemPath = (item?.file_path || key).replace(/\\/g, '/').toLowerCase();
+      const itemFolder = (item?.folder || '').replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+
+      const matches = normFolders.some((rf) => itemPath.startsWith(rf + '/') || itemFolder === rf);
+      if (matches) {
+        this.cache.delete(key);
+        removedCount++;
+        if (store) {
+          store.delete(key).catch(() => {});
+        }
+      }
+    }
+
+    this.orderedKeys = this.orderedKeys.filter((k) => this.cache.has(k));
+    this.totalCount = Math.max(0, this.totalCount - removedCount);
+
+    if (tx) {
+      await tx.done.catch((e) => console.warn('IndexedDB transaction failed:', e));
+    }
+  }
+
+  /**
+   * Update cache entries when a folder is renamed
+   */
+  async renameFolder(oldPath: string, newPath: string): Promise<void> {
+    const normOld = oldPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+    const normNew = newPath.replace(/\\/g, '/').replace(/\/+$/, '');
+
+    const db = await this.dbPromise;
+    const tx = db ? db.transaction(STORE_NAME, 'readwrite') : null;
+    const store = tx ? tx.objectStore(STORE_NAME) : null;
+
+    for (const key of Array.from(this.cache.keys())) {
+      const item = this.cache.get(key);
+      if (!item) continue;
+      const itemPath = (item.file_path || '').replace(/\\/g, '/');
+      const itemFolder = (item.folder || '').replace(/\\/g, '/');
+
+      let changed = false;
+      if (itemPath.toLowerCase().startsWith(normOld + '/')) {
+        const suffix = itemPath.slice(normOld.length);
+        item.file_path = normNew + suffix;
+        changed = true;
+      }
+      if (itemFolder.toLowerCase() === normOld) {
+        item.folder = normNew;
+        changed = true;
+      }
+
+      if (changed) {
+        const newKey = item.file_path || item.filename;
+        if (newKey !== key) {
+          this.cache.delete(key);
+          this.cache.set(newKey, item);
+          const keyIdx = this.orderedKeys.indexOf(key);
+          if (keyIdx >= 0) this.orderedKeys[keyIdx] = newKey;
+          if (store) {
+            store.delete(key).catch(() => {});
+            store.put({ id: newKey, data: item }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    if (tx) {
+      await tx.done.catch((e) => console.warn('IndexedDB transaction failed:', e));
+    }
+  }
+
+  /**
+   * Get caching strategy status from backend API
+   */
+  async getCacheStatus(): Promise<any> {
+    const res = await fetch('/api/media/cache/status');
+    if (!res.ok) throw new Error(`Failed fetching cache status: ${res.statusText}`);
+    return res.json();
+  }
+
+  /**
+   * Save caching strategy configuration to backend API
+   */
+  async saveCacheStrategy(config: {
+    daily_automation_enabled?: boolean;
+    daily_schedule_time?: string;
+    incremental_only?: boolean;
+  }): Promise<any> {
+    const res = await fetch('/api/media/cache-strategy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error(`Failed saving cache strategy: ${res.statusText}`);
+    return res.json();
+  }
+
+  /**
+   * Trigger manual recache for all or specific folder
+   */
+  async recache(options: { folder?: string; incremental?: boolean } = {}): Promise<any> {
+    const res = await fetch('/api/media/cache/recache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+    if (!res.ok) throw new Error(`Failed triggering recache: ${res.statusText}`);
+    const data = await res.json();
+    return data;
+  }
 }
 
 export const mediaCacheService = new MediaCacheService();

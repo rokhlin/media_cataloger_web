@@ -28,6 +28,7 @@ export interface SettingsScreenProps {
     current_filename: string | null;
     current_folder: string | null;
   } | null;
+  onNavigateToTreeSettings?: () => void;
 }
 
 export default function SettingsScreen({
@@ -51,6 +52,7 @@ export default function SettingsScreen({
   onRefreshMedia,
   onRescanSeries,
   scanProgress,
+  onNavigateToTreeSettings,
 }: SettingsScreenProps) {
   return (
     <div className="tab-pane active" id="pane-settings">
@@ -75,6 +77,7 @@ export default function SettingsScreen({
         onRefreshMedia={onRefreshMedia}
         onRescanSeries={onRescanSeries}
         scanProgress={scanProgress}
+        onNavigateToTreeSettings={onNavigateToTreeSettings}
       />
     </div>
   );

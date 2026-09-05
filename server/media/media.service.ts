@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, Inject, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -23,8 +23,20 @@ export interface ScanStatusInfo {
   total_known: number;
 }
 
+export function computeNextScheduledRecache(scheduleTime: string): string {
+  const parts = (scheduleTime || '03:00').split(':');
+  const hours = parseInt(parts[0], 10) || 3;
+  const minutes = parseInt(parts[1], 10) || 0;
+  const next = new Date();
+  next.setHours(hours, minutes, 0, 0);
+  if (next.getTime() <= Date.now()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next.toISOString();
+}
+
 @Injectable()
-export class MediaService {
+export class MediaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MediaService.name);
 
   constructor(
@@ -39,6 +51,18 @@ export class MediaService {
   private sidecarCache: Map<string, { mtime: number; data: any }> = new Map();
   private filePathMap: Map<string, string> = new Map();
   private baseNamePathMap: Map<string, string> = new Map();
+  private automationTimer: NodeJS.Timeout | null = null;
+
+  onModuleInit() {
+    this.startDailyAutomation();
+  }
+
+  onModuleDestroy() {
+    if (this.automationTimer) {
+      clearInterval(this.automationTimer);
+      this.automationTimer = null;
+    }
+  }
 
   private scanStatus: ScanStatusInfo = {
     is_scanning: false,
@@ -133,13 +157,244 @@ export class MediaService {
     this.scanStatus.current_filename = null;
   }
 
+  /**
+   * Get real-time caching status, performance metrics, and automation state
+   */
+  getCacheStatus(): {
+    status: 'warm' | 'indexing' | 'idle';
+    total_cached_files: number;
+    memory_cached_count: number;
+    cache_timestamp: number;
+    last_cached_at: string | null;
+    next_scheduled_recache: string | null;
+    daily_automation_enabled: boolean;
+    daily_schedule_time: string;
+    incremental_only: boolean;
+    last_run_duration_ms: number;
+    input_folders: string[];
+    indexed_folders: Array<{ folder: string; count: number }>;
+  } {
+    const strategy = this.db.getCacheStrategyConfig();
+    const isScanning = this.scanStatus.is_scanning;
+    const memCount = this.cachedMediaList ? this.cachedMediaList.length : 0;
+    const status: 'warm' | 'indexing' | 'idle' = isScanning ? 'indexing' : memCount > 0 ? 'warm' : 'idle';
+
+    // Folder counts
+    const folderMap = new Map<string, number>();
+    if (this.cachedMediaList) {
+      for (const item of this.cachedMediaList) {
+        const f = item.folder || 'Unknown';
+        folderMap.set(f, (folderMap.get(f) || 0) + 1);
+      }
+    }
+    const indexedFolders = Array.from(folderMap.entries()).map(([folder, count]) => ({ folder, count }));
+
+    return {
+      status,
+      total_cached_files: memCount || strategy.last_cached_count || 0,
+      memory_cached_count: memCount,
+      cache_timestamp: this.cacheTimestamp,
+      last_cached_at: strategy.last_cached_at,
+      next_scheduled_recache: strategy.next_scheduled_recache || (strategy.daily_automation_enabled ? computeNextScheduledRecache(strategy.daily_schedule_time) : null),
+      daily_automation_enabled: strategy.daily_automation_enabled,
+      daily_schedule_time: strategy.daily_schedule_time,
+      incremental_only: strategy.incremental_only,
+      last_run_duration_ms: strategy.last_run_duration_ms,
+      input_folders: this.config.inputFolders,
+      indexed_folders: indexedFolders,
+    };
+  }
+
+  /**
+   * Save caching strategy settings and schedule next recache
+   */
+  saveCacheStrategy(config: {
+    daily_automation_enabled?: boolean;
+    daily_schedule_time?: string;
+    incremental_only?: boolean;
+  }) {
+    const updated = this.db.saveCacheStrategyConfig(config);
+    if (updated.daily_automation_enabled) {
+      const nextDate = computeNextScheduledRecache(updated.daily_schedule_time);
+      this.db.updateCacheStats({ next_scheduled_recache: nextDate });
+    }
+    return this.getCacheStatus();
+  }
+
+  /**
+   * Manual or automated recache of files (for all folders or a specific folder, incremental or full)
+   */
+  async recache(options: { folder?: string; incremental?: boolean } = {}): Promise<{
+    status: string;
+    total_cached: number;
+    duration_ms: number;
+    folder?: string;
+  }> {
+    const start = Date.now();
+    this.logger.log(`Recache initiated (folder=${options.folder || 'ALL'}, incremental=${Boolean(options.incremental)})`);
+
+    const isIncremental = Boolean(options.incremental);
+    const targetFolder = options.folder && options.folder.trim() ? options.folder.trim() : undefined;
+
+    await this.buildMediaIndex(true, targetFolder, isIncremental);
+    const duration = Date.now() - start;
+    const total = this.cachedMediaList ? this.cachedMediaList.length : 0;
+    const strategy = this.db.getCacheStrategyConfig();
+
+    const nowIso = new Date().toISOString();
+    const nextRecache = strategy.daily_automation_enabled ? computeNextScheduledRecache(strategy.daily_schedule_time) : null;
+    this.db.updateCacheStats({
+      last_cached_at: nowIso,
+      next_scheduled_recache: nextRecache || undefined,
+      last_run_duration_ms: duration,
+      last_cached_count: total,
+    });
+
+    return {
+      status: 'success',
+      total_cached: total,
+      duration_ms: duration,
+      folder: targetFolder,
+    };
+  }
+
+  /**
+   * Recalculate and update the cache for remaining files after duplicate file(s) are deleted.
+   * Keeps remaining files warm in memory and updates indices.
+   */
+  recalculateCacheAfterDeletion(deletedPaths: string[]): void {
+    if (!deletedPaths || deletedPaths.length === 0) return;
+    const deletedNorms = new Set(deletedPaths.map((p) => p.replace(/\\/g, '/').toLowerCase()));
+
+    if (this.cachedMediaList) {
+      this.cachedMediaList = this.cachedMediaList.filter((item) => {
+        const itemNorm = (item.file_path || '').replace(/\\/g, '/').toLowerCase();
+        return !deletedNorms.has(itemNorm);
+      });
+      this.cacheTimestamp = Date.now();
+      this.scanStatus.scanned_count = this.cachedMediaList.length;
+    } else {
+      // Rebuild in background if cache was empty
+      this.buildMediaIndex(false).catch((e) => this.logger.warn(`Failed rebuilding cache after duplicate deletion: ${e}`));
+    }
+
+    for (const dp of deletedPaths) {
+      const norm = dp.replace(/\\/g, '/');
+      const base = path.basename(dp).toLowerCase();
+      this.filePathMap.delete(dp);
+      this.filePathMap.delete(norm);
+      this.filePathMap.delete(dp.toLowerCase());
+      this.filePathMap.delete(norm.toLowerCase());
+      if (this.baseNamePathMap.get(base) === dp || this.baseNamePathMap.get(base) === norm) {
+        this.baseNamePathMap.delete(base);
+      }
+      this.sidecarCache.delete(dp);
+      this.sidecarCache.delete(norm);
+    }
+
+    const currentTotal = this.cachedMediaList ? this.cachedMediaList.length : 0;
+    this.db.updateCacheStats({ last_cached_count: currentTotal });
+
+    this.logger.log(`Recalculated cache after deleting ${deletedPaths.length} file(s). Remaining cache items: ${currentTotal}`);
+  }
+
+  /**
+   * Recalculate cache after input folders are removed or renamed.
+   * Filters out deleted folder paths and updates renamed folders in-place.
+   */
+  recalculateCacheAfterFolderChange(change: {
+    removedFolders?: string[];
+    renamedFolders?: Array<{ oldPath: string; newPath: string }>;
+  }): void {
+    const { removedFolders = [], renamedFolders = [] } = change;
+    if (removedFolders.length === 0 && renamedFolders.length === 0) return;
+
+    if (this.cachedMediaList) {
+      const normRemoved = removedFolders.map((f) => f.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, ''));
+
+      // Filter out removed folders
+      if (normRemoved.length > 0) {
+        this.cachedMediaList = this.cachedMediaList.filter((item) => {
+          const itemPath = (item.file_path || '').replace(/\\/g, '/').toLowerCase();
+          const itemFolder = (item.folder || '').replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+          return !normRemoved.some((rf) => itemPath.startsWith(rf + '/') || itemFolder === rf);
+        });
+      }
+
+      // Update renamed folders
+      for (const { oldPath, newPath } of renamedFolders) {
+        const normOld = oldPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+        for (const item of this.cachedMediaList) {
+          const itemPathNorm = (item.file_path || '').replace(/\\/g, '/').toLowerCase();
+          const itemFolderNorm = (item.folder || '').replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+
+          if (itemPathNorm.startsWith(normOld + '/')) {
+            const relSuffix = (item.file_path || '').replace(/\\/g, '/').slice(normOld.length);
+            item.file_path = newPath.replace(/\\/g, '/') + relSuffix;
+          }
+          if (itemFolderNorm === normOld) {
+            item.folder = newPath;
+          }
+        }
+      }
+
+      this.cacheTimestamp = Date.now();
+      this.scanStatus.scanned_count = this.cachedMediaList.length;
+    }
+
+    // Rebuild lookup maps
+    this.filePathMap.clear();
+    this.baseNamePathMap.clear();
+    if (this.cachedMediaList) {
+      for (const item of this.cachedMediaList) {
+        this.registerIndexedFile(item.file_path, item.folder);
+      }
+    }
+
+    const currentTotal = this.cachedMediaList ? this.cachedMediaList.length : 0;
+    this.db.updateCacheStats({ last_cached_count: currentTotal });
+
+    this.logger.log(
+      `Recalculated cache after folder changes (removed=${removedFolders.length}, renamed=${renamedFolders.length}). Remaining cache items: ${currentTotal}`,
+    );
+  }
+
+  /**
+   * Start periodic daily automation timer
+   */
+  startDailyAutomation(): void {
+    if (this.automationTimer) return;
+    this.automationTimer = setInterval(() => {
+      this.checkScheduledAutomation();
+    }, 60000);
+  }
+
+  private async checkScheduledAutomation(): Promise<void> {
+    try {
+      const config = this.db.getCacheStrategyConfig();
+      if (!config.daily_automation_enabled) return;
+      if (this.scanStatus.is_scanning) return;
+
+      const nextIso = config.next_scheduled_recache || computeNextScheduledRecache(config.daily_schedule_time);
+      const nextTime = new Date(nextIso).getTime();
+      const now = Date.now();
+
+      if (now >= nextTime) {
+        this.logger.log(`Executing scheduled daily caching automation (scheduled=${nextIso})`);
+        await this.recache({ incremental: config.incremental_only });
+      }
+    } catch (err: any) {
+      this.logger.warn(`Daily cache automation execution error: ${err.message}`);
+    }
+  }
+
   private get catalogerBaseUrl(): string {
     return this.config.catalogerApiUrl.replace(/\/+$/, '');
   }
 
   private inFlightScanPromise: Promise<any[]> | null = null;
 
-  async scanInputFolders(): Promise<ScannedMediaFile[]> {
+  async scanInputFolders(targetFolder?: string): Promise<ScannedMediaFile[]> {
     const results: ScannedMediaFile[] = [];
     const supported = new Set([...this.config.supportedPhotoExts, ...this.config.supportedVideoExts]);
     const visitedFiles = new Set<string>();
@@ -209,8 +464,10 @@ export class MediaService {
       }
     };
 
+    const foldersToScan = targetFolder ? [targetFolder] : this.config.inputFolders;
+
     try {
-      for (const folder of this.config.inputFolders) {
+      for (const folder of foldersToScan) {
         let scanTarget = folder;
         if (!fs.existsSync(scanTarget)) {
           // If in Docker container with Windows UNC / drive path, fallback to mounted container media_input
@@ -323,12 +580,16 @@ export class MediaService {
     }
   }
 
-  private async buildMediaIndex(_isRefresh: boolean = false): Promise<any[]> {
+  private async buildMediaIndex(
+    _isRefresh: boolean = false,
+    targetFolder?: string,
+    isIncremental: boolean = false,
+  ): Promise<any[]> {
     this.scanStatus.is_scanning = true;
     this.scanStatus.started_at = Date.now();
 
     try {
-      const scanned = await this.scanInputFolders();
+      const scanned = await this.scanInputFolders(targetFolder);
       const syncRecords = this.db.getAllSyncRecords();
       const faceCounts = this.db.getFacesCountBySourceFile();
       const allFacesByFile = this.db.getAllFacesBySourceFile();
@@ -368,6 +629,15 @@ export class MediaService {
         baseFaces[bn].push(...fList);
       }
 
+      const existingMap = new Map<string, any>();
+      if (isIncremental && this.cachedMediaList) {
+        for (const it of this.cachedMediaList) {
+          if (it && it.file_path) {
+            existingMap.set(it.file_path.toLowerCase().replace(/\\/g, '/'), it);
+          }
+        }
+      }
+
       const items: any[] = [];
       let itemIdx = 0;
       for (const { filePath, folder } of scanned) {
@@ -388,6 +658,15 @@ export class MediaService {
           mtime = stat.mtimeMs / 1000;
         } catch {
           // file unreadable
+        }
+
+        const normFp = filePath.toLowerCase().replace(/\\/g, '/');
+        if (isIncremental && existingMap.has(normFp)) {
+          const existing = existingMap.get(normFp);
+          if (existing && existing.mtime === mtime && existing.size === size) {
+            items.push(existing);
+            continue;
+          }
         }
 
       const baseName = path.basename(filePath);
@@ -698,14 +977,24 @@ export class MediaService {
       }
 
       items.push(item);
-      if (items.length % 50 === 0) {
+      if (items.length % 50 === 0 && !targetFolder) {
         this.cachedMediaList = items;
       }
     }
 
-      this.cachedMediaList = items;
+      if (targetFolder && this.cachedMediaList) {
+        const normTarget = targetFolder.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+        const remaining = this.cachedMediaList.filter((it) => {
+          const itFolder = (it.folder || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+          const itPath = (it.file_path || '').toLowerCase().replace(/\\/g, '/');
+          return itFolder !== normTarget && !itPath.startsWith(normTarget + '/');
+        });
+        this.cachedMediaList = [...remaining, ...items];
+      } else {
+        this.cachedMediaList = items;
+      }
       this.cacheTimestamp = Date.now();
-      return items;
+      return this.cachedMediaList;
     } finally {
       this.scanStatus.is_scanning = false;
       this.scanStatus.current_file = null;

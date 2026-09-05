@@ -262,6 +262,28 @@ export interface FaceRegistryTranslations {
 export interface SettingsTranslations {
   settingsTitle: string;
   tabExecution: string;
+  tabFileMetadataOperations?: string;
+  cachingStrategyTitle?: string;
+  cachingStrategyDesc?: string;
+  cacheStatusWarm?: string;
+  cacheStatusIndexing?: string;
+  cacheStatusIdle?: string;
+  cacheTotalFiles?: string;
+  cacheLastRun?: string;
+  cacheNextRun?: string;
+  cacheDailyAutomation?: string;
+  cacheDailyAutomationDesc?: string;
+  cacheScheduleTime?: string;
+  cacheIncrementalOnly?: string;
+  cacheIncrementalOnlyDesc?: string;
+  btnRecacheAll?: string;
+  btnRecacheFolder?: string;
+  btnClearCache?: string;
+  cacheFolderSelectLabel?: string;
+  cacheFolderSelectAll?: string;
+  cacheRecacheSuccess?: string;
+  cacheClearSuccess?: string;
+  cacheSaveStrategySuccess?: string;
   tabPaths: string;
   tabModels: string;
   tabPreferences: string;

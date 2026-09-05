@@ -152,4 +152,25 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(settingsContent.includes('var(--primary-gradient'), 'TreeSettingsTab should use --primary-gradient');
     assert.ok(settingsContent.includes('var(--nav-tab-active-bg)'), 'TreeSettingsTab should use --nav-tab-active-bg');
   });
+
+  it('should verify SystemSettings.tsx tab navigation contains a link to Tree settings and hooks up navigation', () => {
+    const srcDir = path.resolve(componentsDir, '../../..');
+    const systemSettingsPath = path.resolve(srcDir, 'components/settings/SystemSettings.tsx');
+    assert.ok(fs.existsSync(systemSettingsPath), 'SystemSettings.tsx should exist');
+
+    const systemSettingsContent = fs.readFileSync(systemSettingsPath, 'utf8');
+    assert.ok(systemSettingsContent.includes('id="tab-settings-tree"'), 'SystemSettings should have Tree Settings nav link');
+    assert.ok(systemSettingsContent.includes('handleGoToTreeSettings'), 'SystemSettings should handle click on Tree Settings link');
+    assert.ok(systemSettingsContent.includes('setTreeStore({ activeSubTab: \'settings\' })'), 'Should set activeSubTab to settings in treeStore');
+    assert.ok(systemSettingsContent.includes('onNavigateToTreeSettings'), 'SystemSettings should accept onNavigateToTreeSettings prop');
+
+    const settingsScreenPath = path.resolve(srcDir, 'screens/SettingsScreen.tsx');
+    const settingsScreenContent = fs.readFileSync(settingsScreenPath, 'utf8');
+    assert.ok(settingsScreenContent.includes('onNavigateToTreeSettings'), 'SettingsScreen should accept and forward onNavigateToTreeSettings');
+
+    const appPath = path.resolve(srcDir, 'App.tsx');
+    const appContent = fs.readFileSync(appPath, 'utf8');
+    assert.ok(appContent.includes('onNavigateToTreeSettings={() => {'), 'App.tsx should wire onNavigateToTreeSettings to SettingsScreen');
+    assert.ok(appContent.includes('setActiveTab(\'family_tree\')'), 'Should switch activeTab to family_tree');
+  });
 });

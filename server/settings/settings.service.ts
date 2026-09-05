@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AppConfigService, normalizeConfigPath } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { MediaService } from '../media/media.service.js';
 
 const execAsync = promisify(exec);
 
@@ -25,6 +26,7 @@ export class SettingsService {
   constructor(
     @Inject(AppConfigService) private readonly config: AppConfigService,
     @Inject(DatabaseService) private readonly db: DatabaseService,
+    @Optional() @Inject(MediaService) private readonly mediaService?: MediaService,
   ) { }
 
   getSettings() {
@@ -59,6 +61,7 @@ export class SettingsService {
   }
 
   updateSettings(dto: Partial<import('./dto/settings.dto.js').SettingsUpdateRequestDto>) {
+    const previousInputs = [...this.config.inputFolders];
     const cleanedInputs: string[] = [];
     if (dto.input_folders) {
       for (const inp of dto.input_folders) {
@@ -79,6 +82,16 @@ export class SettingsService {
     if (dto.local_max_workers !== undefined) additional.LOCAL_MAX_WORKERS = Number(dto.local_max_workers);
     if (dto.whisper_model !== undefined) additional.WHISPER_MODEL = dto.whisper_model;
     if (dto.preserve_structure !== undefined) additional.PRESERVE_STRUCTURE = Boolean(dto.preserve_structure);
+
+    // Identify removed or renamed folders for recalculating cache
+    if (dto.input_folders && this.mediaService) {
+      const normCleaned = new Set(cleanedInputs.map((p) => p.toLowerCase().replace(/\\/g, '/')));
+      const removedFolders = previousInputs.filter((p) => !normCleaned.has(p.toLowerCase().replace(/\\/g, '/')));
+
+      if (removedFolders.length > 0) {
+        this.mediaService.recalculateCacheAfterFolderChange({ removedFolders });
+      }
+    }
 
     this.config.saveSettings(
       cleanedInputs.length > 0 ? cleanedInputs : undefined,

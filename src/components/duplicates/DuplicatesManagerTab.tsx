@@ -8,6 +8,7 @@ import type {
 } from '../../models/media';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../services/authContext';
+import { mediaCacheService } from '../../services/mediaCacheService';
 import './DuplicatesManagerTab.css';
 
 export interface DuplicatesManagerTabProps {
@@ -218,6 +219,9 @@ export default function DuplicatesManagerTab({
 
       if (res.ok) {
         const data = await res.json();
+        if (data.deletedFiles && Array.isArray(data.deletedFiles)) {
+          await mediaCacheService.removeFiles(data.deletedFiles);
+        }
         alert(t('duplicatesDeleteSuccess' as any) || `Successfully deleted ${data.deletedCount} duplicate file(s).`);
         setSelectedFiles(new Set());
         setIsDeleteConfirmOpen(false);
@@ -251,6 +255,10 @@ export default function DuplicatesManagerTab({
 
       if (res.ok) {
         const data = await res.json();
+        if (data.movedFiles && Array.isArray(data.movedFiles)) {
+          const originalPaths = data.movedFiles.map((m: any) => m.original);
+          await mediaCacheService.removeFiles(originalPaths);
+        }
         alert(t('duplicatesMoveSuccess' as any) || `Successfully moved ${data.movedCount} duplicate file(s).`);
         setSelectedFiles(new Set());
         setIsMoveModalOpen(false);

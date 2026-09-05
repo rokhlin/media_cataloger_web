@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
   - Automatic bidirectional synchronization with on-disk sidecar JSON files.
   - Interactive multi-tab in-viewer metadata editor modal in `MediaGallery` with instant reactive UI refresh and 100% English 🇬🇧 and Russian 🇷🇺 localization.
+- **Advanced Caching Strategies & Management System**:
+  - Renamed `Execution controls` settings tab to `File metadata operations` (`tabFileMetadataOperations`) with full English and Russian localization.
+  - Implemented `Caching strategy` control section in `SystemSettings` featuring cache metrics (item count, memory footprint, hit rate, last cache time, next scheduled run).
+  - High-performance caching for static media libraries with manual single-folder or global recache triggers (`/api/media/cache/recache`).
+  - Automated daily recaching background job (`checkScheduledAutomation`) with configurable time-of-day scheduling and incremental-only modes.
+  - In-place warm cache recalculation on duplicate file deletion (`recalculateCacheAfterDeletion`), avoiding cold cache drops across both server and client IndexedDB.
+  - Dynamic cache recalculation on folder removal and rename operations (`recalculateCacheAfterFolderChange`).
+  - Added dedicated navigation link button to **Tree Settings** (`tab-settings-tree`) inside `SystemSettings` tabs navigation, automatically switching to the Family Tree screen and activating the Tree Settings subtab.
 - **Developer Guidelines & Rules Documentation**:
   - `.agents/rules/jest-testing-for-js-ts.md`: Strict testing requirements, mock isolation, and Jest best practices.
   - `.agents/rules/nest-js-development-best-practices.md`: Modular backend architecture and clean service standards.

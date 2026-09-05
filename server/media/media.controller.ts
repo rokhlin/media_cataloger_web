@@ -144,6 +144,42 @@ export class MediaController {
     return this.mediaService.getScanStatus();
   }
 
+  @Get('cache/status')
+  @ApiOperation({ summary: 'Get current caching strategy status, stats, and next schedule' })
+  async getCacheStatus() {
+    return this.mediaService.getCacheStatus();
+  }
+
+  @Post('cache/recache')
+  @ApiOperation({ summary: 'Trigger manual recaching for all folders or a specific folder' })
+  async recache(@Body() body?: { folder?: string; incremental?: boolean }) {
+    return this.mediaService.recache({
+      folder: body?.folder,
+      incremental: body?.incremental,
+    });
+  }
+
+  @Post('cache/clear')
+  @ApiOperation({ summary: 'Clear in-memory and sidecar media cache' })
+  async clearCache() {
+    this.mediaService.invalidateCache();
+    return { status: 'success', message: 'Cache cleared successfully' };
+  }
+
+  @Get('cache-strategy')
+  @ApiOperation({ summary: 'Get cache strategy configuration and execution metrics' })
+  async getCacheStrategy() {
+    return this.mediaService.getCacheStatus();
+  }
+
+  @Post('cache-strategy')
+  @ApiOperation({ summary: 'Save daily cache automation configuration' })
+  async saveCacheStrategy(
+    @Body() body: { daily_automation_enabled?: boolean; daily_schedule_time?: string; incremental_only?: boolean },
+  ) {
+    return this.mediaService.saveCacheStrategy(body);
+  }
+
   @Get('thumbnail')
   @ApiOperation({ summary: 'Get or generate a fast cached WebP thumbnail for a media file' })
   @ApiQuery({ name: 'path', required: false, description: 'Full path or relative path to media file' })

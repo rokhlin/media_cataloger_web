@@ -214,6 +214,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       INSERT OR IGNORE INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy)
       VALUES (1, 'auto', 0.90, 3.0, 'highest_resolution');
 
+      CREATE TABLE IF NOT EXISTS cache_strategy (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        daily_automation_enabled INTEGER NOT NULL DEFAULT 1,
+        daily_schedule_time TEXT NOT NULL DEFAULT '03:00',
+        incremental_only INTEGER NOT NULL DEFAULT 1,
+        last_cached_at TEXT,
+        next_scheduled_recache TEXT,
+        last_run_duration_ms INTEGER DEFAULT 0,
+        last_cached_count INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      INSERT OR IGNORE INTO cache_strategy (id, daily_automation_enabled, daily_schedule_time, incremental_only)
+      VALUES (1, 1, '03:00', 1);
+
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -1580,6 +1595,94 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `).run(updated);
 
     return this.getDuplicateConfig();
+  }
+
+  getCacheStrategyConfig(): {
+    daily_automation_enabled: boolean;
+    daily_schedule_time: string;
+    incremental_only: boolean;
+    last_cached_at: string | null;
+    next_scheduled_recache: string | null;
+    last_run_duration_ms: number;
+    last_cached_count: number;
+    updated_at: string;
+  } {
+    const db = this.getDb();
+    const row = db.prepare(`SELECT * FROM cache_strategy WHERE id = 1`).get() as any;
+    if (!row) {
+      return {
+        daily_automation_enabled: true,
+        daily_schedule_time: '03:00',
+        incremental_only: true,
+        last_cached_at: null,
+        next_scheduled_recache: null,
+        last_run_duration_ms: 0,
+        last_cached_count: 0,
+        updated_at: new Date().toISOString(),
+      };
+    }
+    return {
+      daily_automation_enabled: Boolean(row.daily_automation_enabled),
+      daily_schedule_time: row.daily_schedule_time || '03:00',
+      incremental_only: Boolean(row.incremental_only),
+      last_cached_at: row.last_cached_at || null,
+      next_scheduled_recache: row.next_scheduled_recache || null,
+      last_run_duration_ms: Number(row.last_run_duration_ms) || 0,
+      last_cached_count: Number(row.last_cached_count) || 0,
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+  }
+
+  saveCacheStrategyConfig(config: {
+    daily_automation_enabled?: boolean;
+    daily_schedule_time?: string;
+    incremental_only?: boolean;
+  }): any {
+    const db = this.getDb();
+    const current = this.getCacheStrategyConfig();
+    const updated = {
+      daily_automation_enabled: config.daily_automation_enabled !== undefined ? (config.daily_automation_enabled ? 1 : 0) : (current.daily_automation_enabled ? 1 : 0),
+      daily_schedule_time: config.daily_schedule_time !== undefined ? config.daily_schedule_time : current.daily_schedule_time,
+      incremental_only: config.incremental_only !== undefined ? (config.incremental_only ? 1 : 0) : (current.incremental_only ? 1 : 0),
+    };
+
+    db.prepare(`
+      INSERT INTO cache_strategy (id, daily_automation_enabled, daily_schedule_time, incremental_only, updated_at)
+      VALUES (1, @daily_automation_enabled, @daily_schedule_time, @incremental_only, datetime('now', 'localtime'))
+      ON CONFLICT(id) DO UPDATE SET
+        daily_automation_enabled = excluded.daily_automation_enabled,
+        daily_schedule_time = excluded.daily_schedule_time,
+        incremental_only = excluded.incremental_only,
+        updated_at = datetime('now', 'localtime')
+    `).run(updated);
+
+    return this.getCacheStrategyConfig();
+  }
+
+  updateCacheStats(stats: {
+    last_cached_at?: string;
+    next_scheduled_recache?: string;
+    last_run_duration_ms?: number;
+    last_cached_count?: number;
+  }): void {
+    const db = this.getDb();
+    const current = this.getCacheStrategyConfig();
+    const updated = {
+      last_cached_at: stats.last_cached_at !== undefined ? stats.last_cached_at : current.last_cached_at,
+      next_scheduled_recache: stats.next_scheduled_recache !== undefined ? stats.next_scheduled_recache : current.next_scheduled_recache,
+      last_run_duration_ms: stats.last_run_duration_ms !== undefined ? stats.last_run_duration_ms : current.last_run_duration_ms,
+      last_cached_count: stats.last_cached_count !== undefined ? stats.last_cached_count : current.last_cached_count,
+    };
+
+    db.prepare(`
+      UPDATE cache_strategy SET
+        last_cached_at = @last_cached_at,
+        next_scheduled_recache = @next_scheduled_recache,
+        last_run_duration_ms = @last_run_duration_ms,
+        last_cached_count = @last_cached_count,
+        updated_at = datetime('now', 'localtime')
+      WHERE id = 1
+    `).run(updated);
   }
 }
 

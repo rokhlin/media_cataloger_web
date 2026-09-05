@@ -997,6 +997,10 @@ function AppMain() {
                 await loadMediaFiles(true);
               }}
               scanProgress={scanProgress}
+              onNavigateToTreeSettings={() => {
+                setActiveTab('family_tree');
+                setTreeStore({ activeSubTab: 'settings' });
+              }}
             />
           )}
 
