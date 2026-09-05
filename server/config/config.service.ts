@@ -387,5 +387,42 @@ export class AppConfigService {
       ui_base_url: process.env.UI_PUBLIC_URL || `http://localhost:${this.port}`,
     };
   }
+
+  get backupPath(): string {
+    const saved = this.getSavedSettings();
+    const savedBackupPath = saved.BACKUP_PATH || saved.backup_path;
+    if (savedBackupPath && String(savedBackupPath).trim()) {
+      return normalizeConfigPath(String(savedBackupPath).trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
+    }
+    if (process.env.BACKUP_PATH && process.env.BACKUP_PATH.trim()) {
+      return normalizeConfigPath(process.env.BACKUP_PATH.trim(), this.projectRoot, { isDev: this.isDev, fallbackType: 'output' });
+    }
+    return this.isDev
+      ? path.resolve(this.projectRoot, 'data', 'backups')
+      : '/app/backups';
+  }
+
+  get backupCron(): string {
+    const saved = this.getSavedSettings();
+    return saved.BACKUP_CRON || process.env.BACKUP_CRON || '0 2 * * *';
+  }
+
+  get backupRetentionCount(): number {
+    const saved = this.getSavedSettings();
+    const count = saved.BACKUP_RETENTION_COUNT ?? process.env.BACKUP_RETENTION_COUNT;
+    return count ? Number(count) : 10;
+  }
+
+  get backupEnabled(): boolean {
+    const saved = this.getSavedSettings();
+    if (saved.BACKUP_ENABLED !== undefined) {
+      return Boolean(saved.BACKUP_ENABLED);
+    }
+    if (process.env.BACKUP_ENABLED !== undefined) {
+      return process.env.BACKUP_ENABLED !== 'false' && process.env.BACKUP_ENABLED !== '0';
+    }
+    return true;
+  }
 }
+
 

@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.8.0] - Unreleased
 
 ### Added
+- **System Backup & Restore Architecture (`server/backup/`, `AdminBackupTab`)**:
+  - Full system backup and restore engine capturing SQLite databases (`catalog_history.db` and `family_tree.db`), configuration data (`settings.json`, env snapshots, custom folder directories), feature flags (`feature_flags.json`), kinship relations, and face registry.
+  - Zero-downtime atomic hot snapshots using `better-sqlite3`'s native SQLite online backup API (`db.backup()`), guaranteeing database consistency under concurrent reads/writes.
+  - Automatic pre-restore safety snapshot creation protecting existing databases before applying any restore operation.
+  - Configurable background cron scheduler (`BackupSchedulerService`) using `cron` with customizable expressions (e.g. daily at 02:00 AM) and dynamic runtime schedule updates.
+  - Automated retention management pruning oldest backup archives beyond the configurable threshold.
+  - REST API suite under `/api/backup` for listing, creating, downloading, uploading, restoring, deleting, and configuring backups with RBAC permission protection (`admin_panel`).
+  - Container and environment integration: mapped `BACKUP_PATH` in `docker-compose.yml` (`/app/backups`), `.env`, and `.env.example`.
+  - Added dedicated `System Backups` subtab in the Admin Panel (`AdminBackupTab`) with storage statistics, scheduled cron status, archive downloads, upload dropzone, and selective component restore modal.
+  - Full English and Russian localization for all backup metrics, action buttons, and modal dialogs.
 - **Advanced Caching Strategies & Management System**:
   - Renamed `Execution controls` settings tab to `File metadata operations` (`tabFileMetadataOperations`) with full English 🇬🇧 and Russian 🇷🇺 localization.
   - Implemented `Caching strategy` control section in `SystemSettings` featuring real-time cache metrics (item count, memory footprint, hit rate, last cache time, next scheduled run).

@@ -27,6 +27,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return this.db!;
   }
 
+  public reconnect(): Database {
+    this.logger.log('Reconnecting SQLite database connection...');
+    this.close();
+    this.initDb();
+    return this.getDb();
+  }
+
   public close() {
     if (this.db) {
       try {

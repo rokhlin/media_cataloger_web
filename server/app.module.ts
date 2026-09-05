@@ -10,6 +10,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { CatalogerClientModule } from './cataloger-client/cataloger.module.js';
 import { FamilyTreeModule } from './family-tree/family-tree.module.js';
 import { DuplicatesModule } from './duplicates/duplicates.module.js';
+import { BackupModule } from './backup/backup.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { DuplicatesModule } from './duplicates/duplicates.module.js';
     CatalogerClientModule,
     FamilyTreeModule,
     DuplicatesModule,
+    BackupModule,
   ],
 })
 export class AppModule {}

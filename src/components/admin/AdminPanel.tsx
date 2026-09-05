@@ -3,6 +3,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, DEFAULT_FEATURE_FLAG_PRESETS } from '../../services/featureFlagsContext';
 import UserManagementTab from './UserManagementTab';
 import AdminVaultTab from './AdminVaultTab';
+import AdminBackupTab from './AdminBackupTab';
 import type { FeatureFlag } from '../../models/featureFlags';
 import type { StatusInfo } from '../../models/status';
 import type { GalleryMediaFile } from '../gallery/MediaGallery';
@@ -19,7 +20,7 @@ interface AdminPanelProps {
   uiSettings?: UISettings;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
-  initialSubTab?: 'flags' | 'users' | 'vault';
+  initialSubTab?: 'flags' | 'users' | 'vault' | 'backups';
 }
 
 export default function AdminPanel({
@@ -47,7 +48,7 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault'>(initialSubTab);
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault' | 'backups'>(initialSubTab);
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -424,6 +425,15 @@ export default function AdminPanel({
         >
           🔒 {t('adminTabVault' as any) || 'Secret Vault & Privacy'}
         </button>
+        <button
+          type="button"
+          className={`btn ${activeAdminSubTab === 'backups' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveAdminSubTab('backups')}
+          id="tab-btn-admin-backups"
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
+        >
+          💾 {t('adminTabBackups' as any) || 'System Backups'}
+        </button>
       </div>
 
       {activeAdminSubTab === 'users' ? (
@@ -437,6 +447,8 @@ export default function AdminPanel({
           onReloadFaces={onReloadFaces}
           onViewInFamilyTree={onViewInFamilyTree}
         />
+      ) : activeAdminSubTab === 'backups' ? (
+        <AdminBackupTab />
       ) : (
         <>
           {/* 1. Feature Flags Management Dropdown / Accordion Section */}

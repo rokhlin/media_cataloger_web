@@ -50,7 +50,7 @@
     - Add controls to run caching manually in `Caching strategy` section.
 - [x] **Caching strategies: on duplicates removing**: after remove duplicates, recalculate the cache for the remaining files.
 - [x] **Caching strategies: on folder remove**: after remove folder, recalculate the cache for the remaining files. It's also make sense for the folders rename operation.
-- [ ] **System Backup**: add to admin panel the section: `System Backups`. Provide functionality to back up and restore. Include to backup configuration data (envs, custom_dirs, custom_names), feature flags, face registry, kinshup data and metadata from db. Add In configuration file/ and in `docker-compose.yml`(optional: if not exist use from envs ) to save backups. Add cron job.
+- [x] **System Backup**: add to admin panel the section: `System Backups`. Provide functionality to back up and restore. Include to backup configuration data (envs, custom_dirs, custom_names), feature flags, face registry, kinshup data and metadata from db. Add In configuration file/ and in `docker-compose.yml`(optional: if not exist use from envs ) to save backups. Add cron job.
 
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
