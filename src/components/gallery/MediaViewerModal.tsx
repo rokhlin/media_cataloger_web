@@ -892,13 +892,12 @@ export default function MediaViewerModal({
                 <div className="lightbox-detail-row">
                   <span className="lightbox-label">{t('status')}:</span>
                   <span
-                    className={`badge-pill ${
-                      selectedMedia.status === 'PROCESSED'
-                        ? 'badge-pill-success'
-                        : selectedMedia.status === 'PENDING'
+                    className={`badge-pill ${selectedMedia.status === 'PROCESSED'
+                      ? 'badge-pill-success'
+                      : selectedMedia.status === 'PENDING'
                         ? 'badge-pill-warning'
                         : 'badge-pill-secondary'
-                    }`}
+                      }`}
                   >
                     {selectedMedia.status || 'UNPROCESSED'}
                   </span>
@@ -916,217 +915,195 @@ export default function MediaViewerModal({
               {/* Family Tree Kinship & Context Section */}
               {Boolean(
                 selectedMedia.family_context?.suggested_caption ||
-                  (selectedMedia.family_context?.identified_members &&
-                    selectedMedia.family_context.identified_members.length > 0) ||
-                  (selectedMedia.family_context?.milestones &&
-                    selectedMedia.family_context.milestones.length > 0)
+                (selectedMedia.family_context?.identified_members &&
+                  selectedMedia.family_context.identified_members.length > 0) ||
+                (selectedMedia.family_context?.milestones &&
+                  selectedMedia.family_context.milestones.length > 0)
               ) && (
-                <div className="lightbox-section lightbox-family-context">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <h4 className="lightbox-family-context-title">
-                      <span>🌳</span> {t('lightboxFamilyKinshipContextTitle') || (language === 'ru' ? 'Родство и контекст семейного древа' : 'Family Tree Kinship & Context')}
-                      <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.75, marginLeft: 6 }}>
-                        ({galleryKinshipFactsConfig.scope === 'ALL'
-                          ? (t('lightboxScopeAllRelatives') || (language === 'ru' ? 'Все родственники' : 'All relatives'))
-                          : galleryKinshipFactsConfig.scope === 'OWN'
-                          ? (t('lightboxScopeOwnFacts') || (language === 'ru' ? 'Только свои' : 'Own facts'))
-                          : (t('lightboxScopeClosestFamily') || (language === 'ru' ? 'Близкие родственники' : 'Closest family'))})
-                      </span>
-                    </h4>
-                  </div>
-
-                  {selectedMedia.family_context?.suggested_caption && (
-                    <p className="lightbox-family-caption">
-                      ✨ &ldquo;{selectedMedia.family_context.suggested_caption}&rdquo;
-                    </p>
-                  )}
-
-                  {selectedMedia.family_context?.identified_members &&
-                    selectedMedia.family_context.identified_members.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                        {selectedMedia.family_context.identified_members.map((m) => {
-                          const kinshipTerm = m.kinshipToRoot || (m as any).kinship;
-                          return (
-                            <button
-                              key={m.name}
-                              type="button"
-                              className="badge-pill"
-                              style={{
-                                background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))',
-                                border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.5))',
-                                color: 'var(--text-primary)',
-                                cursor: onViewInFamilyTree ? 'pointer' : 'default',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.25rem',
-                              }}
-                              onClick={() => {
-                                if (onViewInFamilyTree) {
-                                  onClose();
-                                  onViewInFamilyTree(m.name);
-                                }
-                              }}
-                              title={onViewInFamilyTree ? (language === 'ru' ? `Открыть ${m.name} в семейном древе` : `View ${m.name} in Family Tree`) : m.name}
-                            >
-                              <span>👤 {m.name}</span>
-                              {kinshipTerm && (
-                                <span style={{ color: 'var(--primary-color)', fontWeight: 700 }}>({kinshipTerm})</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  {selectedMedia.family_context?.relationships &&
-                    selectedMedia.family_context.relationships.length > 0 && (
-                      <div className="lightbox-family-relationships">
-                        {selectedMedia.family_context.relationships.map((rel, idx) => {
-                          const p1 = rel.person1 || (rel as any).personA || (rel as any).person_a;
-                          const p2 = rel.person2 || (rel as any).personB || (rel as any).person_b;
-                          const r = rel.relationship || (rel as any).kinshipAtoB || (rel as any).kinship;
-                          return (
-                            <div key={idx}>
-                              💞 <strong style={{ color: 'var(--text-primary)' }}>{p1}</strong> &amp;{' '}
-                              <strong style={{ color: 'var(--text-primary)' }}>{p2}</strong>: {r}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  {(() => {
-                    const rawMilestones = selectedMedia.family_context?.milestones;
-                    if (!rawMilestones || rawMilestones.length === 0) return null;
-
-                    const uniqueMilestones: typeof rawMilestones = [];
-                    const seenCoupleKeys = new Set<string>();
-                    const seenSharedKeys = new Set<string>();
-
-                    for (const ms of rawMilestones) {
-                      const pName = (ms.personName || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-                      const title = (ms.title || '').trim();
-                      const titleLower = title.toLowerCase();
-                      const date = (ms.date || '').trim();
-
-                      // Reciprocal couple duplicate check (e.g. "Partnership with Oxana Wagner" on Anton and "Partnership with Anton Rokhlin" on Oxana)
-                      const partnerMatch = titleLower
-                        .replace(/^(partnership with|married to|married|divorced from|divorced|separated from|брак с|партнерство с|развод с)\s+/i, '')
-                        .trim();
-                      if (partnerMatch && partnerMatch !== titleLower) {
-                        const coupleKey = [pName, partnerMatch].sort().join('___') + '_' + date;
-                        if (seenCoupleKeys.has(coupleKey)) continue;
-                        seenCoupleKeys.add(coupleKey);
-                      }
-
-                      // Exact same title & date across different relatives
-                      const sharedKey = `${titleLower}_${date}`;
-                      if (seenSharedKeys.has(sharedKey)) continue;
-                      seenSharedKeys.add(sharedKey);
-
-                      uniqueMilestones.push(ms);
-                    }
-
-                    if (uniqueMilestones.length === 0) return null;
-
-                    return (
-                      <div className="lightbox-family-milestones" style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))', paddingTop: '0.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                            ⭐ {t('lightboxLifeTimelineFacts') || (language === 'ru' ? 'Хроника событий' : 'Life Timeline Facts')} ({uniqueMilestones.length})
-                          </span>
-                        </div>
-                        <div
-                          className="lightbox-family-milestones-list"
-                          style={{
-                            maxHeight: 280,
-                            overflowY: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.4rem',
-                            paddingRight: '4px',
-                          }}
-                        >
-                          {uniqueMilestones.map((ms, idx) => {
-                            const cat = (ms.eventType || ms.type || ms.category || 'CUSTOM').toUpperCase();
-                            const icon = CATEGORY_ICONS[cat] || '⭐';
-                            const color = CATEGORY_COLORS[cat] || '#6366f1';
-                            const approxPrefix = ms.date_is_approximate ? (language === 'ru' ? 'ок. ' : 'circa ') : '';
-                            const dateDisplay = ms.date
-                              ? `${approxPrefix}${ms.date}${ms.end_date ? ` – ${ms.end_date}` : ''}`
-                              : null;
-
+                  <div className="lightbox-section lightbox-family-context">
+                    {selectedMedia.family_context?.relationships &&
+                      selectedMedia.family_context.relationships.length > 0 && (
+                        <div className="lightbox-family-relationships">
+                          {selectedMedia.family_context.relationships.map((rel, idx) => {
+                            const p1 = rel.person1 || (rel as any).personA || (rel as any).person_a;
+                            const p2 = rel.person2 || (rel as any).personB || (rel as any).person_b;
+                            const r = rel.relationship || (rel as any).kinshipAtoB || (rel as any).kinship;
                             return (
-                              <div
-                                key={idx}
-                                style={{
-                                  background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
-                                  border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
-                                  borderRadius: 8,
-                                  padding: '6px 10px',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '2px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                    <span
-                                      style={{
-                                        background: `${color}25`,
-                                        color: color,
-                                        border: `1px solid ${color}40`,
-                                        borderRadius: 4,
-                                        padding: '1px 6px',
-                                        fontSize: '0.65rem',
-                                        fontWeight: 700,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '3px',
-                                      }}
-                                    >
-                                      <span>{icon}</span>
-                                      <span>{cat}</span>
-                                    </span>
-                                    {ms.personName && (
-                                      <span
-                                        style={{
-                                          color: 'var(--text-primary)',
-                                          fontWeight: 600,
-                                          fontSize: '0.72rem',
-                                        }}
-                                      >
-                                        👤 {ms.personName}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {dateDisplay && (
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 500 }}>
-                                      📅 {dateDisplay}
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', lineHeight: 1.3 }}>
-                                  {ms.title}
-                                </div>
-                                {ms.description && (
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.35 }}>
-                                    {ms.description}
-                                  </div>
-                                )}
-                                {ms.location && (
-                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
-                                    <span>📍</span>
-                                    <span>{ms.location}</span>
-                                  </div>
-                                )}
+                              <div key={idx}>
+                                💞 <strong style={{ color: 'var(--text-primary)' }}>{p1}</strong> &amp;{' '}
+                                <strong style={{ color: 'var(--text-primary)' }}>{p2}</strong>: {r}
                               </div>
                             );
                           })}
                         </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
+                      )}
+
+                    {(() => {
+                      const rawMilestones = selectedMedia.family_context?.milestones;
+                      if (!rawMilestones || rawMilestones.length === 0) return null;
+
+                      const uniqueMilestones: typeof rawMilestones = [];
+                      const seenCoupleKeys = new Set<string>();
+                      const seenSharedKeys = new Set<string>();
+
+                      for (const ms of rawMilestones) {
+                        const pName = (ms.personName || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+                        const title = (ms.title || '').trim();
+                        const titleLower = title.toLowerCase();
+                        const date = (ms.date || '').trim();
+
+                        // Reciprocal couple duplicate check (e.g. "Partnership with Oxana Wagner" on Anton and "Partnership with Anton Rokhlin" on Oxana)
+                        const partnerMatch = titleLower
+                          .replace(/^(partnership with|married to|married|divorced from|divorced|separated from|брак с|партнерство с|развод с)\s+/i, '')
+                          .trim();
+                        if (partnerMatch && partnerMatch !== titleLower) {
+                          const coupleKey = [pName, partnerMatch].sort().join('___') + '_' + date;
+                          if (seenCoupleKeys.has(coupleKey)) continue;
+                          seenCoupleKeys.add(coupleKey);
+                        }
+
+                        // Exact same title & date across different relatives
+                        const sharedKey = `${titleLower}_${date}`;
+                        if (seenSharedKeys.has(sharedKey)) continue;
+                        seenSharedKeys.add(sharedKey);
+
+                        uniqueMilestones.push(ms);
+                      }
+
+                      if (uniqueMilestones.length === 0) return null;
+
+                      return (
+                        <div className="lightbox-family-milestones" style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))', paddingTop: '0.5rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <span className="lightbox-family-caption">
+                              ✨ Important facts for You
+                            </span>
+                            {selectedMedia.family_context?.identified_members &&
+                              selectedMedia.family_context.identified_members.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.4rem' }}>
+                                  {selectedMedia.family_context.identified_members.map((m) => {
+                                    return (
+                                      <button
+                                        key={m.name}
+                                        type="button"
+                                        className="badge-pill"
+                                        style={{
+                                          background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))',
+                                          border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.5))',
+                                          color: 'var(--text-primary)',
+                                          cursor: onViewInFamilyTree ? 'pointer' : 'default',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                        }}
+                                        onClick={() => {
+                                          if (onViewInFamilyTree) {
+                                            onClose();
+                                            onViewInFamilyTree(m.name);
+                                          }
+                                        }}
+                                        title={onViewInFamilyTree ? t('viewInFamilyTree', { name: m.name }) : m.name}
+                                      >
+                                        <span className="lightbox-badge-pill-text-variant-1">👤 {m.name}</span>
+                                        <span className="lightbox-badge-pill-text-variant-2" style={{ color: 'var(--primary-color)', fontWeight: 700 }}>Me In Family Tree</span>
+
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                          </div>
+                          <div
+                            className="lightbox-family-milestones-list"
+                            style={{
+                              maxHeight: 280,
+                              overflowY: 'auto',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.4rem',
+                              paddingRight: '4px',
+                            }}
+                          >
+                            {uniqueMilestones.map((ms, idx) => {
+                              const cat = (ms.eventType || ms.type || ms.category || 'CUSTOM').toUpperCase();
+                              const icon = CATEGORY_ICONS[cat] || '⭐';
+                              const color = CATEGORY_COLORS[cat] || '#6366f1';
+                              const approxPrefix = ms.date_is_approximate ? (language === 'ru' ? 'ок. ' : 'circa ') : '';
+                              const dateDisplay = ms.date
+                                ? `${approxPrefix}${ms.date}${ms.end_date ? ` – ${ms.end_date}` : ''}`
+                                : null;
+
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
+                                    border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
+                                    borderRadius: 8,
+                                    padding: '6px 10px',
+                                    fontSize: '0.75rem',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '2px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span
+                                        style={{
+                                          background: `${color}25`,
+                                          color: color,
+                                          border: `1px solid ${color}40`,
+                                          borderRadius: 4,
+                                          padding: '1px 6px',
+                                          fontSize: '0.65rem',
+                                          fontWeight: 700,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                        }}
+                                      >
+                                        <span>{icon}</span>
+                                        <span>{cat}</span>
+                                      </span>
+                                      {ms.personName && (
+                                        <span
+                                          style={{
+                                            color: 'var(--text-primary)',
+                                            fontWeight: 600,
+                                            fontSize: '0.72rem',
+                                          }}
+                                        >
+                                          👤 {ms.personName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {dateDisplay && (
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 500 }}>
+                                        📅 {dateDisplay}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', lineHeight: 1.3 }}>
+                                    {ms.title}
+                                  </div>
+                                  {ms.description && (
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.35 }}>
+                                      {ms.description}
+                                    </div>
+                                  )}
+                                  {ms.location && (
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
+                                      <span>📍</span>
+                                      <span>{ms.location}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
               {/* AI Semantic Description & Attributes Section */}
               {(selectedMedia.description_ru ||
@@ -1139,194 +1116,194 @@ export default function MediaViewerModal({
                 selectedMedia.ocr_text ||
                 selectedMedia.exif_analysis ||
                 selectedMedia.transcription) && (
-                <div className="lightbox-section">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h4 className="lightbox-section-title">{t('aiDescription')}</h4>
-                    <span className="badge-pill badge-pill-secondary" style={{ fontSize: '0.7rem' }}>
-                      {activeDetailLang === 'ru' ? '🇷🇺 RU' : '🇬🇧 EN'}
-                    </span>
-                  </div>
-
-                  {/* Localized Description & Summary */}
-                  {activeDetailLang === 'ru' ? (
-                    <>
-                      {(selectedMedia.description_ru || selectedMedia.description) && (
-                        <div className="lightbox-desc-block">
-                          <p className="lightbox-desc-text">
-                            {selectedMedia.description_ru || selectedMedia.description}
-                          </p>
-                        </div>
-                      )}
-                      {(selectedMedia.summary_ru || selectedMedia.summary) && (
-                        <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
-                          <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
-                          <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
-                            {selectedMedia.summary_ru || selectedMedia.summary}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {(selectedMedia.description || selectedMedia.description_ru) && (
-                        <div className="lightbox-desc-block">
-                          <p className="lightbox-desc-text">
-                            {selectedMedia.description || selectedMedia.description_ru}
-                          </p>
-                        </div>
-                      )}
-                      {(selectedMedia.summary || selectedMedia.summary_ru) && (
-                        <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
-                          <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
-                          <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
-                            {selectedMedia.summary || selectedMedia.summary_ru}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Rich Localized Semantic Badges/Details */}
-                  <div className="lightbox-meta-grid" style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    {selectedMedia.environment && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('environment')}:</span>
-                        <span className="lightbox-value">
-                          {selectedMedia.environment === 'indoor'
-                            ? t('environmentIndoor')
-                            : selectedMedia.environment === 'outdoor'
-                            ? t('environmentOutdoor')
-                            : selectedMedia.environment}
-                        </span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.lighting_ru || selectedMedia.lighting) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('lighting')}:</span>
-                        <span className="lightbox-value">
-                          {activeDetailLang === 'ru'
-                            ? selectedMedia.lighting_ru || selectedMedia.lighting
-                            : selectedMedia.lighting || selectedMedia.lighting_ru}
-                        </span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.weather_ru || selectedMedia.weather) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('weather')}:</span>
-                        <span className="lightbox-value">
-                          {activeDetailLang === 'ru'
-                            ? selectedMedia.weather_ru || selectedMedia.weather
-                            : selectedMedia.weather || selectedMedia.weather_ru}
-                        </span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.time_of_day_ru || selectedMedia.time_of_day) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('timeOfDay')}:</span>
-                        <span className="lightbox-value">
-                          {activeDetailLang === 'ru'
-                            ? selectedMedia.time_of_day_ru || selectedMedia.time_of_day
-                            : selectedMedia.time_of_day || selectedMedia.time_of_day_ru}
-                        </span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('exifAnalysis')}:</span>
-                        <span className="lightbox-value" style={{ fontSize: '0.78rem' }}>
-                          {activeDetailLang === 'ru'
-                            ? selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis
-                            : selectedMedia.exif_analysis || selectedMedia.exif_analysis_ru}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedMedia.ocr_text && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('ocrText')}:</span>
-                        <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
-                          «{selectedMedia.ocr_text}»
-                        </span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.transcription_ru || selectedMedia.transcription) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">{t('audioTranscription')}:</span>
-                        <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
-                          {activeDetailLang === 'ru'
-                            ? selectedMedia.transcription_ru || selectedMedia.transcription
-                            : selectedMedia.transcription || selectedMedia.transcription_ru}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedMedia.location_name && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">📍 {t('editLocationName')}:</span>
-                        <span className="lightbox-value">{selectedMedia.location_name}</span>
-                      </div>
-                    )}
-
-                    {(selectedMedia.camera_make || selectedMedia.camera_model || selectedMedia.lens_model) && (
-                      <div className="lightbox-detail-row">
-                        <span className="lightbox-label">📷 {t('editCameraMake')}:</span>
-                        <span className="lightbox-value">
-                          {[selectedMedia.camera_make, selectedMedia.camera_model, selectedMedia.lens_model].filter(Boolean).join(' ')}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedMedia.tags && (Array.isArray(selectedMedia.tags) ? selectedMedia.tags.length > 0 : Boolean(selectedMedia.tags)) && (
-                      <div style={{ marginTop: '0.4rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                        {(Array.isArray(selectedMedia.tags)
-                          ? selectedMedia.tags
-                          : typeof selectedMedia.tags === 'string'
-                          ? (selectedMedia.tags as string).split(',').map((tagItem: string) => tagItem.trim()).filter(Boolean)
-                          : []
-                        ).map((tag: string) => (
-                          <span
-                            key={tag}
-                            className="badge-pill"
-                            style={{
-                              background: 'var(--nav-tab-active-bg, rgba(59, 130, 246, 0.18))',
-                              border: '1px solid var(--border-color-hover, rgba(59, 130, 246, 0.35))',
-                              color: 'var(--primary-color)',
-                              fontSize: '0.72rem',
-                              padding: '0.15rem 0.45rem',
-                            }}
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Timeline events for video */}
-                  {selectedMedia.timeline_events && selectedMedia.timeline_events.length > 0 && (
-                    <div style={{ marginTop: '0.6rem' }}>
-                      <span className="lightbox-label" style={{ display: 'block', marginBottom: '0.3rem' }}>
-                        {t('timelineEvents')}:
+                  <div className="lightbox-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h4 className="lightbox-section-title">{t('aiDescription')}</h4>
+                      <span className="badge-pill badge-pill-secondary" style={{ fontSize: '0.7rem' }}>
+                        {activeDetailLang === 'ru' ? '🇷🇺 RU' : '🇬🇧 EN'}
                       </span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {selectedMedia.timeline_events.map((evt, idx) => (
-                          <div key={idx} style={{ fontSize: '0.75rem', background: 'var(--input-bg)', border: '1px solid var(--border-color)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
-                            <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>
-                              {evt.timestamp_start} - {evt.timestamp_end}:
-                            </span>{' '}
-                            <span>{activeDetailLang === 'ru' ? evt.activity_ru || evt.activity : evt.activity || evt.activity_ru}</span>
-                          </div>
-                        ))}
-                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {/* Localized Description & Summary */}
+                    {activeDetailLang === 'ru' ? (
+                      <>
+                        {(selectedMedia.description_ru || selectedMedia.description) && (
+                          <div className="lightbox-desc-block">
+                            <p className="lightbox-desc-text">
+                              {selectedMedia.description_ru || selectedMedia.description}
+                            </p>
+                          </div>
+                        )}
+                        {(selectedMedia.summary_ru || selectedMedia.summary) && (
+                          <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
+                            <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
+                            <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
+                              {selectedMedia.summary_ru || selectedMedia.summary}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {(selectedMedia.description || selectedMedia.description_ru) && (
+                          <div className="lightbox-desc-block">
+                            <p className="lightbox-desc-text">
+                              {selectedMedia.description || selectedMedia.description_ru}
+                            </p>
+                          </div>
+                        )}
+                        {(selectedMedia.summary || selectedMedia.summary_ru) && (
+                          <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
+                            <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
+                            <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
+                              {selectedMedia.summary || selectedMedia.summary_ru}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Rich Localized Semantic Badges/Details */}
+                    <div className="lightbox-meta-grid" style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {selectedMedia.environment && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('environment')}:</span>
+                          <span className="lightbox-value">
+                            {selectedMedia.environment === 'indoor'
+                              ? t('environmentIndoor')
+                              : selectedMedia.environment === 'outdoor'
+                                ? t('environmentOutdoor')
+                                : selectedMedia.environment}
+                          </span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.lighting_ru || selectedMedia.lighting) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('lighting')}:</span>
+                          <span className="lightbox-value">
+                            {activeDetailLang === 'ru'
+                              ? selectedMedia.lighting_ru || selectedMedia.lighting
+                              : selectedMedia.lighting || selectedMedia.lighting_ru}
+                          </span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.weather_ru || selectedMedia.weather) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('weather')}:</span>
+                          <span className="lightbox-value">
+                            {activeDetailLang === 'ru'
+                              ? selectedMedia.weather_ru || selectedMedia.weather
+                              : selectedMedia.weather || selectedMedia.weather_ru}
+                          </span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.time_of_day_ru || selectedMedia.time_of_day) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('timeOfDay')}:</span>
+                          <span className="lightbox-value">
+                            {activeDetailLang === 'ru'
+                              ? selectedMedia.time_of_day_ru || selectedMedia.time_of_day
+                              : selectedMedia.time_of_day || selectedMedia.time_of_day_ru}
+                          </span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('exifAnalysis')}:</span>
+                          <span className="lightbox-value" style={{ fontSize: '0.78rem' }}>
+                            {activeDetailLang === 'ru'
+                              ? selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis
+                              : selectedMedia.exif_analysis || selectedMedia.exif_analysis_ru}
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedMedia.ocr_text && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('ocrText')}:</span>
+                          <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
+                            «{selectedMedia.ocr_text}»
+                          </span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.transcription_ru || selectedMedia.transcription) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">{t('audioTranscription')}:</span>
+                          <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
+                            {activeDetailLang === 'ru'
+                              ? selectedMedia.transcription_ru || selectedMedia.transcription
+                              : selectedMedia.transcription || selectedMedia.transcription_ru}
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedMedia.location_name && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">📍 {t('editLocationName')}:</span>
+                          <span className="lightbox-value">{selectedMedia.location_name}</span>
+                        </div>
+                      )}
+
+                      {(selectedMedia.camera_make || selectedMedia.camera_model || selectedMedia.lens_model) && (
+                        <div className="lightbox-detail-row">
+                          <span className="lightbox-label">📷 {t('editCameraMake')}:</span>
+                          <span className="lightbox-value">
+                            {[selectedMedia.camera_make, selectedMedia.camera_model, selectedMedia.lens_model].filter(Boolean).join(' ')}
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedMedia.tags && (Array.isArray(selectedMedia.tags) ? selectedMedia.tags.length > 0 : Boolean(selectedMedia.tags)) && (
+                        <div style={{ marginTop: '0.4rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          {(Array.isArray(selectedMedia.tags)
+                            ? selectedMedia.tags
+                            : typeof selectedMedia.tags === 'string'
+                              ? (selectedMedia.tags as string).split(',').map((tagItem: string) => tagItem.trim()).filter(Boolean)
+                              : []
+                          ).map((tag: string) => (
+                            <span
+                              key={tag}
+                              className="badge-pill"
+                              style={{
+                                background: 'var(--nav-tab-active-bg, rgba(59, 130, 246, 0.18))',
+                                border: '1px solid var(--border-color-hover, rgba(59, 130, 246, 0.35))',
+                                color: 'var(--primary-color)',
+                                fontSize: '0.72rem',
+                                padding: '0.15rem 0.45rem',
+                              }}
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Timeline events for video */}
+                    {selectedMedia.timeline_events && selectedMedia.timeline_events.length > 0 && (
+                      <div style={{ marginTop: '0.6rem' }}>
+                        <span className="lightbox-label" style={{ display: 'block', marginBottom: '0.3rem' }}>
+                          {t('timelineEvents')}:
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {selectedMedia.timeline_events.map((evt, idx) => (
+                            <div key={idx} style={{ fontSize: '0.75rem', background: 'var(--input-bg)', border: '1px solid var(--border-color)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
+                              <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>
+                                {evt.timestamp_start} - {evt.timestamp_end}:
+                              </span>{' '}
+                              <span>{activeDetailLang === 'ru' ? evt.activity_ru || evt.activity : evt.activity || evt.activity_ru}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
               {/* Detected Faces & Persons on this Image */}
               <div className="lightbox-section" style={{ flex: 1 }}>
@@ -1426,8 +1403,8 @@ export default function MediaViewerModal({
                       const isManual = !f.face_id || f.face_id.startsWith('manual_') || f.face_id.startsWith('face_manual_');
                       const cropUrl = !isManual
                         ? (f.image_path
-                            ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
-                            : f.face_id
+                          ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
+                          : f.face_id
                             ? `/api/faces/image/${f.face_id}`
                             : null)
                         : null;

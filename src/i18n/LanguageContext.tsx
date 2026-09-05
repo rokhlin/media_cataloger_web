@@ -5,7 +5,7 @@ interface LanguageContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
-  t: (key: keyof TranslationDictionary) => string;
+  t: (key: keyof TranslationDictionary, params?: Record<string, string | number>) => string;
   getLocalizedText: (enText?: string | null, ruText?: string | null) => string;
 }
 
@@ -52,9 +52,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [language]);
 
   const t = useCallback(
-    (key: keyof TranslationDictionary): string => {
+    (key: keyof TranslationDictionary, params?: Record<string, string | number>): string => {
       const dict = translations[language] || translations.en;
-      return dict[key] || translations.en[key] || String(key);
+      let text = dict[key] || translations.en[key] || String(key);
+      if (params) {
+        for (const [paramKey, val] of Object.entries(params)) {
+          text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val));
+        }
+      }
+      return text;
     },
     [language]
   );

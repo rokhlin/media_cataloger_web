@@ -342,6 +342,7 @@ export const lightboxTranslationsEn: LightboxTranslations = {
   lightboxScopeOwnFacts: 'Own facts',
   lightboxScopeClosestFamily: 'Closest family',
   lightboxLifeTimelineFacts: 'Life Timeline Facts',
+  viewInFamilyTree: 'View {name} in Family Tree',
 };
 
 export const lightboxTranslationsRu: LightboxTranslations = {
@@ -425,6 +426,7 @@ export const lightboxTranslationsRu: LightboxTranslations = {
   lightboxScopeOwnFacts: 'Только свои',
   lightboxScopeClosestFamily: 'Близкие родственники',
   lightboxLifeTimelineFacts: 'Хроника событий',
+  viewInFamilyTree: 'Открыть {name} в семейном древе',
 };
 
 export const faceRegistryTranslationsEn: FaceRegistryTranslations = {

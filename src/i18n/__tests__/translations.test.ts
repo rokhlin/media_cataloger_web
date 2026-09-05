@@ -8,6 +8,8 @@ import {
   commonTranslationsRu,
   familyTreeTranslationsEn,
   familyTreeTranslationsRu,
+  lightboxTranslationsEn,
+  lightboxTranslationsRu,
 } from '../translations.js';
 
 describe('i18n Translations', () => {
@@ -37,7 +39,7 @@ describe('i18n Translations', () => {
     }
   });
 
-  it('should have consistent sub-dictionaries (header, common, family tree)', () => {
+  it('should have consistent sub-dictionaries (header, common, family tree, lightbox)', () => {
     const enHeaderKeys = Object.keys(headerTranslationsEn).sort();
     const ruHeaderKeys = Object.keys(headerTranslationsRu).sort();
     assert.deepStrictEqual(enHeaderKeys, ruHeaderKeys);
@@ -49,5 +51,14 @@ describe('i18n Translations', () => {
     const enTreeKeys = Object.keys(familyTreeTranslationsEn).sort();
     const ruTreeKeys = Object.keys(familyTreeTranslationsRu).sort();
     assert.deepStrictEqual(enTreeKeys, ruTreeKeys);
+
+    const enLightboxKeys = Object.keys(lightboxTranslationsEn).sort();
+    const ruLightboxKeys = Object.keys(lightboxTranslationsRu).sort();
+    assert.deepStrictEqual(enLightboxKeys, ruLightboxKeys);
+  });
+
+  it('should support viewInFamilyTree placeholder template in both languages', () => {
+    assert.ok(translations.en.viewInFamilyTree.includes('{name}'));
+    assert.ok(translations.ru.viewInFamilyTree.includes('{name}'));
   });
 });

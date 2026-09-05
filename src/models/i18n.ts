@@ -195,6 +195,7 @@ export interface LightboxTranslations {
   lightboxScopeOwnFacts: string;
   lightboxScopeClosestFamily: string;
   lightboxLifeTimelineFacts: string;
+  viewInFamilyTree: string;
 }
 
 export interface FaceRegistryTranslations {
