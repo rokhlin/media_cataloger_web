@@ -80,6 +80,14 @@
     - Make sure that all components are split by features and are self-contained.
     - Avoid circular dependencies. Use hooks to share logic between components. 
 Do the same for all components. Do not change functionality. Add tests.
+- [x] **Refactoring: Buttons** :
+      Buttons: 
+        -  All buttons should have `id` also if it not in use
+        -  Use common button component if it possible to keep one single styling in the whole project. Create the new common button component if wasnt exist.
+        -  Create rule to use common components for: buttons, toggles, modals, etc.
+        - Export Styles from Component tree. create a hook that by name provides the specific style.
+- [x] **Feature flags for buttons** : Add in feature flags the functionality to toggle on/off buttons by Id. Add under `CSS Class Names (Optional)` in `Create Feature flag`
+the same input for button id's. It also should be ooptional. User can add buttonIds or clas name or together to toggle feature on/off.
 
 ### Family Tree 
 - [x] **Represent Divorced person**: If couple is divorced, then show connection as striped line and connection icon should reflect the status. add a mechanism to expand and collapse the subtree of the divorced spounse. Only theyr own children. Don't show the subtree of the current partner.
@@ -106,6 +114,8 @@ Do the same for all components. Do not change functionality. Add tests.
 - [x] **Russian language support**: Add Russian language support for the UI. 
 - [x] **Export to PNG/JPG/SVG for Tree and Timeline** : Add in tree settings the section with ability to export tree and timeline to PNG/JPG/SVG. Export options: Export Tree, Export Timeline. Tree should be exported with current settings and with items shown, e.g. node style, celebration badges, etc. Export with high quality. 
 - [ ] **Kinship in media gallery configuration**: add option to configure facts including in media gallery for chained person( only own facts, own and closest family members, all). add only facts which date is close (birtday, marriage, anniversary, death) and config for period before date.
+- [ ] **Refactoring: Export to PNG/JPG/SVG** : move **Export to PNG/JPG/SVG for Tree and Timeline** section under csv import export section.
+
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.
 - [x] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels. Admin can give specific permissions to users. For example: view-only mode for some users. Admin can manage user accounts (create, edit, delete).

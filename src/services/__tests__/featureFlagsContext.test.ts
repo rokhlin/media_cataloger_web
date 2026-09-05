@@ -20,6 +20,7 @@ describe('FeatureFlagsContext and Presets from /data/feature_flags.json', () => 
     for (let i = 0; i < fileContent.length; i++) {
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].key, fileContent[i].key);
       assert.deepStrictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].classNames, fileContent[i].classNames);
+      assert.deepStrictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].buttonIds, fileContent[i].buttonIds);
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].isEnabled, fileContent[i].isEnabled);
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].description, fileContent[i].description);
     }

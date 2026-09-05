@@ -1,6 +1,7 @@
 import InputSourcesGallery, { type GalleryMediaFile } from '../components/gallery';
 import type { PersonItem, UISettings } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { Button } from '../components/common';
 
 export interface VaultScreenProps {
   isUnlocked: boolean;
@@ -73,15 +74,14 @@ export default function VaultScreen({
               {t('vaultScreenLockedDesc')}
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={onOpenVaultModal}
             style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
             id="btn-unlock-vault-pane"
           >
             🔓 {isConfigured ? t('btnUnlockVaultScreen') : t('btnSetupMasterPinScreen')}
-          </button>
+          </Button>
         </div>
       ) : (
         <InputSourcesGallery

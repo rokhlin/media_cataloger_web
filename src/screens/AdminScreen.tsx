@@ -1,6 +1,7 @@
 import AdminPanel from '../components/admin';
 import type { StatusInfo, UISettings, GalleryMediaFile } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { Button } from '../components/common';
 
 export interface AdminScreenProps {
   canAccessAdmin: boolean;
@@ -60,15 +61,14 @@ export default function AdminScreen({
               {t('adminPrivilegesRequiredDesc')}
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={onOpenLogin}
             style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
             id="btn-admin-signin"
           >
             🔑 {t('btnSignInAsAdmin')}
-          </button>
+          </Button>
         </div>
       ) : (
         <AdminPanel

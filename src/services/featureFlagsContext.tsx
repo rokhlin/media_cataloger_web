@@ -11,6 +11,11 @@ export function normalizeClassName(cls: string): string {
   return cls.trim().replace(/^\.+/, '');
 }
 
+// Normalize a button id string (strip leading hash, whitespace)
+export function normalizeButtonId(id: string): string {
+  return id.trim().replace(/^#+/, '');
+}
+
 // Normalize a flag key (case-insensitive, treats '-' and '_' interchangeably)
 export function normalizeFlagKey(key: string): string {
   return key.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -67,6 +72,9 @@ class FlagsManagerSingleton {
                 classNames: Array.isArray(item.classNames)
                   ? item.classNames.map(normalizeClassName).filter(Boolean)
                   : [],
+                buttonIds: Array.isArray(item.buttonIds)
+                  ? item.buttonIds.map(normalizeButtonId).filter(Boolean)
+                  : [],
                 isEnabled: Boolean(item.isEnabled),
               });
             }
@@ -85,6 +93,8 @@ class FlagsManagerSingleton {
       const normKey = normalizeFlagKey(p.key);
       this.flagsMap.set(normKey, {
         ...p,
+        classNames: Array.isArray(p.classNames) ? p.classNames.map(normalizeClassName).filter(Boolean) : [],
+        buttonIds: Array.isArray(p.buttonIds) ? p.buttonIds.map(normalizeButtonId).filter(Boolean) : [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -111,6 +121,9 @@ class FlagsManagerSingleton {
                 key: item.key,
                 classNames: Array.isArray(item.classNames)
                   ? item.classNames.map(normalizeClassName).filter(Boolean)
+                  : [],
+                buttonIds: Array.isArray(item.buttonIds)
+                  ? item.buttonIds.map(normalizeButtonId).filter(Boolean)
                   : [],
                 isEnabled: Boolean(item.isEnabled),
               });
@@ -198,6 +211,20 @@ class FlagsManagerSingleton {
     return true;
   }
 
+  /**
+   * Check if a button ID is currently enabled across all feature flags.
+   */
+  public isButtonEnabled(buttonId: string): boolean {
+    const norm = normalizeButtonId(buttonId);
+    if (!norm) return true;
+    for (const flag of this.flagsMap.values()) {
+      if (!flag.isEnabled && flag.buttonIds && flag.buttonIds.some((id) => normalizeButtonId(id) === norm)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   public getFlags(): FeatureFlag[] {
     return Array.from(this.flagsMap.values());
   }
@@ -212,7 +239,10 @@ class FlagsManagerSingleton {
 
     const normKey = normalizeFlagKey(cleanKey);
     const normalizedClasses = Array.from(
-      new Set(flag.classNames.map(normalizeClassName).filter(Boolean))
+      new Set((flag.classNames || []).map(normalizeClassName).filter(Boolean))
+    );
+    const normalizedButtonIds = Array.from(
+      new Set((flag.buttonIds || []).map(normalizeButtonId).filter(Boolean))
     );
 
     const now = Date.now();
@@ -221,6 +251,7 @@ class FlagsManagerSingleton {
     const newFlag: FeatureFlag = {
       key: cleanKey,
       classNames: normalizedClasses,
+      buttonIds: normalizedButtonIds,
       isEnabled: flag.isEnabled ?? true,
       description: flag.description?.trim() || '',
       createdAt: existing?.createdAt || now,
@@ -259,6 +290,8 @@ class FlagsManagerSingleton {
       const normKey = normalizeFlagKey(p.key);
       this.flagsMap.set(normKey, {
         ...p,
+        classNames: Array.isArray(p.classNames) ? p.classNames.map(normalizeClassName).filter(Boolean) : [],
+        buttonIds: Array.isArray(p.buttonIds) ? p.buttonIds.map(normalizeButtonId).filter(Boolean) : [],
         createdAt: now,
         updatedAt: now,
       });
@@ -285,12 +318,22 @@ class FlagsManagerSingleton {
     if (typeof document === 'undefined') return;
 
     const disabledClassesSet = new Set<string>();
+    const disabledButtonsSet = new Set<string>();
+
     for (const flag of this.flagsMap.values()) {
       if (!flag.isEnabled) {
         for (const cls of flag.classNames) {
           const normalized = normalizeClassName(cls);
           if (normalized) {
             disabledClassesSet.add(normalized);
+          }
+        }
+        if (Array.isArray(flag.buttonIds)) {
+          for (const bid of flag.buttonIds) {
+            const normalized = normalizeButtonId(bid);
+            if (normalized) {
+              disabledButtonsSet.add(normalized);
+            }
           }
         }
       }
@@ -303,13 +346,18 @@ class FlagsManagerSingleton {
       document.head.appendChild(styleEl);
     }
 
-    if (disabledClassesSet.size === 0) {
-      styleEl.textContent = '/* Feature flags: all active classes enabled */';
+    const classRules = Array.from(disabledClassesSet).map(
+      (cls) => `.${CSS.escape ? CSS.escape(cls) : cls} { display: none !important; }`
+    );
+    const buttonRules = Array.from(disabledButtonsSet).map(
+      (bid) => `#${CSS.escape ? CSS.escape(bid) : bid} { display: none !important; }`
+    );
+    const allRules = [...classRules, ...buttonRules];
+
+    if (allRules.length === 0) {
+      styleEl.textContent = '/* Feature flags: all active classes and buttons enabled */';
     } else {
-      const rules = Array.from(disabledClassesSet).map(
-        (cls) => `.${CSS.escape ? CSS.escape(cls) : cls} { display: none !important; }`
-      );
-      styleEl.textContent = `/* Feature flags disabled class rules */\n${rules.join('\n')}`;
+      styleEl.textContent = `/* Feature flags disabled class and button rules */\n${allRules.join('\n')}`;
     }
   }
 }
@@ -368,6 +416,10 @@ export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return FlagsManager.isClassEnabled(className);
   }, []);
 
+  const isButtonEnabled = useCallback((buttonId: string) => {
+    return FlagsManager.isButtonEnabled(buttonId);
+  }, []);
+
   const hasFlag = useCallback((key: string) => {
     return FlagsManager.getFlag(key) !== undefined;
   }, []);
@@ -378,6 +430,19 @@ export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!flag.isEnabled) {
         for (const cls of flag.classNames) {
           const norm = normalizeClassName(cls);
+          if (norm) set.add(norm);
+        }
+      }
+    }
+    return set.size;
+  }, [flags]);
+
+  const disabledButtonsCount = useMemo(() => {
+    const set = new Set<string>();
+    for (const flag of flags) {
+      if (!flag.isEnabled && flag.buttonIds) {
+        for (const bid of flag.buttonIds) {
+          const norm = normalizeButtonId(bid);
           if (norm) set.add(norm);
         }
       }
@@ -396,8 +461,10 @@ export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       clearAllFlags,
       isFeatureEnabled,
       isClassEnabled,
+      isButtonEnabled,
       hasFlag,
       disabledClassesCount,
+      disabledButtonsCount,
     }),
     [
       flags,
@@ -409,18 +476,20 @@ export const FeatureFlagsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       clearAllFlags,
       isFeatureEnabled,
       isClassEnabled,
+      isButtonEnabled,
       hasFlag,
       disabledClassesCount,
+      disabledButtonsCount,
     ]
   );
 
   return <FeatureFlagsContext.Provider value={value}>{children}</FeatureFlagsContext.Provider>;
 };
 
-export function useFeatureFlags(): FeatureFlagsContextValue {
+export const useFeatureFlags = (): FeatureFlagsContextValue => {
   const ctx = useContext(FeatureFlagsContext);
   if (!ctx) {
     throw new Error('useFeatureFlags must be used within a FeatureFlagsProvider');
   }
   return ctx;
-}
+};

@@ -1,4 +1,5 @@
 import { useLanguage } from '../../i18n/LanguageContext';
+import { Button } from '../common';
 
 export interface HeaderSettingsProps {
   onOpenSettings?: () => void;
@@ -8,15 +9,14 @@ export default function HeaderSettings({ onOpenSettings }: HeaderSettingsProps) 
   const { t } = useLanguage();
 
   return (
-    <button
-      className="btn btn-secondary"
+    <Button
+      variant="secondary"
       onClick={onOpenSettings}
       id="btn-open-settings"
-      type="button"
       style={{ padding: '0.55rem 1.2rem', fontSize: '0.88rem' }}
     >
       ⚙️ {t('btnSettings')}
-    </button>
+    </Button>
   );
 }
 

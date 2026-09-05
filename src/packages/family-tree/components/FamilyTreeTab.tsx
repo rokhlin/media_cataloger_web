@@ -244,6 +244,7 @@ export const FamilyTreeTab = () => {
               <span>⚠️ {error}</span>
               <button
                 type="button"
+                id="btn-family-tree-retry"
                 onClick={() => refreshGraph()}
                 style={{
                   background: 'rgba(239, 68, 68, 0.3)',
@@ -347,6 +348,7 @@ export const FamilyTreeTab = () => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                   <button
                     type="button"
+                    id="btn-family-tree-create-cancel"
                     style={{
                       background: 'var(--nav-tab-bg)',
                       color: 'var(--text-primary)',
@@ -362,6 +364,7 @@ export const FamilyTreeTab = () => {
                   </button>
                   <button
                     type="submit"
+                    id="btn-family-tree-create-submit"
                     style={{
                       background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                       color: '#ffffff',

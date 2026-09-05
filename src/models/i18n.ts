@@ -395,6 +395,8 @@ export interface AdminPanelTranslations {
   btnImportFlags: string;
   flagKeyLabel: string;
   flagClassesLabel: string;
+  flagButtonIdsLabel: string;
+  flagButtonIdsHint: string;
   flagDescLabel: string;
   flagStatusLabel: string;
   flagEnabled: string;
