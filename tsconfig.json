@@ -12,6 +12,8 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "jsx": "react-jsx",
 
@@ -26,5 +28,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "server", "data/**/*.json"]
+  "include": ["src", "server", "data"]
 }
