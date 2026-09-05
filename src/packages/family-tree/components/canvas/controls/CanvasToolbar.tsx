@@ -125,7 +125,7 @@ export const CanvasToolbar = memo(({ graphData, onAddMember, onRecalculateLayout
             document.getElementById('section-export-tree-timeline')?.scrollIntoView({ behavior: 'smooth' });
           }, 60);
         }}
-        title="Export to PNG/JPG/SVG for Tree and Timeline"
+        title={t('exportToolbarTooltip') || 'Export to PNG/JPG/SVG for Tree and Timeline'}
       >
         🖼️ {t('exportQuickBtn')} (PNG/JPG/SVG)
       </button>

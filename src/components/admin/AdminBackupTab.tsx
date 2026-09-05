@@ -511,11 +511,11 @@ export default function AdminBackupTab() {
               {t('backupScheduleTitle' as any) || 'Cron Schedule'}
             </div>
             <div style={{ fontSize: '1.1rem', fontWeight: 600, marginTop: '0.3rem', color: config?.enabled ? '#34d399' : '#f87171' }}>
-              {config?.enabled ? '🟢 Active' : '⚪ Disabled'}
+              {config?.enabled ? `🟢 ${t('backupStatusActive' as any) || 'Active'}` : `⚪ ${t('backupStatusDisabled' as any) || 'Disabled'}`}
             </div>
             {config?.nextRunDate && config?.enabled && (
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #94a3b8)', marginTop: '0.2rem' }}>
-                Next: {formatDate(config.nextRunDate)}
+                {t('backupNextRunPrefix' as any) || 'Next'}: {formatDate(config.nextRunDate)}
               </div>
             )}
           </div>
@@ -532,7 +532,7 @@ export default function AdminBackupTab() {
               {t('backupLastCreated' as any) || 'Last Backup'}
             </div>
             <div style={{ fontSize: '1rem', fontWeight: 600, marginTop: '0.3rem', color: 'var(--text-main, #f8fafc)' }}>
-              {latestBackupDate ? formatDate(latestBackupDate) : 'Never'}
+              {latestBackupDate ? formatDate(latestBackupDate) : (t('backupNeverRun' as any) || 'Never')}
             </div>
           </div>
         </div>
@@ -578,14 +578,14 @@ export default function AdminBackupTab() {
                 <span>{scheduleEnabled ? t('backupScheduleEnabled' as any) || 'Automated Cron Backup is Active' : t('backupScheduleDisabled' as any) || 'Automated Cron Backup is Disabled'}</span>
               </label>
               <p style={{ margin: '0.4rem 0 0 2rem', fontSize: '0.82rem', color: 'var(--text-muted, #94a3b8)' }}>
-                When enabled, the background server creates automated snapshots on the specified cron schedule.
+                {t('backupScheduleDesc' as any) || 'When enabled, the background server creates automated snapshots on the specified cron schedule.'}
               </p>
             </div>
 
             {/* Preset selector */}
             <div>
               <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
-                Schedule Preset
+                {t('backupSchedulePresetLabel' as any) || 'Schedule Preset'}
               </label>
               <select
                 className="form-control"
@@ -610,7 +610,7 @@ export default function AdminBackupTab() {
                     style={{ width: '100%', padding: '0.5rem', borderRadius: '8px' }}
                   />
                   <small style={{ color: 'var(--text-muted, #94a3b8)', display: 'block', marginTop: '0.25rem' }}>
-                    Standard 5-part cron format (minute hour day month day-of-week).
+                    {t('backupCronHelp' as any) || 'Standard 5-part cron format (minute hour day month day-of-week).'}
                   </small>
                 </div>
               )}
@@ -631,7 +631,7 @@ export default function AdminBackupTab() {
                 style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px' }}
               />
               <small style={{ color: 'var(--text-muted, #94a3b8)', display: 'block', marginTop: '0.25rem' }}>
-                Oldest backups beyond this threshold will be pruned automatically.
+                {t('backupRetentionHelp' as any) || 'Oldest backups beyond this threshold will be pruned automatically.'}
               </small>
             </div>
 
@@ -661,7 +661,7 @@ export default function AdminBackupTab() {
               className="btn btn-secondary"
               onClick={() => setIsScheduleOpen(false)}
             >
-              Cancel
+              {t('cancel' as any) || 'Cancel'}
             </button>
             <button
               type="button"
@@ -688,12 +688,12 @@ export default function AdminBackupTab() {
         }}
       >
         <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 600 }}>
-          Available System Backups ({backups.length})
+          {t('backupAvailableTitle' as any) || 'Available System Backups'} ({backups.length})
         </h4>
 
         {isLoading ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
-            Loading backup archives...
+            {t('backupLoadingArchives' as any) || 'Loading backup archives...'}
           </div>
         ) : error ? (
           <div style={{ padding: '1rem', color: '#f87171' }}>
@@ -750,7 +750,7 @@ export default function AdminBackupTab() {
                       )}
                       {!item.isValid && (
                         <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '0.2rem' }}>
-                          ⚠️ {item.errorMessage || 'Archive invalid'}
+                          ⚠️ {item.errorMessage || (t('backupArchiveInvalid' as any) || 'Archive invalid')}
                         </div>
                       )}
                     </td>
@@ -782,7 +782,7 @@ export default function AdminBackupTab() {
                           border: `1px solid ${item.trigger === 'scheduled' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
                         }}
                       >
-                        {item.trigger === 'scheduled' ? '⏱️ Scheduled' : '⚡ Manual'}
+                        {item.trigger === 'scheduled' ? (t('backupTriggerScheduled' as any) || '⏱️ Scheduled') : (t('backupTriggerManual' as any) || '⚡ Manual')}
                       </span>
                     </td>
 
@@ -790,16 +790,16 @@ export default function AdminBackupTab() {
                     <td style={{ padding: '0.85rem 0.5rem' }}>
                       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                          ⚙️ Config
+                          ⚙️ {t('backupCompConfigShort' as any) || 'Config'}
                         </span>
                         <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                          ⚡ Flags ({item.stats?.featureFlagsCount ?? '—'})
+                          ⚡ {t('backupCompFlagsShort' as any) || 'Flags'} ({item.stats?.featureFlagsCount ?? '—'})
                         </span>
                         <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                          🗄️ Media DB ({item.stats?.mediaItemsCount ?? '—'})
+                          🗄️ {t('backupCompDbShort' as any) || 'Media DB'} ({item.stats?.mediaItemsCount ?? '—'})
                         </span>
                         <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                          🌳 Kinship ({item.stats?.kinshipMembersCount ?? '—'})
+                          🌳 {t('backupCompKinshipShort' as any) || 'Kinship'} ({item.stats?.kinshipMembersCount ?? '—'})
                         </span>
                       </div>
                     </td>
@@ -811,7 +811,7 @@ export default function AdminBackupTab() {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => handleDownloadBackup(item.filename)}
-                          title="Download ZIP archive"
+                          title={t('backupDownloadArchiveTooltip' as any) || 'Download ZIP archive'}
                           style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                         >
                           ⬇️ {t('backupBtnDownload' as any) || 'Download'}
@@ -820,7 +820,7 @@ export default function AdminBackupTab() {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => setRestoreTarget(item)}
-                          title="Restore system from this backup"
+                          title={t('backupRestoreArchiveTooltip' as any) || 'Restore system from this backup'}
                           style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#60a5fa' }}
                         >
                           🔄 {t('backupBtnRestore' as any) || 'Restore'}
@@ -829,7 +829,7 @@ export default function AdminBackupTab() {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => handleDeleteBackup(item.filename)}
-                          title="Delete backup archive"
+                          title={t('backupDeleteArchiveTooltip' as any) || 'Delete backup archive'}
                           style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: '#f87171' }}
                         >
                           🗑️
@@ -899,10 +899,10 @@ export default function AdminBackupTab() {
                 fontSize: '0.85rem',
               }}
             >
-              <div><strong>Archive:</strong> {restoreTarget.filename}</div>
-              <div style={{ marginTop: '0.25rem' }}><strong>Created:</strong> {formatDate(restoreTarget.createdAt)} ({formatBytes(restoreTarget.sizeBytes)})</div>
+              <div><strong>{t('backupArchiveLabel' as any) || 'Archive'}:</strong> {restoreTarget.filename}</div>
+              <div style={{ marginTop: '0.25rem' }}><strong>{t('backupCreatedLabel' as any) || 'Created'}:</strong> {formatDate(restoreTarget.createdAt)} ({formatBytes(restoreTarget.sizeBytes)})</div>
               {restoreTarget.description && (
-                <div style={{ marginTop: '0.25rem', color: 'var(--text-muted, #94a3b8)' }}><strong>Note:</strong> {restoreTarget.description}</div>
+                <div style={{ marginTop: '0.25rem', color: 'var(--text-muted, #94a3b8)' }}><strong>{t('backupNoteLabel' as any) || 'Note'}:</strong> {restoreTarget.description}</div>
               )}
             </div>
 
@@ -980,7 +980,7 @@ export default function AdminBackupTab() {
                 disabled={isRestoring}
                 onClick={() => setRestoreTarget(null)}
               >
-                Cancel
+                {t('cancel' as any) || 'Cancel'}
               </button>
               <button
                 type="button"

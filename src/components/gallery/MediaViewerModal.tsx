@@ -924,13 +924,13 @@ export default function MediaViewerModal({
                 <div className="lightbox-section lightbox-family-context">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <h4 className="lightbox-family-context-title">
-                      <span>🌳</span> Family Tree Kinship &amp; Context
+                      <span>🌳</span> {t('lightboxFamilyKinshipContextTitle') || (language === 'ru' ? 'Родство и контекст семейного древа' : 'Family Tree Kinship & Context')}
                       <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.75, marginLeft: 6 }}>
                         ({galleryKinshipFactsConfig.scope === 'ALL'
-                          ? (language === 'ru' ? 'Все родственники' : 'All relatives')
+                          ? (t('lightboxScopeAllRelatives') || (language === 'ru' ? 'Все родственники' : 'All relatives'))
                           : galleryKinshipFactsConfig.scope === 'OWN'
-                          ? (language === 'ru' ? 'Только свои' : 'Own facts')
-                          : (language === 'ru' ? 'Близкие родственники' : 'Closest family')})
+                          ? (t('lightboxScopeOwnFacts') || (language === 'ru' ? 'Только свои' : 'Own facts'))
+                          : (t('lightboxScopeClosestFamily') || (language === 'ru' ? 'Близкие родственники' : 'Closest family'))})
                       </span>
                     </h4>
                   </div>
@@ -966,7 +966,7 @@ export default function MediaViewerModal({
                                   onViewInFamilyTree(m.name);
                                 }
                               }}
-                              title={onViewInFamilyTree ? `View ${m.name} in Family Tree` : m.name}
+                              title={onViewInFamilyTree ? (language === 'ru' ? `Открыть ${m.name} в семейном древе` : `View ${m.name} in Family Tree`) : m.name}
                             >
                               <span>👤 {m.name}</span>
                               {kinshipTerm && (
@@ -1033,7 +1033,7 @@ export default function MediaViewerModal({
                       <div className="lightbox-family-milestones" style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))', paddingTop: '0.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                            ⭐ {language === 'ru' ? 'Хроника событий' : 'Life Timeline Facts'} ({uniqueMilestones.length})
+                            ⭐ {t('lightboxLifeTimelineFacts') || (language === 'ru' ? 'Хроника событий' : 'Life Timeline Facts')} ({uniqueMilestones.length})
                           </span>
                         </div>
                         <div
@@ -1554,7 +1554,7 @@ export default function MediaViewerModal({
                                             onClose();
                                             onViewInFamilyTree(f.name!);
                                           }}
-                                          title={`View ${f.name} in Family Tree`}
+                                          title={t('viewInFamilyTree', { name: f.name })}
                                         >
                                           🌳
                                         </button>

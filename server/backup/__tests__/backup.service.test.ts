@@ -246,7 +246,7 @@ describe('BackupService & Scheduler', () => {
     );
 
     await new Promise<void>((resolve, reject) => {
-      mockRes.on = (event: string, callback: any) => {
+      mockRes.on = (event: string, _callback: any) => {
         if (event === 'finish') {
           setTimeout(resolve, 50);
         }

@@ -263,7 +263,7 @@ export const FamilyTreeTab = () => {
                   cursor: 'pointer',
                 }}
               >
-                Retry
+                {t('retry') || 'Retry'}
               </button>
             </div>
           )}

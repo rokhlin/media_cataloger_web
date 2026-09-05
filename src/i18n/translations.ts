@@ -337,6 +337,11 @@ export const lightboxTranslationsEn: LightboxTranslations = {
   btnCancel: 'Cancel',
   metadataSavedSuccess: 'Metadata saved successfully!',
   metadataSaveError: 'Failed to save metadata',
+  lightboxFamilyKinshipContextTitle: 'Family Tree Kinship & Context',
+  lightboxScopeAllRelatives: 'All relatives',
+  lightboxScopeOwnFacts: 'Own facts',
+  lightboxScopeClosestFamily: 'Closest family',
+  lightboxLifeTimelineFacts: 'Life Timeline Facts',
 };
 
 export const lightboxTranslationsRu: LightboxTranslations = {
@@ -415,6 +420,11 @@ export const lightboxTranslationsRu: LightboxTranslations = {
   btnCancel: 'Отмена',
   metadataSavedSuccess: 'Метаданные успешно сохранены!',
   metadataSaveError: 'Ошибка при сохранении метаданных',
+  lightboxFamilyKinshipContextTitle: 'Родство и контекст семейного древа',
+  lightboxScopeAllRelatives: 'Все родственники',
+  lightboxScopeOwnFacts: 'Только свои',
+  lightboxScopeClosestFamily: 'Близкие родственники',
+  lightboxLifeTimelineFacts: 'Хроника событий',
 };
 
 export const faceRegistryTranslationsEn: FaceRegistryTranslations = {
@@ -447,6 +457,7 @@ export const faceRegistryTranslationsEn: FaceRegistryTranslations = {
   btnDelete: 'Delete',
   btnDeleteGroup: 'Delete Group',
   btnViewSources: 'View Source Photos',
+  btnOpenFamilyTree: 'Open in Family Tree',
   assignFaceModalTitle: 'Assign Face to Person',
   assignGroupModalTitle: 'Assign Face Group to Person',
   renamePersonModalTitle: 'Rename Person',
@@ -514,6 +525,7 @@ export const faceRegistryTranslationsRu: FaceRegistryTranslations = {
   btnDelete: 'Удалить',
   btnDeleteGroup: 'Удалить группу',
   btnViewSources: 'Смотреть исходные фото',
+  btnOpenFamilyTree: 'Открыть в семейном древе',
   assignFaceModalTitle: 'Назначение лица персоне',
   assignGroupModalTitle: 'Назначение группы лиц персоне',
   renamePersonModalTitle: 'Переименовать персону',
@@ -828,6 +840,7 @@ export const commonTranslationsEn: CommonTranslations = {
   active: 'Active',
   custom: 'Custom',
   default: 'Default',
+  retry: 'Retry',
 };
 
 export const commonTranslationsRu: CommonTranslations = {
@@ -841,6 +854,7 @@ export const commonTranslationsRu: CommonTranslations = {
   active: 'Активен',
   custom: 'Пользовательский',
   default: 'По умолчанию',
+  retry: 'Повторить',
 };
 
 export const adminPanelTranslationsEn: AdminPanelTranslations = {
@@ -1012,6 +1026,29 @@ export const authAndVaultTranslationsEn = {
   backupTotalCount: 'Total Backups',
   backupTotalSize: 'Total Archive Size',
   backupLastCreated: 'Last Backup',
+  backupAvailableTitle: 'Available System Backups',
+  backupLoadingArchives: 'Loading backup archives...',
+  backupScheduleDesc: 'When enabled, the background server creates automated snapshots on the specified cron schedule.',
+  backupSchedulePresetLabel: 'Schedule Preset',
+  backupCronHelp: 'Standard 5-part cron format (minute hour day month day-of-week).',
+  backupRetentionHelp: 'Oldest backups beyond this threshold will be pruned automatically.',
+  backupArchiveInvalid: 'Archive invalid',
+  backupTriggerScheduled: '⏱️ Scheduled',
+  backupTriggerManual: '⚡ Manual',
+  backupCompConfigShort: 'Config',
+  backupCompFlagsShort: 'Flags',
+  backupCompDbShort: 'Media DB',
+  backupCompKinshipShort: 'Kinship',
+  backupDownloadArchiveTooltip: 'Download ZIP archive',
+  backupRestoreArchiveTooltip: 'Restore system from this backup',
+  backupDeleteArchiveTooltip: 'Delete backup archive',
+  backupArchiveLabel: 'Archive',
+  backupCreatedLabel: 'Created',
+  backupNoteLabel: 'Note',
+  backupStatusActive: 'Active',
+  backupStatusDisabled: 'Disabled',
+  backupNextRunPrefix: 'Next',
+  backupNeverRun: 'Never',
   rbacUsersTitle: 'User & Access Control Management (RBAC)',
   rbacUsersSubtitle: 'Manage user accounts, assign roles, and configure granular permissions.',
   rbacAddUserButton: 'Create New User',
@@ -1144,6 +1181,29 @@ export const authAndVaultTranslationsRu = {
   backupTotalCount: 'Всего копий',
   backupTotalSize: 'Общий объем архивов',
   backupLastCreated: 'Последняя копия',
+  backupAvailableTitle: 'Доступные резервные копии системы',
+  backupLoadingArchives: 'Загрузка списка резервных копий...',
+  backupScheduleDesc: 'При включении фоновый сервер будет автоматически создавать снимки системы по заданному расписанию cron.',
+  backupSchedulePresetLabel: 'Шаблон расписания',
+  backupCronHelp: 'Стандартный 5-позиционный формат cron (минута час день месяц день-недели).',
+  backupRetentionHelp: 'Более старые копии сверх этого лимита будут удаляться автоматически.',
+  backupArchiveInvalid: 'Архив поврежден или недействителен',
+  backupTriggerScheduled: '⏱️ По расписанию',
+  backupTriggerManual: '⚡ Вручную',
+  backupCompConfigShort: 'Конфиг',
+  backupCompFlagsShort: 'Флаги',
+  backupCompDbShort: 'База медиа',
+  backupCompKinshipShort: 'Древо',
+  backupDownloadArchiveTooltip: 'Скачать ZIP-архив',
+  backupRestoreArchiveTooltip: 'Восстановить систему из этой копии',
+  backupDeleteArchiveTooltip: 'Удалить архив резервной копии',
+  backupArchiveLabel: 'Архив',
+  backupCreatedLabel: 'Создано',
+  backupNoteLabel: 'Примечание',
+  backupStatusActive: 'Активно',
+  backupStatusDisabled: 'Отключено',
+  backupNextRunPrefix: 'Следующий',
+  backupNeverRun: 'Никогда',
   rbacUsersTitle: 'Управление пользователями и правами (RBAC)',
   rbacUsersSubtitle: 'Создание пользователей, назначение ролей и гранулярных прав доступа.',
   rbacAddUserButton: 'Создать пользователя',
@@ -1602,6 +1662,8 @@ export const familyTreeTranslationsEn: FamilyTreeTranslations = {
   exportSuccess: 'Export downloaded successfully!',
   exportError: 'Failed to generate export file.',
   exportQuickBtn: 'Export',
+  exportToolbarTooltip: 'Export to PNG/JPG/SVG for Tree and Timeline',
+  treeEmptyExportAlert: 'Family tree is currently empty. Add members before exporting.',
 };
 
 export const familyTreeTranslationsRu: FamilyTreeTranslations = {
@@ -1947,6 +2009,8 @@ export const familyTreeTranslationsRu: FamilyTreeTranslations = {
   exportSuccess: 'Файл успешно экспортирован!',
   exportError: 'Ошибка при экспорте файла.',
   exportQuickBtn: 'Экспорт',
+  exportToolbarTooltip: 'Экспорт древа и хроники в PNG/JPG/SVG',
+  treeEmptyExportAlert: 'Семейное древо пусто. Добавьте персон перед экспортом.',
 };
 
 export const translations: Record<Language, TranslationDictionary> = {

@@ -242,7 +242,7 @@ export const TreeSettingsTab: React.FC<TreeSettingsTabProps> = ({
   // ---------------------------------------------------------------------------
   const handleExportCSV = () => {
     if (!graphData || !graphData.persons || graphData.persons.length === 0) {
-      alert('Family tree is currently empty. Add members before exporting.');
+      alert(t('treeEmptyExportAlert') || (language === 'ru' ? 'Семейное древо пусто. Добавьте персон перед экспортом.' : 'Family tree is currently empty. Add members before exporting.'));
       return;
     }
     const csvContent = exportTreeToCSV(graphData);

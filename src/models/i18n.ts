@@ -190,6 +190,11 @@ export interface LightboxTranslations {
   btnCancel: string;
   metadataSavedSuccess: string;
   metadataSaveError: string;
+  lightboxFamilyKinshipContextTitle: string;
+  lightboxScopeAllRelatives: string;
+  lightboxScopeOwnFacts: string;
+  lightboxScopeClosestFamily: string;
+  lightboxLifeTimelineFacts: string;
 }
 
 export interface FaceRegistryTranslations {
@@ -222,6 +227,7 @@ export interface FaceRegistryTranslations {
   btnDelete: string;
   btnDeleteGroup: string;
   btnViewSources: string;
+  btnOpenFamilyTree: string;
   assignFaceModalTitle: string;
   assignGroupModalTitle: string;
   renamePersonModalTitle: string;
@@ -403,6 +409,7 @@ export interface CommonTranslations {
   active: string;
   custom: string;
   default: string;
+  retry: string;
 }
 
 export interface AdminPanelTranslations {
@@ -539,6 +546,29 @@ export interface AuthAndVaultTranslations {
   backupTotalCount: string;
   backupTotalSize: string;
   backupLastCreated: string;
+  backupAvailableTitle: string;
+  backupLoadingArchives: string;
+  backupScheduleDesc: string;
+  backupSchedulePresetLabel: string;
+  backupCronHelp: string;
+  backupRetentionHelp: string;
+  backupArchiveInvalid: string;
+  backupTriggerScheduled: string;
+  backupTriggerManual: string;
+  backupCompConfigShort: string;
+  backupCompFlagsShort: string;
+  backupCompDbShort: string;
+  backupCompKinshipShort: string;
+  backupDownloadArchiveTooltip: string;
+  backupRestoreArchiveTooltip: string;
+  backupDeleteArchiveTooltip: string;
+  backupArchiveLabel: string;
+  backupCreatedLabel: string;
+  backupNoteLabel: string;
+  backupStatusActive: string;
+  backupStatusDisabled: string;
+  backupNextRunPrefix: string;
+  backupNeverRun: string;
   rbacUsersTitle: string;
   rbacUsersSubtitle: string;
   rbacAddUserButton: string;
@@ -963,6 +993,8 @@ export interface FamilyTreeTranslations {
   exportSuccess: string;
   exportError: string;
   exportQuickBtn: string;
+  exportToolbarTooltip: string;
+  treeEmptyExportAlert: string;
 }
 
 export type TranslationDictionary = HeaderTranslations &

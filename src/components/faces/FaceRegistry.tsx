@@ -719,9 +719,9 @@ export default function FaceRegistry({
                                 onClick={() => onViewInFamilyTree(person.name, person.person_id)}
                                 disabled={disabled}
                                 type="button"
-                                title="Open in Family Tree"
+                                title={t('btnOpenFamilyTree') || 'Open in Family Tree'}
                               >
-                                🌳 Family Tree
+                                🌳 {t('navFamilyTree') || 'Family Tree'}
                               </button>
                             )}
 
