@@ -795,10 +795,7 @@ export default function MediaViewerModal({
               {effectiveGroupFiles && effectiveGroupFiles.length > 1 && (
                 <div className="media-viewer-similarity-strip">
                   <div className="similarity-strip-title">
-                    <span>🗂️ {t('similarPhotosInGroup' as any) || 'Series Shots'} ({effectiveGroupFiles.length})</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 'auto' }}>
-                      {t('clickToView') || 'Click to view'}
-                    </span>
+                    <span>{t('similarPhotosInGroup')} ({effectiveGroupFiles.length})</span>
                   </div>
                   <div className="similarity-strip-thumbs">
                     {effectiveGroupFiles.map((simFile: GalleryMediaFile, idx: number) => {
@@ -869,19 +866,50 @@ export default function MediaViewerModal({
             <div className="media-lightbox-sidebar">
               {/* File Details Section */}
               <div className="lightbox-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <h4 className="lightbox-section-title" style={{ margin: 0 }}>{t('fileDetails')}</h4>
-                  {canEdit && selectedMedia.status === 'PROCESSED' && (
+                <div className="btn-edit-metadata-button" style={{ display: 'flex', justifyContent: 'left', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  {isAdmin && (
                     <button
-                      type="button"
                       className="btn btn-secondary"
-                      style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                      onClick={() => setIsEditingMetadata(true)}
-                      title={t('btnEditMetadata')}
+                      style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem'}}
+                      onClick={async () => {
+                        const filePath = selectedMedia.file_path || selectedMedia.filename;
+                        if (selectedMedia.is_vault) {
+                          await removeVaultItem(filePath);
+                          const updated = { ...selectedMedia, is_vault: false };
+                          setSelectedMedia(updated);
+                          if (onMediaUpdated) onMediaUpdated(updated);
+                        } else {
+                          await addVaultItem(filePath);
+                          const updated = { ...selectedMedia, is_vault: true };
+                          setSelectedMedia(updated);
+                          if (onMediaUpdated) onMediaUpdated(updated);
+                        }
+                        if (onRefresh) onRefresh();
+                      }}
+                      type="button"
+                      title={selectedMedia.is_vault
+                        ? `🔒 ${t('vaultRemoveFromVault' as any) || 'Remove from Secret Vault'}`
+                        : `🔓 ${t('vaultAddToVault' as any) || 'Move to Secret Vault'}`}
                     >
-                      {t('btnEditMetadata')}
+                      {selectedMedia.is_vault
+                        ? `🔒`
+                        : `🔓`}
                     </button>
                   )}
+                  <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <h4 className="lightbox-section-title" style={{ margin: 0 }}>{t('fileDetails')}</h4>
+                    {canEdit && selectedMedia.status === 'PROCESSED' && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        onClick={() => setIsEditingMetadata(true)}
+                        title={t('btnEditMetadata')}
+                      >
+                        {t('btnEditMetadata')}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="lightbox-detail-row">
                   <span className="lightbox-label">{t('fullPath')}:</span>
@@ -902,14 +930,6 @@ export default function MediaViewerModal({
                     {selectedMedia.status || 'UNPROCESSED'}
                   </span>
                 </div>
-                {selectedMedia.sidecar_path && (
-                  <div className="lightbox-detail-row">
-                    <span className="lightbox-label">{t('sidecar')}:</span>
-                    <span className="lightbox-value" title={selectedMedia.sidecar_path}>
-                      {selectedMedia.sidecar_path.split(/[/\\]/).pop()}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* Family Tree Kinship & Context Section */}
@@ -1119,9 +1139,6 @@ export default function MediaViewerModal({
                   <div className="lightbox-section">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <h4 className="lightbox-section-title">{t('aiDescription')}</h4>
-                      <span className="badge-pill badge-pill-secondary" style={{ fontSize: '0.7rem' }}>
-                        {activeDetailLang === 'ru' ? '🇷🇺 RU' : '🇬🇧 EN'}
-                      </span>
                     </div>
 
                     {/* Localized Description & Summary */}
@@ -1382,7 +1399,7 @@ export default function MediaViewerModal({
                 )}
 
                 {facesForSelected.length === 0 ? (
-                  <div style={{ margin: '0.5rem 0' }}>
+                  <div className='no-faces-indexed-container' style={{ margin: '0.5rem 0' }}>
                     <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 0.4rem 0' }}>
                       {loadingFaces ? t('loadingFaces') : t('noFacesIndexed')}
                     </p>
@@ -1487,7 +1504,7 @@ export default function MediaViewerModal({
                                 <div className="lightbox-face-name">
                                   {f.name || f.face_id}
                                 </div>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                <div className='known_faces_badge_confidence' style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                   {isManual ? (
                                     <span>{t('badgeManual')}</span>
                                   ) : (
@@ -1518,6 +1535,7 @@ export default function MediaViewerModal({
 
                                       {onViewInFamilyTree && f.name && (
                                         <button
+                                          id='known_faces_badge_genealogy'
                                           type="button"
                                           className="btn btn-secondary"
                                           style={{
@@ -1545,13 +1563,6 @@ export default function MediaViewerModal({
 
                           {!isEditing && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <span
-                                className={`badge-pill ${f.is_reference ? 'badge-pill-accent' : 'badge-pill-warning'}`}
-                                style={{ fontSize: '0.68rem' }}
-                              >
-                                {isManual ? t('badgeManual') : f.is_reference ? t('badgeKnown') : t('badgePending')}
-                              </span>
-
                               {canManageFaces && (
                                 <>
                                   <button
@@ -1591,6 +1602,7 @@ export default function MediaViewerModal({
               <div className="lightbox-section lightbox-actions-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {canEdit && selectedMedia.status === 'PROCESSED' && (
                   <button
+                    id="edit_metadata_button_id"
                     className="btn btn-secondary"
                     style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
                     onClick={() => setIsEditingMetadata(true)}
@@ -1602,6 +1614,7 @@ export default function MediaViewerModal({
 
                 {isAdmin && (
                   <button
+                    id="mov_to_vault_button_id"
                     className="btn btn-secondary"
                     style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
                     onClick={async () => {
