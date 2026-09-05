@@ -48,6 +48,12 @@ export default function DuplicatesManagerTab({
     duplicate: DuplicateItemInfo;
   } | null>(null);
 
+  const [previewItem, setPreviewItem] = useState<{
+    item: DuplicateItemInfo;
+    isPrimary?: boolean;
+    primaryFile?: DuplicateItemInfo;
+  } | null>(null);
+
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [targetMoveFolder, setTargetMoveFolder] = useState('');
@@ -116,6 +122,21 @@ export default function DuplicatesManagerTab({
       if (timer) clearTimeout(timer);
     };
   }, [loadData, scanStatus?.isScanning]);
+
+  // Keyboard listener for Escape to close modals
+  useEffect(() => {
+    if (!previewItem && !comparatorGroup && !isDeleteConfirmOpen && !isMoveModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewItem(null);
+        setComparatorGroup(null);
+        setIsDeleteConfirmOpen(false);
+        setIsMoveModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewItem, comparatorGroup, isDeleteConfirmOpen, isMoveModalOpen]);
 
   // Trigger scan
   const handleStartScan = async () => {
@@ -587,29 +608,41 @@ export default function DuplicatesManagerTab({
                   {/* Primary Item */}
                   <div
                     className={`dup-item-card is-primary ${selectedFiles.has(group.primaryFile.filePath) ? 'is-selected' : ''}`}
+                    onClick={() => handleToggleSelectFile(group.primaryFile.filePath)}
                   >
-                    <div
-                      className="dup-item-preview-wrap"
-                      onClick={() => onOpenViewer?.(group.primaryFile.filePath)}
-                    >
+                    <div className="dup-item-preview-wrap">
                       <input
                         type="checkbox"
                         className="dup-item-checkbox"
                         checked={selectedFiles.has(group.primaryFile.filePath)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleToggleSelectFile(group.primaryFile.filePath);
-                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => handleToggleSelectFile(group.primaryFile.filePath)}
                       />
                       <span className="dup-item-primary-tag">
                         🌟 {t('keepPrimary' as any) || 'KEEP'}
                       </span>
+                      {group.primaryFile.isVideo && (
+                        <span className="dup-item-video-tag" title="Video file">
+                          🎥
+                        </span>
+                      )}
                       <img
                         className="dup-item-img"
                         src={`/api/media/thumbnail?path=${encodeURIComponent(group.primaryFile.filePath)}&size=300`}
                         alt={group.primaryFile.filename}
                         loading="lazy"
                       />
+                      <button
+                        type="button"
+                        className="dup-item-zoom-btn"
+                        title={t('previewImage' as any) || 'Full Preview'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewItem({ item: group.primaryFile, isPrimary: true });
+                        }}
+                      >
+                        🔍
+                      </button>
                     </div>
 
                     <div className="dup-item-details">
@@ -642,26 +675,42 @@ export default function DuplicatesManagerTab({
                       <div
                         key={dup.filePath}
                         className={`dup-item-card ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => handleToggleSelectFile(dup.filePath)}
                       >
-                        <div
-                          className="dup-item-preview-wrap"
-                          onClick={() => onOpenViewer?.(dup.filePath)}
-                        >
+                        <div className="dup-item-preview-wrap">
                           <input
                             type="checkbox"
                             className="dup-item-checkbox"
                             checked={isSelected}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleToggleSelectFile(dup.filePath);
-                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => handleToggleSelectFile(dup.filePath)}
                           />
+                          {dup.isVideo && (
+                            <span className="dup-item-video-tag" title="Video file">
+                              🎥
+                            </span>
+                          )}
                           <img
                             className="dup-item-img"
                             src={`/api/media/thumbnail?path=${encodeURIComponent(dup.filePath)}&size=300`}
                             alt={dup.filename}
                             loading="lazy"
                           />
+                          <button
+                            type="button"
+                            className="dup-item-zoom-btn"
+                            title={t('previewImage' as any) || 'Full Preview'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewItem({
+                                item: dup,
+                                isPrimary: false,
+                                primaryFile: group.primaryFile,
+                              });
+                            }}
+                          >
+                            🔍
+                          </button>
                         </div>
 
                         <div className="dup-item-details">
@@ -697,6 +746,145 @@ export default function DuplicatesManagerTab({
         )}
       </div>
 
+      {/* Single Item Full Preview Lightbox Modal */}
+      {previewItem && (
+        <div className="dup-comparator-modal" onClick={() => setPreviewItem(null)}>
+          <div
+            className="dup-comparator-container"
+            style={{ maxWidth: '850px', width: '92vw', maxHeight: '90vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dup-comparator-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                <span style={{ fontSize: '1.2rem' }}>🖼️</span>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {previewItem.item.filename}
+                  </h3>
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                    {previewItem.isPrimary ? '🌟 Recommended Primary File' : 'Duplicate Candidate'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setPreviewItem(null)}
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="dup-preview-modal-body">
+              <div className="dup-preview-img-wrap">
+                {previewItem.item.isVideo ? (
+                  <video
+                    className="dup-preview-modal-video"
+                    src={`/api/media/file?path=${encodeURIComponent(previewItem.item.filePath)}`}
+                    poster={`/api/media/thumbnail?path=${encodeURIComponent(previewItem.item.filePath)}&size=1080`}
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img
+                    className="dup-preview-modal-img"
+                    src={
+                      /\.(heic|heif)$/i.test(previewItem.item.filePath)
+                        ? `/api/media/thumbnail?path=${encodeURIComponent(previewItem.item.filePath)}&size=1920`
+                        : `/api/media/file?path=${encodeURIComponent(previewItem.item.filePath)}`
+                    }
+                    alt={previewItem.item.filename}
+                  />
+                )}
+              </div>
+
+              <div className="dup-preview-meta-panel">
+                <table className="dup-comparator-meta-table">
+                  <tbody>
+                    <tr>
+                      <td>Resolution</td>
+                      <td>
+                        {previewItem.item.width && previewItem.item.height
+                          ? `${previewItem.item.width}x${previewItem.item.height} (${previewItem.item.megapixels} MP)`
+                          : 'Unknown'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>File Size</td>
+                      <td>{formatBytes(previewItem.item.fileSize)}</td>
+                    </tr>
+                    <tr>
+                      <td>Folder</td>
+                      <td>{previewItem.item.folder}</td>
+                    </tr>
+                    {previewItem.item.similarityToPrimary !== undefined && (
+                      <tr>
+                        <td>Similarity</td>
+                        <td style={{ color: '#c084fc' }}>
+                          {Math.round(previewItem.item.similarityToPrimary * 100)}%
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                <div className="dup-preview-modal-actions">
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className={`btn ${selectedFiles.has(previewItem.item.filePath) ? 'btn-danger' : 'btn-secondary'}`}
+                      onClick={() => handleToggleSelectFile(previewItem.item.filePath)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        background: selectedFiles.has(previewItem.item.filePath) ? '#ef4444' : undefined,
+                        borderColor: selectedFiles.has(previewItem.item.filePath) ? '#ef4444' : undefined,
+                        color: '#fff',
+                      }}
+                    >
+                      {selectedFiles.has(previewItem.item.filePath) ? '☑️ Marked for Deletion' : '☐ Mark for Deletion'}
+                    </button>
+
+                    {!previewItem.isPrimary && previewItem.primaryFile && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          const prim = previewItem.primaryFile!;
+                          const dup = previewItem.item;
+                          setPreviewItem(null);
+                          setComparatorGroup({ primary: prim, duplicate: dup });
+                        }}
+                      >
+                        ⚖️ Compare Side-by-Side
+                      </button>
+                    )}
+                  </div>
+
+                  {onOpenViewer && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        onOpenViewer(previewItem.item.filePath);
+                        setPreviewItem(null);
+                      }}
+                      title="View file in Media Gallery"
+                    >
+                      ↗️ Open in Gallery
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Side-by-Side Visual Comparator Modal */}
       {comparatorGroup && (
         <div className="dup-comparator-modal" onClick={() => setComparatorGroup(null)}>
@@ -721,11 +909,26 @@ export default function DuplicatesManagerTab({
                   <span className="dup-badge dup-badge-exact">🌟 Recommended Primary (Keep)</span>
                   <span style={{ fontWeight: 600, color: '#fff' }}>{comparatorGroup.primary.filename}</span>
                 </div>
-                <img
-                  className="dup-comparator-preview"
-                  src={`/api/media/file?path=${encodeURIComponent(comparatorGroup.primary.filePath)}`}
-                  alt="Primary"
-                />
+                {comparatorGroup.primary.isVideo ? (
+                  <video
+                    className="dup-comparator-preview"
+                    src={`/api/media/file?path=${encodeURIComponent(comparatorGroup.primary.filePath)}`}
+                    poster={`/api/media/thumbnail?path=${encodeURIComponent(comparatorGroup.primary.filePath)}&size=720`}
+                    controls
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img
+                    className="dup-comparator-preview"
+                    src={
+                      /\.(heic|heif)$/i.test(comparatorGroup.primary.filePath)
+                        ? `/api/media/thumbnail?path=${encodeURIComponent(comparatorGroup.primary.filePath)}&size=1080`
+                        : `/api/media/file?path=${encodeURIComponent(comparatorGroup.primary.filePath)}`
+                    }
+                    alt="Primary"
+                  />
+                )}
                 <table className="dup-comparator-meta-table">
                   <tbody>
                     <tr>
@@ -750,11 +953,26 @@ export default function DuplicatesManagerTab({
                   <span className="dup-badge dup-badge-burst">Duplicate Candidate</span>
                   <span style={{ fontWeight: 600, color: '#fff' }}>{comparatorGroup.duplicate.filename}</span>
                 </div>
-                <img
-                  className="dup-comparator-preview"
-                  src={`/api/media/file?path=${encodeURIComponent(comparatorGroup.duplicate.filePath)}`}
-                  alt="Duplicate"
-                />
+                {comparatorGroup.duplicate.isVideo ? (
+                  <video
+                    className="dup-comparator-preview"
+                    src={`/api/media/file?path=${encodeURIComponent(comparatorGroup.duplicate.filePath)}`}
+                    poster={`/api/media/thumbnail?path=${encodeURIComponent(comparatorGroup.duplicate.filePath)}&size=720`}
+                    controls
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img
+                    className="dup-comparator-preview"
+                    src={
+                      /\.(heic|heif)$/i.test(comparatorGroup.duplicate.filePath)
+                        ? `/api/media/thumbnail?path=${encodeURIComponent(comparatorGroup.duplicate.filePath)}&size=1080`
+                        : `/api/media/file?path=${encodeURIComponent(comparatorGroup.duplicate.filePath)}`
+                    }
+                    alt="Duplicate"
+                  />
+                )}
                 <table className="dup-comparator-meta-table">
                   <tbody>
                     <tr>

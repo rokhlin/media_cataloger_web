@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { useFeatureFlags, normalizeClassName, DEFAULT_FEATURE_FLAG_PRESETS } from '../../services/featureFlagsContext';
+import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, DEFAULT_FEATURE_FLAG_PRESETS } from '../../services/featureFlagsContext';
 import UserManagementTab from './UserManagementTab';
 import AdminVaultTab from './AdminVaultTab';
 import type { FeatureFlag } from '../../models/featureFlags';
@@ -63,6 +63,8 @@ export default function AdminPanel({
   const [formKey, setFormKey] = useState('');
   const [formClassNames, setFormClassNames] = useState<string[]>([]);
   const [currentClassInput, setCurrentClassInput] = useState('');
+  const [formButtonIds, setFormButtonIds] = useState<string[]>([]);
+  const [currentButtonIdInput, setCurrentButtonIdInput] = useState('');
   const [formIsEnabled, setFormIsEnabled] = useState(true);
   const [formDescription, setFormDescription] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -75,7 +77,8 @@ export default function AdminPanel({
       (f) =>
         f.key.toLowerCase().includes(q) ||
         (f.description && f.description.toLowerCase().includes(q)) ||
-        f.classNames.some((c) => c.toLowerCase().includes(q))
+        f.classNames.some((c) => c.toLowerCase().includes(q)) ||
+        (f.buttonIds && f.buttonIds.some((b) => b.toLowerCase().includes(q)))
     );
   }, [flags, searchQuery]);
 
@@ -90,6 +93,8 @@ export default function AdminPanel({
     setFormKey('');
     setFormClassNames([]);
     setCurrentClassInput('');
+    setFormButtonIds([]);
+    setCurrentButtonIdInput('');
     setFormIsEnabled(true);
     setFormDescription('');
     setFormError(null);
@@ -102,6 +107,8 @@ export default function AdminPanel({
     setFormKey(flag.key);
     setFormClassNames([...flag.classNames]);
     setCurrentClassInput('');
+    setFormButtonIds([...(flag.buttonIds || [])]);
+    setCurrentButtonIdInput('');
     setFormIsEnabled(flag.isEnabled);
     setFormDescription(flag.description || '');
     setFormError(null);
@@ -128,6 +135,26 @@ export default function AdminPanel({
     }
   };
 
+  // Add button ID tag to form
+  const handleAddButtonIdTag = useCallback(() => {
+    const norm = normalizeButtonId(currentButtonIdInput);
+    if (norm && !formButtonIds.includes(norm)) {
+      setFormButtonIds((prev) => [...prev, norm]);
+      setCurrentButtonIdInput('');
+    }
+  }, [currentButtonIdInput, formButtonIds]);
+
+  const handleRemoveButtonIdTag = useCallback((bidToRemove: string) => {
+    setFormButtonIds((prev) => prev.filter((b) => b !== bidToRemove));
+  }, []);
+
+  const handleButtonIdInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+      e.preventDefault();
+      handleAddButtonIdTag();
+    }
+  };
+
   // Submit Modal
   const handleSaveModal = (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,10 +171,18 @@ export default function AdminPanel({
       finalClasses.push(pendingNorm);
     }
 
+    // Include any pending text in the button ID input
+    const finalButtonIds = [...formButtonIds];
+    const pendingBidNorm = normalizeButtonId(currentButtonIdInput);
+    if (pendingBidNorm && !finalButtonIds.includes(pendingBidNorm)) {
+      finalButtonIds.push(pendingBidNorm);
+    }
+
     if (editingFlagKey) {
       // Editing existing
       const ok = updateFlag(editingFlagKey, {
         classNames: finalClasses,
+        buttonIds: finalButtonIds,
         isEnabled: formIsEnabled,
         description: formDescription,
       });
@@ -165,6 +200,7 @@ export default function AdminPanel({
       const ok = addFlag({
         key: cleanKey,
         classNames: finalClasses,
+        buttonIds: finalButtonIds,
         isEnabled: formIsEnabled,
         description: formDescription,
       });
@@ -187,6 +223,7 @@ export default function AdminPanel({
       addFlag({
         key: preset.key,
         classNames: preset.classNames,
+        buttonIds: preset.buttonIds || [],
         isEnabled: preset.isEnabled,
         description: preset.description,
       });
@@ -215,29 +252,98 @@ export default function AdminPanel({
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
+        let items: any[] = [];
         if (Array.isArray(parsed)) {
-          let count = 0;
-          for (const item of parsed) {
-            if (item.key) {
-              addFlag({
-                key: item.key,
-                classNames: Array.isArray(item.classNames) ? item.classNames : [],
-                isEnabled: Boolean(item.isEnabled),
-                description: item.description || '',
-              });
-              count++;
+          items = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          items = Object.entries(parsed).map(([k, v]) => {
+            if (typeof v === 'boolean') {
+              return { key: k, isEnabled: v };
             }
-          }
-          alert(`Successfully imported ${count} feature flag(s).`);
+            if (v && typeof v === 'object') {
+              return { key: k, ...v };
+            }
+            return { key: k, isEnabled: Boolean(v) };
+          });
         } else {
-          alert('Invalid JSON file format. Expected an array of feature flags.');
+          alert('Invalid JSON file format. Expected an array or object of feature flags.');
+          return;
         }
+
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        for (const item of items) {
+          if (!item || typeof item !== 'object') continue;
+          const rawKey = String(item.key || item.id || item.name || '').trim();
+          if (!rawKey) continue;
+
+          const isEnabledVal = typeof item.isEnabled === 'boolean'
+            ? item.isEnabled
+            : typeof item.value === 'boolean'
+            ? item.value
+            : item.isEnabled !== undefined
+            ? Boolean(item.isEnabled)
+            : item.value !== undefined
+            ? Boolean(item.value)
+            : true;
+
+          // Check if a flag with this key already persists (case and format normalized)
+          const existing = FlagsManager.getFlag(rawKey);
+
+          if (existing) {
+            // Flag persists: just update value and metadata, do not add a duplicated record
+            const updates: Partial<Omit<FeatureFlag, 'key'>> = {
+              isEnabled: isEnabledVal,
+            };
+            if (Array.isArray(item.classNames)) {
+              updates.classNames = item.classNames;
+            }
+            if (Array.isArray(item.buttonIds)) {
+              updates.buttonIds = item.buttonIds;
+            }
+            if (typeof item.description === 'string' && item.description.trim()) {
+              updates.description = item.description.trim();
+            }
+            updateFlag(existing.key, updates);
+            updatedCount++;
+          } else {
+            // New flag: add record
+            addFlag({
+              key: rawKey,
+              classNames: Array.isArray(item.classNames) ? item.classNames : [],
+              buttonIds: Array.isArray(item.buttonIds) ? item.buttonIds : [],
+              isEnabled: isEnabledVal,
+              description: typeof item.description === 'string' ? item.description.trim() : '',
+            });
+            addedCount++;
+          }
+        }
+
+        const total = addedCount + updatedCount;
+        alert(`Successfully imported ${total} feature flag(s) (${updatedCount} updated, ${addedCount} added).`);
       } catch (err) {
         alert('Failed to read or parse JSON file: ' + err);
       }
     };
     input.click();
   };
+
+  // Suggested common button IDs in the app
+  const COMMON_APP_BUTTON_IDS = [
+    'btn-logs-toggle',
+    'btn-export-tree',
+    'btn-import-tree',
+    'btn-view-mode-grid',
+    'btn-view-mode-timeline',
+    'btn-view-mode-calendar',
+    'btn-view-mode-people',
+    'btn-gallery-refresh',
+    'btn-submit-flag-modal',
+    'btn-open-settings',
+    'btn-admin-add-flag',
+    'btn-face-registry',
+  ];
 
   // Suggested common class names in the app
   const COMMON_APP_CLASSES = [
@@ -547,6 +653,31 @@ export default function AdminPanel({
                             </span>
                           )}
                         </div>
+
+                        {flag.buttonIds && flag.buttonIds.length > 0 && (
+                          <div className="flag-classes-list" style={{ marginTop: '0.35rem' }}>
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                              Button IDs:
+                            </span>
+                            {flag.buttonIds.map((bid) => (
+                              <span
+                                key={bid}
+                                className={`class-tag ${isEnabled ? '' : 'disabled-class'}`}
+                                style={{
+                                  borderColor: isEnabled ? 'rgba(96, 165, 250, 0.4)' : undefined,
+                                  color: isEnabled ? '#93c5fd' : undefined,
+                                }}
+                                title={
+                                  isEnabled
+                                    ? `Button #${bid} is currently visible`
+                                    : `Button #${bid} is hidden via display:none`
+                                }
+                              >
+                                #{bid}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flag-actions-wrap">
@@ -891,6 +1022,84 @@ export default function AdminPanel({
                           }}
                         >
                           +{suggestion}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Button IDs Tag Input */}
+                <div className="admin-form-group">
+                  <label className="admin-form-label">
+                    <span>
+                      {t('flagButtonIdsLabel')}{' '}
+                      <span style={{ fontSize: '0.78rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>
+                        (Optional)
+                      </span>
+                    </span>
+                    <span className="admin-form-hint">{t('flagButtonIdsHint')}</span>
+                  </label>
+
+                  <div className="tag-input-container">
+                    {formButtonIds.map((bid) => (
+                      <span
+                        key={bid}
+                        className="tag-input-tag"
+                        style={{
+                          background: 'rgba(96, 165, 250, 0.15)',
+                          borderColor: 'rgba(96, 165, 250, 0.3)',
+                          color: '#93c5fd',
+                        }}
+                      >
+                        #{bid}
+                        <button
+                          type="button"
+                          className="tag-remove-btn"
+                          id={`btn-remove-flag-bid-${bid}`}
+                          onClick={() => handleRemoveButtonIdTag(bid)}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      className="tag-input-field"
+                      placeholder={formButtonIds.length === 0 ? "e.g. btn-logs-toggle (press Enter)" : "Add more button IDs..."}
+                      value={currentButtonIdInput}
+                      onChange={(e) => setCurrentButtonIdInput(e.target.value)}
+                      onKeyDown={handleButtonIdInputKeyDown}
+                      id="input-tag-button-id"
+                    />
+                  </div>
+
+                  {/* Suggestions Chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.35rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                      Suggested:
+                    </span>
+                    {COMMON_APP_BUTTON_IDS.filter((b) => !formButtonIds.includes(b))
+                      .slice(0, 6)
+                      .map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          id={`btn-suggest-bid-${suggestion}`}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '6px',
+                            padding: '0.15rem 0.45rem',
+                            fontSize: '0.72rem',
+                            color: '#93c5fd',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            if (!formButtonIds.includes(suggestion)) {
+                              setFormButtonIds((prev) => [...prev, suggestion]);
+                            }
+                          }}
+                        >
+                          +#{suggestion}
                         </button>
                       ))}
                   </div>

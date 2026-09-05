@@ -184,6 +184,31 @@ export class AppConfigService {
     return path.resolve(this.projectRoot, 'data', 'config', 'settings.json');
   }
 
+  ensureFeatureFlagsFile(): string {
+    const rootDataPath = path.resolve(this.projectRoot, 'data', 'feature_flags.json');
+    if (!fs.existsSync(rootDataPath)) {
+      const candidates = [
+        path.resolve(this.projectRoot, 'assets', 'default-feature-flags.json'),
+        path.resolve(this.projectRoot, 'src', 'assets', 'default-feature-flags.json'),
+        path.resolve(process.cwd(), 'assets', 'default-feature-flags.json'),
+        path.resolve(process.cwd(), 'src', 'assets', 'default-feature-flags.json'),
+      ];
+      const source = candidates.find((p) => fs.existsSync(p));
+      if (source) {
+        try {
+          const dir = path.dirname(rootDataPath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          fs.copyFileSync(source, rootDataPath);
+        } catch (err: any) {
+          console.warn(`[AppConfigService] Failed to copy default feature flags from ${source} to ${rootDataPath}:`, err.message);
+        }
+      }
+    }
+    return this.featureFlagsFilePath;
+  }
+
   get featureFlagsFilePath(): string {
     if (process.env.FEATURE_FLAGS_PATH && process.env.FEATURE_FLAGS_PATH.trim()) {
       return path.resolve(process.env.FEATURE_FLAGS_PATH.trim());

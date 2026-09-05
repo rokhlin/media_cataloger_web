@@ -1,7 +1,16 @@
 import { memo, useState } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import type { PersonEventRecord, EventMediaPinRecord } from '../../types/event.types.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import { formatTreeDate } from '../../utils/dateUtils.js';
+import { localizeKinshipTerm } from '../../utils/kinshipUtils.js';
+import {
+  localizeEventType,
+  localizeEventTitle,
+  localizeEventDescription,
+  localizeRelationshipStatus,
+  localizeRelationshipTargetType,
+} from '../../utils/eventLocalization.js';
 
 interface FactCardProps {
   event: PersonEventRecord;
@@ -42,17 +51,18 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedia }: FactCardProps) => {
+  const { language, t } = useLanguage();
   const { dateFormatStyle } = useFamilyTreeStore();
   const [selectedPin, setSelectedPin] = useState<EventMediaPinRecord | null>(null);
 
   const icon = CATEGORY_ICONS[event.event_type] || '📌';
   const color = CATEGORY_COLORS[event.event_type] || '#6366f1';
-  const datePrefix = event.date_is_approximate ? 'circa ' : '';
-  const formattedStart = event.event_date ? formatTreeDate(event.event_date, dateFormatStyle) : null;
-  const formattedEnd = event.end_date ? formatTreeDate(event.end_date, dateFormatStyle) : null;
+  const datePrefix = event.date_is_approximate ? `${language === 'ru' ? 'ок. ' : 'circa '}` : '';
+  const formattedStart = event.event_date ? formatTreeDate(event.event_date, dateFormatStyle, language) : null;
+  const formattedEnd = event.end_date ? formatTreeDate(event.end_date, dateFormatStyle, language) : null;
   const dateDisplay = formattedStart
     ? `${datePrefix}${formattedStart}${formattedEnd ? ` – ${formattedEnd}` : ''}`
-    : 'Date unrecorded';
+    : t('factDateUnrecorded');
 
   return (
     <div
@@ -85,7 +95,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
             }}
           >
             <span>{icon}</span>
-            <span>{event.event_type.replace('_', ' ')}</span>
+            <span>{localizeEventType(event.event_type, language).toUpperCase()}</span>
           </span>
 
           <span style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>
@@ -104,7 +114,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                 fontWeight: 700,
               }}
             >
-              👤 {(event as any).relativeRelation}: {(event as any).relativeName}
+              👤 {localizeKinshipTerm((event as any).relativeRelation, language)}: {(event as any).relativeName}
             </span>
           )}
         </div>
@@ -125,9 +135,9 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                   cursor: 'pointer',
                 }}
                 onClick={() => onPinMedia(event.id)}
-                title="Pin Gallery Photos"
+                title={t('btnPinPhoto')}
               >
-                📷 Pin Photo
+                📷 {t('btnPinPhoto')}
               </button>
             )}
 
@@ -142,7 +152,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                   cursor: 'pointer',
                 }}
                 onClick={() => onEdit(event)}
-                title="Edit Fact"
+                title={t('btnEditFact')}
               >
                 ✏️
               </button>
@@ -159,7 +169,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                   cursor: 'pointer',
                 }}
                 onClick={() => onDelete(event.id)}
-                title="Delete Fact"
+                title={t('btnDeleteFact')}
               >
                 🗑️
               </button>
@@ -170,7 +180,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
 
       {/* Title */}
       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
-        {event.title}
+        {localizeEventTitle(event.title, language)}
       </div>
 
       {/* Relationship Partner Details */}
@@ -187,9 +197,9 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
               fontWeight: 600,
             }}
           >
-            💞 {event.relationship_status ? `${event.relationship_status.toUpperCase()}: ` : ''}
-            {event.relationship_target_name || 'External'}
-            {event.relationship_target_type ? ` (${event.relationship_target_type.replace('_', ' ')})` : ''}
+            💞 {event.relationship_status ? `${localizeRelationshipStatus(event.relationship_status, language).toUpperCase()}: ` : ''}
+            {event.relationship_target_name || (language === 'ru' ? 'Вне древа' : 'External')}
+            {event.relationship_target_type ? ` (${localizeRelationshipTargetType(event.relationship_target_type, language)})` : ''}
           </span>
         </div>
       )}
@@ -197,7 +207,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
       {/* Description */}
       {event.description && (
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 8 }}>
-          {event.description}
+          {localizeEventDescription(event.description, language)}
         </div>
       )}
 
@@ -213,7 +223,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
       {event.pinned_media && event.pinned_media.length > 0 && (
         <div style={{ marginTop: 10, borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-            Pinned Photos ({event.pinned_media.length})
+            {t('pinnedPhotosCount')} ({event.pinned_media.length})
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
             {event.pinned_media.map((pin: EventMediaPinRecord) => {
@@ -261,7 +271,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
                         e.stopPropagation();
                         onUnpinMedia(pin.id);
                       }}
-                      title="Unpin photo"
+                      title={t('unpinPhotoTooltip')}
                     >
                       ✕
                     </button>
@@ -302,7 +312,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
           >
             <img
               src={`/api/media/file?file=${encodeURIComponent(selectedPin.media_file_path)}`}
-              alt={selectedPin.caption || 'Full resolution photo'}
+              alt={selectedPin.caption || t('fullResolutionPhoto')}
               style={{
                 maxWidth: '85vw',
                 maxHeight: '80vh',
@@ -329,7 +339,7 @@ export const FactCard = memo(({ event, onEdit, onDelete, onPinMedia, onUnpinMedi
               }}
               onClick={() => setSelectedPin(null)}
             >
-              Close
+              {t('close')}
             </button>
           </div>
         </div>

@@ -356,6 +356,34 @@
   z-index: 2;
 }
 
+.dup-item-zoom-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s, background 0.2s, transform 0.15s;
+  z-index: 2;
+}
+
+.dup-item-zoom-btn:hover {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.85);
+  border-color: rgba(99, 102, 241, 1);
+  transform: scale(1.08);
+}
+
 .dup-item-details {
   padding: 0.85rem;
   display: flex;
@@ -456,3 +484,79 @@
   color: #94a3b8;
   font-weight: 500;
 }
+
+/* Single Item Full Preview Lightbox */
+.dup-preview-modal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.dup-preview-img-wrap {
+  width: 100%;
+  height: 480px;
+  max-height: 55vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dup-preview-modal-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.dup-preview-meta-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dup-preview-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dup-preview-modal-video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.dup-item-video-tag {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(6px);
+  color: #c7d2fe;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  z-index: 2;
+  pointer-events: none;
+}
+

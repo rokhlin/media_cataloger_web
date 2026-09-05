@@ -20,6 +20,16 @@ const MONTH_SHORT_NAMES = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
+const MONTH_NAMES_RU = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+];
+
+const MONTH_SHORT_NAMES_RU = [
+  'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+];
+
 /**
  * Universal date parser that detects format automatically:
  * - YYYY-MM-DD, YYYY-MM, YYYY
@@ -139,6 +149,7 @@ export function parseFlexibleDate(input?: string | null): ParsedDateInfo {
 export function formatTreeDate(
   dateStr?: string | null,
   style: DateFormatStyle = 'YYYY-MM-DD',
+  language: 'en' | 'ru' = 'en',
 ): string {
   if (!dateStr || !dateStr.trim()) return '';
 
@@ -146,15 +157,18 @@ export function formatTreeDate(
   if (!parsed.isValid) return dateStr;
 
   const { year, month, day } = parsed;
+  const isRu = language === 'ru';
+  const monthNames = isRu ? MONTH_NAMES_RU : MONTH_NAMES;
+  const monthShortNames = isRu ? MONTH_SHORT_NAMES_RU : MONTH_SHORT_NAMES;
 
   // Partial cases: only day
   if (!year && !month && day) {
-    return `Day ${day}`;
+    return isRu ? `${day}-й день` : `Day ${day}`;
   }
 
   // Partial cases: month & day (no year)
   if (!year && month && day) {
-    const mName = MONTH_NAMES[month - 1];
+    const mName = monthNames[month - 1];
     switch (style) {
       case 'DD Month YYYY':
         return `${day} ${mName}`;
@@ -175,7 +189,7 @@ export function formatTreeDate(
 
   // Partial cases: year and month (no day)
   if (year && month && !day) {
-    const mName = MONTH_SHORT_NAMES[month - 1];
+    const mName = monthShortNames[month - 1];
     switch (style) {
       case 'DD Month YYYY':
         return `${mName} ${year}`;
@@ -193,7 +207,7 @@ export function formatTreeDate(
   if (year && month && day) {
     const dStr = day.toString().padStart(2, '0');
     const mStr = month.toString().padStart(2, '0');
-    const mName = MONTH_NAMES[month - 1];
+    const mName = monthNames[month - 1];
 
     switch (style) {
       case 'DD Month YYYY':
@@ -231,6 +245,7 @@ export function checkCelebration(
   typeOrConfig: 'BIRTHDAY' | 'ANNIVERSARY' | 'MEMORIAL' | any = 'BIRTHDAY',
   daysThreshold: number = 7,
   referenceDate: Date = new Date(),
+  language: 'en' | 'ru' = 'en',
 ): CelebrationMatch | null {
   if (!dateOrPerson) return null;
 
@@ -245,14 +260,14 @@ export function checkCelebration(
     if (!isLiving) {
       if (config && !config.showMemorial) return null;
       if (dateOrPerson.death_date) {
-        return checkCelebration(dateOrPerson.death_date, 'MEMORIAL', threshold, referenceDate);
+        return checkCelebration(dateOrPerson.death_date, 'MEMORIAL', threshold, referenceDate, language);
       }
       return null;
     }
 
     if (config && !config.showBirthday) return null;
     if (dateOrPerson.birth_date) {
-      return checkCelebration(dateOrPerson.birth_date, 'BIRTHDAY', threshold, referenceDate);
+      return checkCelebration(dateOrPerson.birth_date, 'BIRTHDAY', threshold, referenceDate, language);
     }
     return null;
   }
@@ -285,20 +300,30 @@ export function checkCelebration(
   if (finalDiffDays >= 0 && finalDiffDays <= threshold) {
     const isToday = finalDiffDays === 0;
     const yearsCount = parsed.year ? targetYear - parsed.year : undefined;
+    const isRu = language === 'ru';
 
     let icon = '🎂';
-    let label = 'Birthday';
+    let label = isRu ? 'День рождения' : 'Birthday';
     if (type === 'ANNIVERSARY') {
       icon = '💍';
-      label = 'Wedding Anniversary';
+      label = isRu ? 'Годовщина свадьбы' : 'Wedding Anniversary';
     } else if (type === 'MEMORIAL') {
       icon = '🕯️';
-      label = 'Memorial';
+      label = isRu ? 'День памяти' : 'Memorial';
     }
 
-    const title = isToday
-      ? `${icon} ${label} Today!${yearsCount ? ` (${yearsCount} yrs)` : ''}`
-      : `${icon} ${label} in ${finalDiffDays} ${finalDiffDays === 1 ? 'day' : 'days'}${yearsCount ? ` (${yearsCount} yrs)` : ''}`;
+    let title: string;
+    if (isRu) {
+      const yrsStr = yearsCount ? ` (${yearsCount} лет)` : '';
+      title = isToday
+        ? `${icon} ${label} сегодня!${yrsStr}`
+        : `${icon} ${label} через ${finalDiffDays} дн.${yrsStr}`;
+    } else {
+      const yrsStr = yearsCount ? ` (${yearsCount} yrs)` : '';
+      title = isToday
+        ? `${icon} ${label} Today!${yrsStr}`
+        : `${icon} ${label} in ${finalDiffDays} ${finalDiffDays === 1 ? 'day' : 'days'}${yrsStr}`;
+    }
 
     return {
       isUpcomingOrToday: true,

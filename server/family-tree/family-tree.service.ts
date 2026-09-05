@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, Optional } from '@nestjs/common';
 import { FamilyTreeDatabaseService } from './family-tree-db.service.js';
 import { GraphIntegrityService } from './graph-integrity.service.js';
 import { FamilyEventsService } from './family-events.service.js';
+import { KinshipEngineService } from './kinship-engine.service.js';
 import type {
   TreeRecord,
   PersonRecord,
@@ -10,6 +11,8 @@ import type {
   TreeGraphData,
   TreeGraphPerson,
   TreeGraphUnion,
+  PersonEventRecord,
+  TreeHistoryRecord,
 } from './types/family-tree.types.js';
 import type {
   CreateTreeDto,
@@ -30,6 +33,7 @@ export class FamilyTreeService {
     @Inject(FamilyTreeDatabaseService) private readonly dbService: FamilyTreeDatabaseService,
     @Inject(GraphIntegrityService) private readonly integrityService: GraphIntegrityService,
     @Inject(FamilyEventsService) private readonly eventsService: FamilyEventsService,
+    @Optional() @Inject(KinshipEngineService) private readonly kinshipService?: KinshipEngineService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -142,7 +146,14 @@ export class FamilyTreeService {
     const treeId = dto.tree_id || this.getOrCreateDefaultTree().id;
     this.getTreeById(treeId);
 
-    const personId = `p_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let personId = `p_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (dto.id && dto.id.trim()) {
+      const cleanId = dto.id.trim();
+      const existing = db.prepare('SELECT id FROM ft_persons WHERE id = ?').get(cleanId);
+      if (!existing) {
+        personId = cleanId;
+      }
+    }
     const isLiving = dto.is_living === false || dto.is_living === 0 ? 0 : 1;
     const customAttrStr =
       typeof dto.custom_attributes === 'object'
@@ -291,27 +302,77 @@ export class FamilyTreeService {
     return updated;
   }
 
+  public cleanUpOrphanedUnions(treeId?: string): void {
+    const db = this.dbService.getDb();
+    const tId = treeId || this.getOrCreateDefaultTree().id;
+
+    // Find all unions where:
+    // 1. partner_count = 0 and child_count <= 1 (no parents, and <= 1 child -> orphaned ring)
+    // 2. partner_count <= 1 and child_count = 0 (single person with no spouse and no children -> orphaned ring)
+    // 3. partner_count = 0 and child_count = 0 (completely empty union)
+    const orphanedUnions = db
+      .prepare(`
+        SELECT u.id
+        FROM ft_unions u
+        LEFT JOIN (
+          SELECT union_id, COUNT(*) as partner_count
+          FROM ft_union_partners
+          GROUP BY union_id
+        ) up ON u.id = up.union_id
+        LEFT JOIN (
+          SELECT union_id, COUNT(*) as child_count
+          FROM ft_child_relations
+          GROUP BY union_id
+        ) cr ON u.id = cr.union_id
+        WHERE u.tree_id = ? AND (
+          (COALESCE(up.partner_count, 0) = 0 AND COALESCE(cr.child_count, 0) <= 1)
+          OR
+          (COALESCE(up.partner_count, 0) <= 1 AND COALESCE(cr.child_count, 0) = 0)
+        )
+      `)
+      .all(tId) as Array<{ id: string }>;
+
+    for (const ou of orphanedUnions) {
+      try {
+        this.deleteUnion(ou.id);
+      } catch {
+        // ignore if already removed
+      }
+    }
+  }
+
   public deletePerson(id: string): void {
     const db = this.dbService.getDb();
-    this.getPersonById(id);
+    const person = this.getPersonById(id);
+
+    // Guard: prevent deletion of non-leaf nodes to preserve graph connectivity.
+    // A non-leaf person is one who has both parents (they appear in ft_child_relations)
+    // AND children (they are a partner in a union that has child records).
+    const isChild = db
+      .prepare('SELECT COUNT(*) as cnt FROM ft_child_relations WHERE person_id = ?')
+      .get(id) as { cnt: number };
+
+    const hasChildren = db
+      .prepare(`
+        SELECT COUNT(*) as cnt
+        FROM ft_child_relations cr
+        INNER JOIN ft_union_partners up ON up.union_id = cr.union_id
+        WHERE up.person_id = ?
+      `)
+      .get(id) as { cnt: number };
+
+    if (isChild.cnt > 0 && hasChildren.cnt > 0) {
+      throw new BadRequestException(
+        `Cannot delete "${person.first_name}${person.last_name ? ' ' + person.last_name : ''}" because they connect parents and children in the tree. ` +
+        `Remove their children or unlink their parents first.`,
+      );
+    }
 
     this.eventsService.removeChildBornEvents(id);
     db.prepare('DELETE FROM ft_persons WHERE id = ?').run(id);
 
-    // Clean up any unions that now have zero partners and zero children
-    const emptyUnions = db
-      .prepare(`
-        SELECT u.id
-        FROM ft_unions u
-        LEFT JOIN ft_union_partners up ON u.id = up.union_id
-        LEFT JOIN ft_child_relations cr ON u.id = cr.union_id
-        WHERE up.id IS NULL AND cr.id IS NULL
-      `)
-      .all() as Array<{ id: string }>;
-
-    for (const eu of emptyUnions) {
-      this.deleteUnion(eu.id);
-    }
+    // Automatically purge all orphaned/empty unions
+    this.cleanUpOrphanedUnions(person.tree_id);
   }
 
   public listPersons(treeId?: string, query?: string): PersonRecord[] {
@@ -382,25 +443,59 @@ export class FamilyTreeService {
       }
 
       case 'CHILD': {
-        // Find existing primary spouse union or create single-parent union for target
         const db = this.dbService.getDb();
-        const existingUnion = db
-          .prepare(`
-            SELECT union_id
-            FROM ft_union_partners
-            WHERE person_id = ?
-            LIMIT 1
-          `)
-          .get(target.id) as { union_id: string } | undefined;
+        const otherParentId = dto.other_parent_id?.trim();
 
-        if (existingUnion) {
-          union = this.getUnionById(existingUnion.union_id);
+        if (otherParentId && otherParentId !== 'unknown') {
+          // Verify that otherParent exists in the tree
+          this.getPersonById(otherParentId);
+
+          // Find an existing union between target and otherParent
+          const existingUnion = db
+            .prepare(`
+              SELECT u.id
+              FROM ft_unions u
+              JOIN ft_union_partners up1 ON u.id = up1.union_id AND up1.person_id = ?
+              JOIN ft_union_partners up2 ON u.id = up2.union_id AND up2.person_id = ?
+              WHERE u.tree_id = ?
+              LIMIT 1
+            `)
+            .get(target.id, otherParentId, target.tree_id) as { id: string } | undefined;
+
+          if (existingUnion) {
+            union = this.getUnionById(existingUnion.id);
+          } else {
+            union = this.createUnion({
+              tree_id: target.tree_id,
+              partner_ids: [target.id, otherParentId],
+              union_type: 'MARRIAGE',
+            });
+          }
         } else {
-          union = this.createUnion({
-            tree_id: target.tree_id,
-            partner_ids: [target.id],
-            union_type: 'MARRIAGE',
-          });
+          // Unknown second parent -> keep the child's second parent empty
+          const singleParentUnion = db
+            .prepare(`
+              SELECT u.id
+              FROM ft_unions u
+              JOIN ft_union_partners up ON u.id = up.union_id
+              WHERE u.tree_id = ? AND u.id IN (
+                SELECT union_id FROM ft_union_partners WHERE person_id = ?
+              )
+              GROUP BY u.id
+              HAVING COUNT(up.person_id) = 1
+              LIMIT 1
+            `)
+            .get(target.tree_id, target.id) as { id: string } | undefined;
+
+          if (singleParentUnion) {
+            union = this.getUnionById(singleParentUnion.id);
+          } else {
+            union = this.createUnion({
+              tree_id: target.tree_id,
+              partner_ids: [target.id],
+              union_type: 'MARRIAGE',
+            });
+          }
         }
 
         this.addChildToUnion(union.id, {
@@ -469,7 +564,14 @@ export class FamilyTreeService {
     const treeId = dto.tree_id || this.getOrCreateDefaultTree().id;
     this.getTreeById(treeId);
 
-    const unionId = `u_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let unionId = `u_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (dto.id && dto.id.trim()) {
+      const cleanId = dto.id.trim();
+      const existing = db.prepare('SELECT id FROM ft_unions WHERE id = ?').get(cleanId);
+      if (!existing) {
+        unionId = cleanId;
+      }
+    }
     const unionType = dto.union_type || 'MARRIAGE';
 
     db.prepare(`
@@ -567,6 +669,13 @@ export class FamilyTreeService {
     const updated = this.getUnionById(id);
     this.eventsService.propagateUnionEvents(updated);
 
+    if (dto.partner_ids !== undefined) {
+      const childRows = db.prepare('SELECT person_id FROM ft_child_relations WHERE union_id = ?').all(id) as Array<{ person_id: string }>;
+      for (const cr of childRows) {
+        this.eventsService.propagateChildBornEvents(cr.person_id, id);
+      }
+    }
+
     return updated;
   }
 
@@ -594,13 +703,19 @@ export class FamilyTreeService {
 
     const union = this.getUnionById(unionId);
     this.eventsService.propagateUnionEvents(union);
+
+    const childRows = db.prepare('SELECT person_id FROM ft_child_relations WHERE union_id = ?').all(unionId) as Array<{ person_id: string }>;
+    for (const cr of childRows) {
+      this.eventsService.propagateChildBornEvents(cr.person_id, unionId);
+    }
   }
 
   public removePartnerFromUnion(unionId: string, personId: string): void {
     const db = this.dbService.getDb();
-    db.prepare('DELETE FROM ft_union_partners WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     const union = this.getUnionById(unionId);
+    db.prepare('DELETE FROM ft_union_partners WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     this.eventsService.propagateUnionEvents(union);
+    this.cleanUpOrphanedUnions(union.tree_id);
   }
 
   // ---------------------------------------------------------------------------
@@ -628,8 +743,10 @@ export class FamilyTreeService {
 
   public removeChildFromUnion(unionId: string, personId: string): void {
     const db = this.dbService.getDb();
+    const union = this.getUnionById(unionId);
     db.prepare('DELETE FROM ft_child_relations WHERE union_id = ? AND person_id = ?').run(unionId, personId);
     this.eventsService.removeChildBornEvents(personId, unionId);
+    this.cleanUpOrphanedUnions(union.tree_id);
   }
 
   public updateChildRelation(unionId: string, personId: string, dto: UpdateChildRelationDto): void {
@@ -734,14 +851,30 @@ export class FamilyTreeService {
     const db = this.dbService.getDb();
     const tree = treeId ? this.getTreeById(treeId) : this.getOrCreateDefaultTree();
 
+    // Ensure database has no dangling / orphaned unions
+    this.cleanUpOrphanedUnions(tree.id);
+
     const persons = db
       .prepare('SELECT * FROM ft_persons WHERE tree_id = ? ORDER BY created_at ASC')
       .all(tree.id) as PersonRecord[];
 
-    const graphPersons: TreeGraphPerson[] = persons.map((p) => ({
-      ...p,
-      full_name: [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' '),
-    }));
+    const rootPersonId = tree.root_person_id;
+    const graphPersons: TreeGraphPerson[] = persons.map((p) => {
+      let kinshipToRoot: string | null = null;
+      if (rootPersonId && this.kinshipService) {
+        try {
+          const k = this.kinshipService.calculateKinship(rootPersonId, p.id);
+          kinshipToRoot = k?.primaryTerm || null;
+        } catch {
+          // fallback
+        }
+      }
+      return {
+        ...p,
+        full_name: [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' '),
+        kinship_to_root: kinshipToRoot,
+      };
+    });
 
     const unions = db
       .prepare('SELECT * FROM ft_unions WHERE tree_id = ? ORDER BY created_at ASC')
@@ -770,11 +903,56 @@ export class FamilyTreeService {
       };
     });
 
+    const facts = db
+      .prepare(`
+        SELECT pe.* FROM ft_person_events pe
+        JOIN ft_persons p ON pe.person_id = p.id
+        WHERE p.tree_id = ?
+        ORDER BY pe.event_date ASC
+      `)
+      .all(tree.id) as PersonEventRecord[];
+
     return {
       tree,
       persons: graphPersons,
       unions: graphUnions,
       root_person_id: tree.root_person_id,
+      facts,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tree History & Audit
+  // ---------------------------------------------------------------------------
+
+  public recordTreeHistory(
+    treeId: string,
+    actionType: string,
+    description: string,
+    details?: any,
+  ): TreeHistoryRecord {
+    const db = this.dbService.getDb();
+    const id = `hist_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const detailsStr = details ? (typeof details === 'string' ? details : JSON.stringify(details)) : null;
+
+    db.prepare(`
+      INSERT INTO ft_tree_history (id, tree_id, action_type, description, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, treeId, actionType, description, detailsStr);
+
+    return db.prepare('SELECT * FROM ft_tree_history WHERE id = ?').get(id) as TreeHistoryRecord;
+  }
+
+  public getTreeHistory(treeId: string, limit: number = 50): TreeHistoryRecord[] {
+    const db = this.dbService.getDb();
+    const tId = treeId || this.getOrCreateDefaultTree().id;
+    return db
+      .prepare(`
+        SELECT * FROM ft_tree_history
+        WHERE tree_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `)
+      .all(tId, limit) as TreeHistoryRecord[];
   }
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import type { TreeGraphData, NodeViewStyle } from '../types/tree.types.js';
 import { computeElkLayout } from '../workers/elk-layout.worker.js';
+import { computeRelationshipToRoot } from '../utils/kinshipUtils.js';
 
 export function useTreeLayoutWorker(
   graphData: TreeGraphData | null,
@@ -45,6 +46,7 @@ export function useTreeLayoutWorker(
             person: p,
             isRoot: p.id === graphData.root_person_id,
             isFolded: false,
+            relationshipToRoot: computeRelationshipToRoot(p, graphData),
           },
         }));
         setNodes(fallbackNodes);

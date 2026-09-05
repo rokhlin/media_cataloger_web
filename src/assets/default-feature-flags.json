@@ -1,0 +1,165 @@
+[
+  {
+    "key": "first_frame_thumbnail_generation",
+    "classNames": [
+      "gallery-video-play-overlay"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "First-frame video thumbnail extraction and preview"
+  },
+  {
+    "key": "header_logs_button",
+    "classNames": [
+      "btn-logs-toggle"
+    ],
+    "buttonIds": [
+      "btn-logs-toggle"
+    ],
+    "isEnabled": true,
+    "description": "Header logs toggle button"
+  },
+  {
+    "key": "theme_quick_switcher",
+    "classNames": [
+      "theme-switcher-container"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Header theme switcher and dark/light toggle"
+  },
+  {
+    "key": "language_switcher",
+    "classNames": [
+      "lang-switcher-wrap"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Language switch buttons (EN/RU)"
+  },
+  {
+    "key": "status_badge_header",
+    "classNames": [
+      "status-badge"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "System status indicator badge in header"
+  },
+  {
+    "key": "gallery_view_mode_selector",
+    "classNames": [
+      "view-mode-selector"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Media gallery view mode switcher buttons"
+  },
+  {
+    "key": "media_filter_bar",
+    "classNames": [
+      "gallery-filter-bar",
+      "gallery-filters-row"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Media gallery search and filter toolbar"
+  },
+  {
+    "key": "gallery-scanning-banner",
+    "classNames": [
+      "gallery-scanning-banner"
+    ],
+    "buttonIds": [],
+    "isEnabled": false,
+    "description": "",
+    "createdAt": 1788379827344,
+    "updatedAt": 1788379893816
+  },
+  {
+    "key": "view_switcher_dropdown",
+    "classNames": [
+      "view-switcher-dropdown"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Show gallery view switcher as dropdown list instead of button group",
+    "updatedAt": 1788382682523
+  },
+  {
+    "key": "filter_bar_dropdown",
+    "classNames": [
+      "filter-bar-dropdown"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Show filter, sort, and search bar as dropdown menu instead of expanded toolbar",
+    "updatedAt": 1788382637701
+  },
+  {
+    "key": "face_registry_dropdown",
+    "classNames": [
+      "face-registry-dropdown"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Show face registry UI controls as dropdown list instead of tab buttons",
+    "updatedAt": 1788382618505
+  },
+  {
+    "key": "system-settings-header",
+    "classNames": [
+      "system-settings-header"
+    ],
+    "buttonIds": [],
+    "isEnabled": false,
+    "description": "",
+    "createdAt": 1788383961132,
+    "updatedAt": 1788383961132
+  },
+  {
+    "key": "hide_top_screen_zoom_actions",
+    "classNames": [
+      "family-tree-top-zoom-actions",
+      "tree-top-zoom-actions"
+    ],
+    "buttonIds": [],
+    "isEnabled": true,
+    "description": "Hide Zoom In, Zoom Out, and Fit view buttons from Family Tree top screen actions"
+  },
+  {
+    "key": "feature-flags-presets-section",
+    "classNames": [
+      "presets-section"
+    ],
+    "buttonIds": [
+      "btn-reset-flags"
+    ],
+    "isEnabled": false,
+    "description": "",
+    "createdAt": 1788595845338,
+    "updatedAt": 1788595910717
+  },
+  {
+    "key": "family-tree-toolbar-export-tree-btn",
+    "classNames": [],
+    "buttonIds": [
+      "toolbar-export-tree-btn"
+    ],
+    "isEnabled": false,
+    "description": "",
+    "createdAt": 1788596419053,
+    "updatedAt": 1788596419053
+  },
+  {
+    "key": "family-tree-toolbar-recalculate-tree-btn",
+    "classNames": [],
+    "buttonIds": [
+      "toolbar-recalculate-tree-btn"
+    ],
+    "isEnabled": false,
+    "description": "",
+    "createdAt": 1788596492353,
+    "updatedAt": 1788596492353
+  }
+]

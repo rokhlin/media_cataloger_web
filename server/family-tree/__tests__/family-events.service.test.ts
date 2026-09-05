@@ -184,4 +184,76 @@ describe('FamilyEventsService', () => {
     const finalTimeline = eventsService.getPersonTimeline(person.id);
     assert.ok(!finalTimeline.some((e) => e.id === fact.id), 'Fact should be deleted');
   });
+
+  it('should not duplicate facts when createEvent is called with existing ID or same title/type', () => {
+    const person = treeService.createPerson({
+      tree_id: treeId,
+      first_name: 'Isaac',
+      last_name: 'Newton',
+      gender: 'MALE',
+    });
+
+    const fact1 = eventsService.createEvent(person.id, {
+      id: 'fact_custom_123',
+      event_type: 'GRADUATION',
+      title: 'Trinity College',
+      description: 'Admitted to Trinity College, Cambridge',
+    });
+
+    assert.strictEqual(fact1.id, 'fact_custom_123');
+
+    // Attempt to create again with same ID
+    const factDuplicateId = eventsService.createEvent(person.id, {
+      id: 'fact_custom_123',
+      event_type: 'GRADUATION',
+      title: 'Trinity College',
+      description: 'Updated admission info',
+    });
+
+    assert.strictEqual(factDuplicateId.id, 'fact_custom_123');
+    assert.strictEqual(factDuplicateId.description, 'Updated admission info');
+
+    // Attempt to create with same person, event_type and title without ID
+    const factSameTitle = eventsService.createEvent(person.id, {
+      event_type: 'GRADUATION',
+      title: 'Trinity College',
+      description: 'Second update',
+    });
+
+    assert.strictEqual(factSameTitle.id, 'fact_custom_123');
+    assert.strictEqual(factSameTitle.description, 'Second update');
+
+    const timeline = eventsService.getPersonTimeline(person.id);
+    const gradEvents = timeline.filter((e) => e.event_type === 'GRADUATION');
+    assert.strictEqual(gradEvents.length, 1, 'Should have exactly 1 GRADUATION event, no duplicates');
+  });
+
+  it('should propagate CHILD_BORN event to new partner when union partner_ids are updated', () => {
+    const parent1 = treeService.createPerson({ tree_id: treeId, first_name: 'Father1', gender: 'MALE' });
+    const parent2 = treeService.createPerson({ tree_id: treeId, first_name: 'Mother1', gender: 'FEMALE' });
+    const child = treeService.createPerson({ tree_id: treeId, first_name: 'Child1', gender: 'FEMALE', birth_date: '2020-01-01' });
+
+    // Union initially has only parent1
+    const union = treeService.createUnion({
+      tree_id: treeId,
+      partner_ids: [parent1.id],
+      union_type: 'MARRIAGE',
+    });
+
+    treeService.addChildToUnion(union.id, { person_id: child.id, filiation: 'BIOLOGICAL' });
+
+    const timelineP1Before = eventsService.getPersonTimeline(parent1.id);
+    assert.ok(timelineP1Before.some((e) => e.event_type === 'CHILD_BORN' && e.title.includes('Child1')));
+
+    const timelineP2Before = eventsService.getPersonTimeline(parent2.id);
+    assert.ok(!timelineP2Before.some((e) => e.event_type === 'CHILD_BORN'));
+
+    // Now update union to include parent2
+    treeService.updateUnion(union.id, { partner_ids: [parent1.id, parent2.id] });
+
+    const timelineP2After = eventsService.getPersonTimeline(parent2.id);
+    const p2ChildBorn = timelineP2After.filter((e) => e.event_type === 'CHILD_BORN');
+    assert.strictEqual(p2ChildBorn.length, 1, 'Parent2 should have received CHILD_BORN event');
+    assert.ok(p2ChildBorn[0].title.includes('Child1'));
+  });
 });

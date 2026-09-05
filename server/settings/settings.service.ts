@@ -253,7 +253,7 @@ export class SettingsService {
   }
 
   getFeatureFlags(): any[] {
-    const filePath = this.config.featureFlagsFilePath;
+    const filePath = this.config.ensureFeatureFlagsFile();
     if (fs.existsSync(filePath)) {
       try {
         const raw = fs.readFileSync(filePath, 'utf-8');

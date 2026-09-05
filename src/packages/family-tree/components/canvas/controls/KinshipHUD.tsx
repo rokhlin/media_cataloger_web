@@ -1,6 +1,8 @@
 import { memo } from 'react';
 import { useFamilyTreeStore } from '../../../state/useFamilyTreeStore.js';
 import { useKinship } from '../../../hooks/useKinship.js';
+import { localizeKinshipTerm, localizeKinshipCategory } from '../../../utils/kinshipUtils.js';
+import { useLanguage } from '../../../../../i18n/LanguageContext.js';
 import type { TreeGraphData } from '../../../types/tree.types.js';
 
 interface KinshipHUDProps {
@@ -9,6 +11,7 @@ interface KinshipHUDProps {
 
 export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
   const { selectedPersonId, openDrawer } = useFamilyTreeStore();
+  const { language, t } = useLanguage();
   const rootPersonId = graphData?.root_person_id;
 
   const { kinship } = useKinship(rootPersonId, selectedPersonId);
@@ -21,12 +24,14 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
   if (!selectedPerson) return null;
 
   const selectedName = selectedPerson.full_name || `${selectedPerson.first_name} ${selectedPerson.last_name || ''}`.trim();
-  const rootName = rootPerson ? (rootPerson.full_name || rootPerson.first_name) : 'Root';
+  const rootName = rootPerson ? (rootPerson.full_name || rootPerson.first_name) : (language === 'ru' ? 'Корень' : 'Root');
 
-  const term = kinship?.primaryTerm || 'Selected';
-  const category = kinship?.category ? ` • ${kinship.category.replace('_', ' ')}` : '';
-  const genDist = kinship?.generationalDistance ? ` • ${kinship.generationalDistance > 0 ? `+${kinship.generationalDistance}` : kinship.generationalDistance} Gen` : '';
-  const blood = kinship?.isDirectBlood ? ' • 🩸 Direct Blood' : '';
+  const rawTerm = kinship?.primaryTerm || (language === 'ru' ? 'Выбран(а)' : 'Selected');
+  const term = localizeKinshipTerm(rawTerm, language);
+  const rawCat = kinship?.category ? localizeKinshipCategory(kinship.category, language) : '';
+  const category = rawCat ? ` • ${rawCat}` : '';
+  const genDist = kinship?.generationalDistance ? ` • ${kinship.generationalDistance > 0 ? `+${kinship.generationalDistance}` : kinship.generationalDistance} ${t('hudGeneration')}` : '';
+  const blood = kinship?.isDirectBlood ? ` • 🩸 ${t('hudDirectBlood')}` : '';
 
   return (
     <div
@@ -56,7 +61,7 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
         <span style={{ fontSize: 16 }}>🧬</span>
         <span>
           <strong style={{ color: 'var(--primary-color, #6366f1)' }}>{selectedName}</strong>
-          {' is '}
+          {language === 'ru' ? ' — ' : ' is '}
           <span
             style={{
               background: 'linear-gradient(135deg, #a855f7, #6366f1)',
@@ -68,7 +73,7 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
           >
             {term}
           </span>
-          {` to ${rootName}`}
+          {` ${t('hudRelationshipTo')} ${rootName}`}
           <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
             {category}
             {genDist}
@@ -92,7 +97,7 @@ export const KinshipHUD = memo(({ graphData }: KinshipHUDProps) => {
         }}
         onClick={() => openDrawer('timeline', selectedPerson.id)}
       >
-        📖 View Life Story & Facts
+        📖 {t('hudViewLifeStory')}
       </button>
     </div>
   );

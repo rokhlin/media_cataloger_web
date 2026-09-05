@@ -246,7 +246,28 @@ export class FamilyEventsService {
       throw new NotFoundException(`Person with ID "${personId}" not found`);
     }
 
-    const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (dto.id && dto.id.trim()) {
+      const cleanId = dto.id.trim();
+      const existing = db.prepare('SELECT id FROM ft_person_events WHERE id = ?').get(cleanId) as { id: string } | undefined;
+      if (existing) {
+        return this.updateEvent(cleanId, dto);
+      }
+      eventId = cleanId;
+    }
+
+    // Deduplicate by (person_id, event_type, title) to prevent duplicate facts
+    const trimmedTitle = (dto.title || '').trim();
+    if (trimmedTitle) {
+      const existingSame = db.prepare(`
+        SELECT id FROM ft_person_events
+        WHERE person_id = ? AND event_type = ? AND TRIM(LOWER(title)) = TRIM(LOWER(?))
+      `).get(personId, dto.event_type, trimmedTitle) as { id: string } | undefined;
+
+      if (existingSame) {
+        return this.updateEvent(existingSame.id, dto);
+      }
+    }
     const dateApprox = dto.date_is_approximate ? 1 : 0;
 
     const stmt = db.prepare(`

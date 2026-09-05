@@ -1,6 +1,7 @@
 export interface FeatureFlag {
   key: string;
   classNames: string[];
+  buttonIds?: string[];
   isEnabled: boolean;
   description?: string;
   createdAt?: number;
@@ -17,6 +18,8 @@ export interface FeatureFlagsContextValue {
   clearAllFlags: () => void;
   isFeatureEnabled: (key: string) => boolean;
   isClassEnabled: (className: string) => boolean;
+  isButtonEnabled: (buttonId: string) => boolean;
   hasFlag: (key: string) => boolean;
   disabledClassesCount: number;
+  disabledButtonsCount: number;
 }

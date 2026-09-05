@@ -57,6 +57,7 @@ const DEFAULT_CELEBRATION_CONFIG: CelebrationBadgeConfig = {
   badgeStyle: 'pill',
   badgeColor: '#ec4899',
   customIcon: '🎂',
+  contentDisplay: 'icon_and_text',
 };
 
 function loadStoredJson<T>(key: string, fallback: T): T {

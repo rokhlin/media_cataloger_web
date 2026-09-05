@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Patch, Body, Query, Res, Headers, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Req, Res, Headers, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MediaService } from './media.service.js';
@@ -26,9 +26,10 @@ function getMimeType(filePath: string): string {
     case '.heif':
       return 'image/heic';
     case '.mp4':
+    case '.m4v':
       return 'video/mp4';
     case '.mov':
-      return 'video/quicktime';
+      return 'video/mp4'; // QuickTime container is ISO BMFF compatible with MP4 demuxers
     case '.avi':
       return 'video/x-msvideo';
     case '.mkv':
@@ -40,7 +41,13 @@ function getMimeType(filePath: string): string {
   }
 }
 
-function streamFileSafely(filePath: string, res: Response, mimeType?: string, cacheControl?: string): void {
+function streamFileSafely(
+  filePath: string,
+  req: Request | undefined,
+  res: Response,
+  mimeType?: string,
+  cacheControl?: string,
+): void {
   try {
     if (!fs.existsSync(filePath)) {
       if (!res.headersSent) {
@@ -57,18 +64,49 @@ function streamFileSafely(filePath: string, res: Response, mimeType?: string, ca
     }
 
     const type = mimeType || getMimeType(filePath);
-    res.setHeader('Content-Type', type);
-    res.setHeader('Content-Length', stat.size);
+    const rangeHeader = req?.headers?.range;
+
+    res.setHeader('Accept-Ranges', 'bytes');
     if (cacheControl) {
       res.setHeader('Cache-Control', cacheControl);
     }
-    const stream = fs.createReadStream(filePath);
-    stream.on('error', (err) => {
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'stream_error', detail: err.message });
+
+    if (rangeHeader && rangeHeader.startsWith('bytes=')) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+
+      if (isNaN(start) || isNaN(end) || start >= stat.size || end >= stat.size || start > end) {
+        res.status(416).setHeader('Content-Range', `bytes */${stat.size}`).end();
+        return;
       }
-    });
-    stream.pipe(res);
+
+      const chunkSize = end - start + 1;
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+      res.setHeader('Content-Length', chunkSize);
+      res.setHeader('Content-Type', type);
+
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.on('error', (err) => {
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'stream_error', detail: err.message });
+        }
+      });
+      stream.pipe(res);
+    } else {
+      res.status(200);
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Content-Type', type);
+
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', (err) => {
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'stream_error', detail: err.message });
+        }
+      });
+      stream.pipe(res);
+    }
   } catch (err: any) {
     if (!res.headersSent) {
       res.status(500).json({ error: 'stream_exception', detail: err.message });
@@ -117,6 +155,7 @@ export class MediaController {
     @Query('size') querySize: string,
     @Query('vault_token') queryVaultToken: string,
     @Headers('x-vault-token') headerVaultToken: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -130,10 +169,10 @@ export class MediaController {
 
     try {
       const thumb = await this.thumbnailService.getThumbnail(resolved, size);
-      streamFileSafely(thumb.filePath, res, 'image/webp', 'public, max-age=31536000, immutable');
+      streamFileSafely(thumb.filePath, req, res, 'image/webp', 'public, max-age=31536000, immutable');
     } catch {
       // If thumbnail generation is not possible (e.g. video or unsupported format), fallback to original file
-      streamFileSafely(resolved, res);
+      streamFileSafely(resolved, req, res);
     }
   }
 
@@ -150,6 +189,7 @@ export class MediaController {
     @Query('download') queryDownload: string,
     @Query('vault_token') queryVaultToken: string,
     @Headers('x-vault-token') headerVaultToken: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -168,14 +208,14 @@ export class MediaController {
     if ((isExplicitPreview || isHeic) && !isExplicitDownload) {
       try {
         const thumb = await this.thumbnailService.getThumbnail(resolved, 1920);
-        streamFileSafely(thumb.filePath, res, 'image/webp', 'public, max-age=86400');
+        streamFileSafely(thumb.filePath, req, res, 'image/webp', 'public, max-age=86400');
         return;
       } catch {
         // fallback to raw stream if preview generation fails
       }
     }
 
-    streamFileSafely(resolved, res);
+    streamFileSafely(resolved, req, res);
   }
 
   @Get('file-content')
@@ -185,6 +225,7 @@ export class MediaController {
   async getMediaFileContent(
     @Query('path') queryPath: string,
     @Query('file') queryFile: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const target = queryPath || queryFile;
@@ -192,7 +233,7 @@ export class MediaController {
       throw new BadRequestException('Missing file or path parameter');
     }
     const resolved = this.mediaService.resolveMediaFilePath(target);
-    streamFileSafely(resolved, res);
+    streamFileSafely(resolved, req, res);
   }
 
   @Get('validate-file')

@@ -9,17 +9,18 @@ import {
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-describe('FeatureFlagsContext and Presets from /data/feature_flags.json', () => {
-  it('should verify DEFAULT_FEATURE_FLAG_PRESETS matches /data/feature_flags.json', () => {
-    const jsonPath = path.resolve(process.cwd(), 'data', 'feature_flags.json');
-    assert.ok(fs.existsSync(jsonPath), '/data/feature_flags.json must exist');
+describe('FeatureFlagsContext and Presets from assets/default-feature-flags.json', () => {
+  it('should verify DEFAULT_FEATURE_FLAG_PRESETS matches assets/default-feature-flags.json', () => {
+    const defaultJsonPath = path.resolve(process.cwd(), 'assets', 'default-feature-flags.json');
+    assert.ok(fs.existsSync(defaultJsonPath), 'assets/default-feature-flags.json must exist');
 
-    const fileContent = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    const fileContent = JSON.parse(fs.readFileSync(defaultJsonPath, 'utf-8'));
     assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS.length, fileContent.length);
 
     for (let i = 0; i < fileContent.length; i++) {
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].key, fileContent[i].key);
       assert.deepStrictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].classNames, fileContent[i].classNames);
+      assert.deepStrictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].buttonIds, fileContent[i].buttonIds);
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].isEnabled, fileContent[i].isEnabled);
       assert.strictEqual(DEFAULT_FEATURE_FLAG_PRESETS[i].description, fileContent[i].description);
     }

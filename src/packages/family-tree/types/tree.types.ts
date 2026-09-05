@@ -1,3 +1,5 @@
+import type { PersonEventRecord } from './event.types.js';
+
 export type LivingPrivacyMode = 'MASK_LIVING' | 'SHOW_ALL' | 'PRIVATE';
 
 export type Gender = 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'UNKNOWN';
@@ -43,6 +45,7 @@ export interface CelebrationBadgeConfig {
   badgeStyle: 'pill' | 'glow' | 'ribbon';
   badgeColor: string;
   customIcon?: string;
+  contentDisplay?: 'icon_only' | 'icon_and_text';
 }
 
 export interface TreeRecord {
@@ -97,6 +100,7 @@ export interface ChildRelationItem {
 
 export interface TreeGraphPerson extends PersonRecord {
   full_name: string;
+  kinship_to_root?: string | null;
 }
 
 export interface TreeGraphUnion extends UnionRecord {
@@ -109,7 +113,18 @@ export interface TreeGraphData {
   persons: TreeGraphPerson[];
   unions: TreeGraphUnion[];
   root_person_id?: string | null;
+  facts?: PersonEventRecord[];
 }
+
+export interface TreeHistoryRecord {
+  id: string;
+  tree_id: string;
+  action_type: string;
+  description: string;
+  details?: string | null;
+  created_at: string;
+}
+
 
 export interface KinshipInfo {
   primaryTerm: string;

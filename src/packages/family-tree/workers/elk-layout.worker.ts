@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { TreeGraphData, NodeViewStyle } from '../types/tree.types.js';
+import { computeRelationshipToRoot } from '../utils/kinshipUtils.js';
 
 export interface LayoutRequestMessage {
   type: 'LAYOUT_REQUEST';
@@ -102,9 +103,18 @@ export async function computeElkLayout(
   const visiblePersonIds = new Set(visiblePersons.map((p) => p.id));
 
   const visibleUnions = graphData.unions.filter((u) => {
-    const hasVisiblePartner = u.partner_ids.some((pid) => visiblePersonIds.has(pid));
-    const hasVisibleChild = u.children.some((ch) => visiblePersonIds.has(ch.person_id));
-    return hasVisiblePartner || hasVisibleChild;
+    const validPartners = u.partner_ids.filter((pid) => visiblePersonIds.has(pid));
+    const validChildren = u.children.filter((ch) => visiblePersonIds.has(ch.person_id));
+
+    // A union is valid if:
+    // 1. It has >= 2 partners (couple/marriage), OR
+    // 2. It has >= 1 partner AND >= 1 child (single parent with child), OR
+    // 3. It has 0 partners but >= 2 children (siblings sharing unknown parents)
+    return (
+      validPartners.length >= 2 ||
+      (validPartners.length >= 1 && validChildren.length >= 1) ||
+      (validPartners.length === 0 && validChildren.length >= 2)
+    );
   });
 
   // 2. Build ELK Nodes
@@ -229,6 +239,7 @@ export async function computeElkLayout(
         isRoot: p.id === graphData.root_person_id,
         isFolded: foldedNodeIds.has(p.id),
         spouses,
+        relationshipToRoot: computeRelationshipToRoot(p, graphData),
       },
     });
   }

@@ -1,28 +1,21 @@
-import { memo, useState, useMemo, useEffect } from 'react';
+import { memo, useState, useMemo, useEffect, useRef } from 'react';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 import { usePersonTimeline } from '../../hooks/usePersonTimeline.js';
 import { useFamilyTreeStore } from '../../state/useFamilyTreeStore.js';
 import type { PersonEventRecord } from '../../types/event.types.js';
 import { FactCard } from './FactCard.js';
 import { AddEditFactModal } from './AddEditFactModal.js';
 import { GalleryPhotoPicker } from './GalleryPhotoPicker.js';
+import { filterRelativeEvents, deduplicateTimelineEvents } from '../../utils/timelineDeduplication.js';
+import { exportPersonTimeline, type ExportImageFormat } from '../../utils/treeExportService.js';
 
 interface PersonTimelineViewProps {
   personId: string;
   personName: string;
 }
 
-const CATEGORY_FILTERS = [
-  { id: 'ALL', label: 'All Events' },
-  { id: 'MILESTONES', label: '💍 Milestones' },
-  { id: 'RELATIONSHIP', label: '💞 Relationships' },
-  { id: 'GRADUATION', label: '🎓 Education' },
-  { id: 'RELOCATION', label: '📍 Relocation' },
-  { id: 'TRAVEL', label: '✈️ Travel' },
-  { id: 'CAREER', label: '💼 Career' },
-  { id: 'CUSTOM', label: '📝 Custom' },
-];
-
 export const PersonTimelineView = memo(({ personId, personName }: PersonTimelineViewProps) => {
+  const { t } = useLanguage();
   const { lifeFactsConfig } = useFamilyTreeStore();
   const {
     events,
@@ -39,6 +32,8 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [factToEdit, setFactToEdit] = useState<PersonEventRecord | null>(null);
   const [pinTargetEventId, setPinTargetEventId] = useState<string | null>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,12 +74,25 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
           relativesToFetch.push(...ctx.immediateFamily.spouses);
         }
 
+        const seenUnionEventKeys = new Set<string>();
+        const seenChildBornIds = new Set<string>();
+        const seenBirthPersonIds = new Set<string>();
+
         const allFetched: PersonEventRecord[] = [];
         for (const rel of relativesToFetch) {
           const res = await fetch(`/api/family-tree/persons/${rel.id}/timeline`);
           if (res.ok) {
             const evts: PersonEventRecord[] = await res.json();
-            for (const ev of evts) {
+            const filtered = filterRelativeEvents(evts, rel, {
+              currentPersonId: personId,
+              currentPersonName: personName,
+              ownEvents: events,
+              seenUnionEventKeys,
+              seenChildBornIds,
+              seenBirthPersonIds,
+            });
+
+            for (const ev of filtered) {
               allFetched.push({
                 ...ev,
                 id: `rel_${ev.id}`,
@@ -108,22 +116,17 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     };
   }, [
     personId,
+    personName,
+    events,
     lifeFactsConfig.showParentsFacts,
     lifeFactsConfig.showSiblingsFacts,
     lifeFactsConfig.showChildrenFacts,
     lifeFactsConfig.showSpousesFacts,
   ]);
 
-  const filteredEvents = useMemo(() => {
-    let result: PersonEventRecord[] = [];
-
-    if (lifeFactsConfig.showOwnFacts !== false) {
-      result = [...result, ...events];
-    }
-
-    if (relativeEvents.length > 0) {
-      result = [...result, ...relativeEvents];
-    }
+  const allAvailableEvents = useMemo(() => {
+    const ownPart = lifeFactsConfig.showOwnFacts !== false ? events : [];
+    let result = deduplicateTimelineEvents(ownPart, relativeEvents, personId);
 
     // Filter by lifeFactsConfig
     if (lifeFactsConfig?.includedFactTypes && lifeFactsConfig.includedFactTypes.length > 0) {
@@ -137,15 +140,44 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
       return d1.localeCompare(d2);
     });
 
-    // Filter by tab category
-    if (activeCategory === 'ALL') return result;
+    return result;
+  }, [events, relativeEvents, lifeFactsConfig, personId]);
+
+  const categoryFilters = useMemo(() => [
+    { id: 'ALL', label: t('filterCategoryAll') },
+    { id: 'MILESTONES', label: t('filterCategoryMilestones') },
+    { id: 'RELATIONSHIP', label: t('filterCategoryRelationships') },
+    { id: 'GRADUATION', label: t('filterCategoryEducation') },
+    { id: 'RELOCATION', label: t('filterCategoryRelocation') },
+    { id: 'TRAVEL', label: t('filterCategoryTravel') },
+    { id: 'CAREER', label: t('filterCategoryCareer') },
+    { id: 'MILITARY', label: t('filterCategoryMilitary') },
+    { id: 'CUSTOM', label: t('filterCategoryCustom') },
+  ], [t]);
+
+  // Only show filter buttons for categories that exist for this person
+  const availableCategories = useMemo(() => {
+    if (allAvailableEvents.length === 0) return [];
+    return categoryFilters.filter((cat) => {
+      if (cat.id === 'ALL') return true;
+      if (cat.id === 'MILESTONES') {
+        return allAvailableEvents.some((e: PersonEventRecord) =>
+          ['BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN'].includes(e.event_type),
+        );
+      }
+      return allAvailableEvents.some((e: PersonEventRecord) => e.event_type === cat.id);
+    });
+  }, [allAvailableEvents, categoryFilters]);
+
+  const filteredEvents = useMemo(() => {
+    if (activeCategory === 'ALL') return allAvailableEvents;
     if (activeCategory === 'MILESTONES') {
-      return result.filter((e: PersonEventRecord) =>
+      return allAvailableEvents.filter((e: PersonEventRecord) =>
         ['BIRTH', 'DEATH', 'MARRIAGE', 'DIVORCE', 'CHILD_BORN'].includes(e.event_type),
       );
     }
-    return result.filter((e: PersonEventRecord) => e.event_type === activeCategory);
-  }, [events, relativeEvents, activeCategory, lifeFactsConfig, personId]);
+    return allAvailableEvents.filter((e: PersonEventRecord) => e.event_type === activeCategory);
+  }, [allAvailableEvents, activeCategory]);
 
   const handleOpenAdd = () => {
     setFactToEdit(null);
@@ -177,85 +209,176 @@ export const PersonTimelineView = memo(({ personId, personName }: PersonTimeline
     setPinTargetEventId(null);
   };
 
+  const handleQuickExport = async (format: ExportImageFormat) => {
+    setIsExportMenuOpen(false);
+    try {
+      await exportPersonTimeline({
+        timelineEl: timelineContainerRef.current,
+        personName,
+        personId,
+        format,
+        quality: 'high',
+      });
+    } catch (err) {
+      console.error('Quick timeline export failed:', err);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div
+      ref={timelineContainerRef}
+      className="person-timeline-container"
+      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+    >
       {/* Header with "+ Add Life Fact" and Filter Pills */}
       <div style={{ padding: '0 0 14px', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Chronological Life Story & Timeline
+              {t('timelineChronologicalTitle')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              {events.length} milestones & life facts recorded for {personName}
+              {events.length} {t('timelineMilestonesCount')} {personName}
             </div>
           </div>
 
-          <button
-            type="button"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
-            }}
-            onClick={handleOpenAdd}
-          >
-            ➕ Add Life Fact
-          </button>
-        </div>
-
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-          {CATEGORY_FILTERS.map((cat) => {
-            const isSelected = activeCategory === cat.id;
-            return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Quick Export Button */}
+            <div style={{ position: 'relative' }}>
               <button
-                key={cat.id}
                 type="button"
                 style={{
-                  background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
-                  border: isSelected ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
-                  borderRadius: 20,
-                  color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
-                  padding: '3px 10px',
-                  fontSize: 11,
+                  background: 'var(--nav-tab-bg)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.1s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
-                onClick={() => setActiveCategory(cat.id)}
+                onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                title={t('exportQuickBtn')}
               >
-                {cat.label}
+                <span>🖼️</span>
+                <span>{t('exportQuickBtn')}</span>
+                <span style={{ fontSize: 9 }}>▼</span>
               </button>
-            );
-          })}
+
+              {isExportMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: 4,
+                    zIndex: 50,
+                    background: 'var(--card-bg-solid, #1e293b)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 8,
+                    boxShadow: 'var(--shadow-modal)',
+                    minWidth: 140,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('png')}
+                  >
+                    PNG ({t('exportQualityHigh')})
+                  </button>
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('jpeg')}
+                  >
+                    JPG
+                  </button>
+                  <button
+                    type="button"
+                    style={{ padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleQuickExport('svg')}
+                  >
+                    SVG
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+              }}
+              onClick={handleOpenAdd}
+            >
+              ➕ {t('btnAddFact')}
+            </button>
+          </div>
         </div>
+
+        {/* Filter Pills with multiline support fitting width of screen */}
+        {availableCategories.length > 1 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingBottom: 4 }}>
+            {availableCategories.map((cat) => {
+              const isSelected = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  style={{
+                    background: isSelected ? 'var(--nav-tab-active-bg)' : 'var(--nav-tab-bg)',
+                    border: isSelected ? '1px solid var(--primary-color, #6366f1)' : '1px solid var(--border-color)',
+                    borderRadius: 20,
+                    color: isSelected ? 'var(--primary-color, #6366f1)' : 'var(--text-secondary)',
+                    padding: '3px 10px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.1s ease',
+                  }}
+                  onClick={() => setActiveCategory(cat.id)}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Timeline List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 4px 16px 0', position: 'relative' }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-            Loading timeline facts...
+            {t('loadingTimelineFacts')}
           </div>
         ) : filteredEvents.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>📜</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-              No facts recorded in this category
+              {t('noFactsRecordedInCategory')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Click &quot;Add Life Fact&quot; above to document graduations, trips, moves, or anecdotes!
+              {t('clickAddFactToDocument')}
             </div>
           </div>
         ) : (

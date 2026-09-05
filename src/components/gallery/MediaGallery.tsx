@@ -21,6 +21,7 @@ import ViewSwitcherButtonGroup from './ViewSwitcherButtonGroup';
 import FilterSortSearchBar from './FilterSortSearchBar';
 import { SearchBar } from './FilterSortSearchBar';
 import FaceRegistryUI from '../faces/FaceRegistryUI';
+import TimelineCalendarView from './TimelineCalendarView';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
 
@@ -81,6 +82,7 @@ export default function InputSourcesGallery({
 
   // View & Organization modes
   const [viewMode, setViewMode] = useState<GalleryViewMode>('gallery');
+  const [dateSubView, setDateSubView] = useState<'calendar' | 'list'>('calendar');
   const [sortBy, setSortBy] = useState<MediaSortField>('date');
   const [sortOrder, setSortOrder] = useState<MediaSortOrder>('desc');
 
@@ -1067,43 +1069,81 @@ export default function InputSourcesGallery({
   // 4. Date / Timeline Grouped View
   const renderDateGroupedView = () => (
     <div className="grouped-sections-wrap">
-      {dateGroups.map((group) => {
-        const isCollapsed = collapsedDates.has(group.key);
-        return (
-          <div key={group.key} className="grouped-card-section">
-            <div
-              className="grouped-section-header"
-              onClick={() => toggleDateCollapse(group.key)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span className="folder-tree-toggle-btn">{isCollapsed ? '▶' : '▼'}</span>
-                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>📅 {group.label}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
-                  {group.count} {t('badgeMediaFiles')}
-                </span>
-                <span className="badge-pill badge-pill-success" style={{ fontSize: '0.75rem' }}>
-                  {group.processedCount} {t('badgeCataloged')}
-                </span>
-              </div>
-            </div>
+      {/* Sub-view switcher between Calendar View and Timeline List */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '14px',
+          flexWrap: 'wrap',
+          gap: '8px',
+        }}
+      >
+        <div className="filter-button-group view-switcher-group" style={{ margin: 0 }}>
+          <button
+            type="button"
+            className={`filter-btn ${dateSubView === 'calendar' ? 'active' : ''}`}
+            onClick={() => setDateSubView('calendar')}
+            title={t('calendarViewSubtab')}
+          >
+            🗓️ {t('calendarViewSubtab')}
+          </button>
+          <button
+            type="button"
+            className={`filter-btn ${dateSubView === 'list' ? 'active' : ''}`}
+            onClick={() => setDateSubView('list')}
+            title={t('timelineListSubtab')}
+          >
+            📋 {t('timelineListSubtab')}
+          </button>
+        </div>
+      </div>
 
-            {!isCollapsed && (
-              <div className="grouped-section-body">
-                <div
-                  className="gallery-grid"
-                  style={{
-                    '--gallery-item-min-width': '140px',
-                  } as React.CSSProperties}
-                >
-                  {group.files.map((file: GalleryMediaFile) => renderCardItem(file))}
+      {dateSubView === 'calendar' ? (
+        <TimelineCalendarView
+          files={filteredFiles}
+          onSelectMedia={setSelectedMedia}
+        />
+      ) : (
+        dateGroups.map((group) => {
+          const isCollapsed = collapsedDates.has(group.key);
+          return (
+            <div key={group.key} className="grouped-card-section">
+              <div
+                className="grouped-section-header"
+                onClick={() => toggleDateCollapse(group.key)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="folder-tree-toggle-btn">{isCollapsed ? '▶' : '▼'}</span>
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>📅 {group.label}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <span className="badge-pill badge-pill-accent" style={{ fontSize: '0.75rem' }}>
+                    {group.count} {t('badgeMediaFiles')}
+                  </span>
+                  <span className="badge-pill badge-pill-success" style={{ fontSize: '0.75rem' }}>
+                    {group.processedCount} {t('badgeCataloged')}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
-        );
-      })}
+
+              {!isCollapsed && (
+                <div className="grouped-section-body">
+                  <div
+                    className="gallery-grid"
+                    style={{
+                      '--gallery-item-min-width': '140px',
+                    } as React.CSSProperties}
+                  >
+                    {group.files.map((file: GalleryMediaFile) => renderCardItem(file))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 

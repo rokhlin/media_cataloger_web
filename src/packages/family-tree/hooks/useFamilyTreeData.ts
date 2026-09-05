@@ -78,7 +78,9 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to delete person');
+      // NestJS wraps message as string or string[]
+      const msg = Array.isArray(err.message) ? err.message.join('; ') : (err.message || 'Failed to delete person');
+      throw new Error(msg);
     }
     await fetchGraph();
   };
@@ -86,6 +88,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
   const quickAddRelative = async (data: {
     relationship: 'PARENT' | 'CHILD' | 'SPOUSE' | 'SIBLING';
     target_person_id: string;
+    other_parent_id?: string;
     person: Record<string, any>;
     filiation?: string;
   }) => {
@@ -205,6 +208,35 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     await fetchGraph();
   };
 
+  const recordTreeHistory = async (actionType: string, description: string, details?: any) => {
+    try {
+      const treeId = activeTreeId || 'default_tree';
+      const res = await fetch(`/api/family-tree/trees/${treeId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_type: actionType, description, details }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const getTreeHistory = async (treeId: string = activeTreeId, limit: number = 30) => {
+    try {
+      const tId = treeId || 'default_tree';
+      const res = await fetch(`/api/family-tree/trees/${tId}/history?limit=${limit}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  };
+
   return {
     graphData,
     trees,
@@ -223,5 +255,7 @@ export function useFamilyTreeData(activeTreeId: string = 'default_tree') {
     linkFace,
     unlinkFace,
     setRootPerson,
+    recordTreeHistory,
+    getTreeHistory,
   };
-}
+};

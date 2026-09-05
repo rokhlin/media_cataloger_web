@@ -7,6 +7,7 @@ import { PersonDetailDrawer } from './modals/PersonDetailDrawer.js';
 import { QuickAddRelativeModal } from './modals/QuickAddRelativeModal.js';
 import { FaceLinkModal } from './modals/FaceLinkModal.js';
 import { TreeSettingsTab } from './settings/TreeSettingsTab.js';
+import { useLanguage } from '../../../i18n/LanguageContext.js';
 import './family-tree.css';
 
 export const FamilyTreeTab = () => {
@@ -26,6 +27,8 @@ export const FamilyTreeTab = () => {
     closeFaceLink,
   } = useFamilyTreeStore();
 
+  const { t } = useLanguage();
+
   const {
     graphData,
     isLoading,
@@ -36,10 +39,13 @@ export const FamilyTreeTab = () => {
     deletePerson,
     quickAddRelative,
     createUnion,
+    updateUnion,
     addChildToUnion,
     linkFace,
     unlinkFace,
     setRootPerson,
+    recordTreeHistory,
+    getTreeHistory,
   } = useFamilyTreeData(activeTreeId);
 
   const [isCreatePersonOpen, setIsCreatePersonOpen] = useState(false);
@@ -83,6 +89,7 @@ export const FamilyTreeTab = () => {
   return (
     <ReactFlowProvider>
       <div
+        className="family-tree-view-wrapper"
         style={{
           width: '100%',
           height: '100%',
@@ -90,22 +97,13 @@ export const FamilyTreeTab = () => {
           display: 'flex',
           flexDirection: 'column',
           background: 'transparent',
-          overflow: 'hidden',
+          gap: '12px',
         }}
       >
-        {/* Subtab Header Bar */}
+        {/* Subtab Header Bar / Tabs Container */}
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 16px',
-            background: 'var(--card-bg)',
-            borderBottom: '1px solid var(--border-color)',
-            backdropFilter: 'blur(12px)',
-            zIndex: 25,
-            flexShrink: 0,
-          }}
+          className="family-tree-tabs-container"
+          id="family-tree-tabs-container"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
@@ -113,7 +111,7 @@ export const FamilyTreeTab = () => {
               id="subtab-family-tree-canvas"
               onClick={() => setActiveSubTab('canvas')}
               style={{
-                background: activeSubTab === 'canvas' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                background: activeSubTab === 'canvas' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                 color: activeSubTab === 'canvas' ? '#ffffff' : 'var(--text-primary)',
                 border: activeSubTab === 'canvas' ? 'none' : '1px solid var(--border-color)',
                 borderRadius: 8,
@@ -129,7 +127,7 @@ export const FamilyTreeTab = () => {
               }}
             >
               <span>🌳</span>
-              <span>Interactive Tree</span>
+              <span>{t('tabInteractiveTree')}</span>
             </button>
 
             <button
@@ -137,7 +135,7 @@ export const FamilyTreeTab = () => {
               id="subtab-family-tree-settings"
               onClick={() => setActiveSubTab('settings')}
               style={{
-                background: activeSubTab === 'settings' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--nav-tab-bg)',
+                background: activeSubTab === 'settings' ? 'var(--primary-gradient, linear-gradient(135deg, #6366f1, #4f46e5))' : 'var(--nav-tab-bg)',
                 color: activeSubTab === 'settings' ? '#ffffff' : 'var(--text-primary)',
                 border: activeSubTab === 'settings' ? 'none' : '1px solid var(--border-color)',
                 borderRadius: 8,
@@ -153,29 +151,36 @@ export const FamilyTreeTab = () => {
               }}
             >
               <span>⚙️</span>
-              <span>Tree Settings</span>
+              <span>{t('tabTreeSettings')}</span>
             </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
             <span>
-              {graphData?.persons?.length || 0} Persons • {graphData?.unions?.length || 0} Unions
+              {graphData?.persons?.length || 0} {t('countPersonsSuffix')} • {graphData?.unions?.length || 0} {t('countUnionsSuffix')}
             </span>
           </div>
         </div>
 
         {/* Subtab Content Viewport */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', height: 'calc(100% - 48px)', overflow: 'hidden' }}>
-          {activeSubTab === 'settings' ? (
-            <TreeSettingsTab
-              graphData={graphData}
-              refreshGraph={refreshGraph}
-              createPerson={createPerson}
-              createUnion={createUnion}
-              addChildToUnion={addChildToUnion}
-              onBackToCanvas={() => setActiveSubTab('canvas')}
-            />
-          ) : (
+        <div
+          className="family-tree-content-viewport"
+          id="family-tree-content-viewport"
+          style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+        >
+          <div
+            id="canvas-subtab-container"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: activeSubTab === 'canvas' ? 2 : 1,
+              pointerEvents: activeSubTab === 'canvas' ? 'auto' : 'none',
+              opacity: 1,
+            }}
+          >
             <TreeCanvas
               graphData={graphData}
               isLoading={isLoading}
@@ -188,7 +193,38 @@ export const FamilyTreeTab = () => {
                 }
               }}
             />
-          )}
+          </div>
+
+          <div
+            id="settings-subtab-container"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: activeSubTab === 'settings' ? 3 : 0,
+              display: activeSubTab === 'settings' ? 'block' : 'none',
+              backgroundColor: 'var(--bg-color)',
+              backgroundImage:
+                'radial-gradient(circle at 15% 15%, var(--bg-radial-1, rgba(99, 102, 241, 0.12)) 0%, transparent 45%), radial-gradient(circle at 85% 85%, var(--bg-radial-2, rgba(168, 85, 247, 0.12)) 0%, transparent 45%)',
+              color: 'var(--text-primary)',
+              overflowY: 'auto',
+            }}
+          >
+            <TreeSettingsTab
+              graphData={graphData}
+              refreshGraph={refreshGraph}
+              createPerson={createPerson}
+              updatePerson={updatePerson}
+              createUnion={createUnion}
+              updateUnion={updateUnion}
+              addChildToUnion={addChildToUnion}
+              recordTreeHistory={recordTreeHistory}
+              getTreeHistory={getTreeHistory}
+              onBackToCanvas={() => setActiveSubTab('canvas')}
+            />
+          </div>
 
           {/* Error Banner */}
           {error && !isLoading && (
@@ -215,6 +251,7 @@ export const FamilyTreeTab = () => {
               <span>⚠️ {error}</span>
               <button
                 type="button"
+                id="btn-family-tree-retry"
                 onClick={() => refreshGraph()}
                 style={{
                   background: 'rgba(239, 68, 68, 0.3)',
@@ -250,6 +287,7 @@ export const FamilyTreeTab = () => {
           targetPersonId={quickAddTargetPersonId}
           targetPersonName={quickAddTargetPerson?.full_name || quickAddTargetPerson?.first_name}
           initialRelationship={quickAddInitialRelation}
+          graphData={graphData}
           onAddRelative={quickAddRelative}
         />
 
@@ -291,7 +329,7 @@ export const FamilyTreeTab = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-                Add Initial Family Member
+                {t('emptyTreeAddButton')}
               </div>
               <form onSubmit={handleAddNewStandalonePerson}>
                 <input
@@ -300,7 +338,7 @@ export const FamilyTreeTab = () => {
                   autoFocus
                   value={newPersonName}
                   onChange={(e) => setNewPersonName(e.target.value)}
-                  placeholder="Enter full name (e.g. Alex Johnson)"
+                  placeholder={`${t('labelFirstName')} ${t('labelLastName')}`}
                   style={{
                     width: '100%',
                     background: 'var(--input-bg)',
@@ -317,6 +355,7 @@ export const FamilyTreeTab = () => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                   <button
                     type="button"
+                    id="btn-family-tree-create-cancel"
                     style={{
                       background: 'var(--nav-tab-bg)',
                       color: 'var(--text-primary)',
@@ -328,10 +367,11 @@ export const FamilyTreeTab = () => {
                     }}
                     onClick={() => setIsCreatePersonOpen(false)}
                   >
-                    Cancel
+                    {t('btnCancel')}
                   </button>
                   <button
                     type="submit"
+                    id="btn-family-tree-create-submit"
                     style={{
                       background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                       color: '#ffffff',
@@ -343,7 +383,7 @@ export const FamilyTreeTab = () => {
                       cursor: 'pointer',
                     }}
                   >
-                    Create Person
+                    {t('emptyTreeAddButton')}
                   </button>
                 </div>
               </form>

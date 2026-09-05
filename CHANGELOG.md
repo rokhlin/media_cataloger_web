@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automated Kinship Calculation Engine (`KinshipEngineService`) resolving complex multi-generation biological and non-biological family relationships.
   - Life Events & Timeline system (`FamilyEventsService`, `PersonTimelineView`, `AddEditFactModal`, `FactCard`) with gallery photo attachment picker.
   - Graph integrity & cycle detection service (`GraphIntegrityService`) preventing circular parentage anomalies.
-  - Interactive modals: `PersonDetailDrawer`, `QuickAddRelativeModal`, and `FaceLinkModal` linking recognized media faces to tree persons.
+  - Interactive modals: `PersonDetailDrawer`, `FaceLinkModal`, and `QuickAddRelativeModal` (with spouse dropdown and unknown second parent options for child addition).
 - **Metadata Editing & In-Viewer Editor (`MetadataEditorModal`)**:
   - Full support for viewing, modifying, and persisting metadata (summaries EN/RU, descriptions EN/RU, environment, lighting, weather, time of day, location, capture date, camera make/model/lens, OCR text, audio transcriptions, and tag chips).
   - Atomic persistence in `DatabaseService` (`media_metadata` and `media_items` tables in `catalog_history.db`).
@@ -29,6 +29,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `.agents/rules/react-js-development.md`: Modern React 19 standards, hook architecture, and accessibility.
   - `.agents/rules/roadmap_and_changelog.md`: Automated GitHub tag synchronization, version grouping, and dynamic `[future_tag_version]` tracking.
   - `.agents/rules/database_migrations.md`: Comprehensive SQLite schema evolution, migration, and persistence rules.
+
+### Fixed
+- **Family Tree Life Story Facts Deduplication**:
+  - Resolved duplicated facts appearing on a person's timeline when exploring with relatives enabled (spouses, parents, siblings, children).
+  - Prevented reciprocal `MARRIAGE` and `DIVORCE` events from spouses from duplicating the person's own union records.
+  - Filtered out a spouse's marriages to third parties (different spouses) and children with other spouses from being wrongly rendered on the person's life story.
+  - Eliminated duplicate child birth facts where parent's `CHILD_BORN` event and the child's `BIRTH` event were both rendered simultaneously.
+  - Preserved single display of parents' marriage and divorce on child timelines.
+  - Added unit test suite `timelineDeduplication.test.ts` verifying exact lifecycle event filtering.
+- **Duplicates Manager Card & Checkbox Selection**:
+  - Fixed issue where clicking a duplicate item checkbox or thumbnail image immediately closed Duplicates Manager and returned to the Media gallery tab.
+  - Added `e.stopPropagation()` on checkbox click to prevent event bubbling to parent click handlers.
+  - Added direct selection toggle on duplicate card/image clicks so clicking either the checkbox or card marks duplicate files for deletion.
+  - Added dedicated in-place Full Preview Lightbox modal with zoom button (`dup-item-zoom-btn`), metadata view, mark/unmark actions, and Esc key dismiss without leaving the tab.
+  - Removed disruptive `setActiveTab('main')` redirect from `App.tsx`.
+- **Video Preview & HTTP Range Streaming**:
+  - Implemented HTTP 206 Partial Content and `Range` header streaming in `server/media/media.controller.ts` (`streamFileSafely`) for seamless buffering, scrubbing, and seeking of video files.
+  - Added `Accept-Ranges: bytes` and byte-range slice stream creation.
+  - Mapped `.mov` and `.m4v` to `video/mp4` MIME type for native browser demuxer compatibility.
+  - Added `<video>` element support with controls, high-resolution extracted poster frame, and metadata in `DuplicatesManagerTab` preview modal and side-by-side visual comparator.
+  - Enhanced `MediaViewerModal` with extracted first-frame poster (`/api/media/thumbnail?size=1920`), `playsInline`, `preload="metadata"`, and graceful fallback with direct download button when browser engines cannot decode specific video codecs (e.g. HEVC in `.mov`).
 
 ---
 

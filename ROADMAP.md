@@ -40,6 +40,14 @@
     - db error
 - [x] **Test Coverage**: Comprehensive unit and integration test suites covering Kinship, Family Tree, Settings, Config, Thumbnails, i18n, Themes, and Cache.
 - [x] **Docker / Host Decoupling**: Separate application core dependencies from local host environment for robust Docker deployment.
+- [ ] **Caching strategies: controls section**: Rename `Execution controls` tab insettings to `File metadata operations`. Change UI accordingly. Add `Caching strategy` section to control cache
+- [ ] **Cahcing strategies**: Review current caching strategies and implement more efficient caching where needed. Main requirement to increase the system performance and reduce the response time of the application:
+    -  Media library mostly is static and doesnt have a lot of realtime changes. So we should keep fast caching, allow to user trigger a mannual caching for the specific folder or for all. 
+    - Define Daily caching automation: for the mediafiles added on a last time. Store last cached datetime, schedule the next recache. and do it onl for the new/changed that time files.
+    - Add controls to run caching manually in `Caching strategy` section.
+- [ ] **Caching strategies: on duplicates removing**: after remove duplicates, recalculate the cache for the remaining files.
+- [ ] **Caching strategies: on folder remove**: after remove folder, recalculate the cache for the remaining files. It's also make sense for the folders rename operation.
+
 
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
@@ -61,6 +69,7 @@
 - [x] **Internationalization (i18n)**: Multi-language interface and localization support (EN/RU).
 - [x] **Theme System**: Dark, Light, and custom theme presets with glassmorphism design.
 - [x] **Calendar Timeline View**: View photos and events on chronological timeline groupings by capture date/time.
+- [x] **Timeline in Calendar**: show calendar with photos in stack in it, If in one date is more than 10 photos, show badge with number of photos. 
 - [ ] **Album Management**: Create, curate, and share custom photo and video albums.
 - [x] **Family Tree**: Interactive genealogy / family relationship visualization connected to recognized faces.
 - [ ] **Photo Stories**: Dynamic story creation and presentation from photo series.
@@ -79,6 +88,14 @@
     - Make sure that all components are split by features and are self-contained.
     - Avoid circular dependencies. Use hooks to share logic between components. 
 Do the same for all components. Do not change functionality. Add tests.
+- [x] **Refactoring: Buttons** :
+      Buttons: 
+        -  All buttons should have `id` also if it not in use
+        -  Use common button component if it possible to keep one single styling in the whole project. Create the new common button component if wasnt exist.
+        -  Create rule to use common components for: buttons, toggles, modals, etc.
+        - Export Styles from Component tree. create a hook that by name provides the specific style.
+- [x] **Feature flags for buttons** : Add in feature flags the functionality to toggle on/off buttons by Id. Add under `CSS Class Names (Optional)` in `Create Feature flag`
+the same input for button id's. It also should be ooptional. User can add buttonIds or clas name or together to toggle feature on/off.
 
 ### Family Tree 
 - [x] **Represent Divorced person**: If couple is divorced, then show connection as striped line and connection icon should reflect the status. add a mechanism to expand and collapse the subtree of the divorced spounse. Only theyr own children. Don't show the subtree of the current partner.
@@ -102,7 +119,11 @@ Do the same for all components. Do not change functionality. Add tests.
         - DD Month YYYY, DD Month
         - DD.MM.YYYY, MM.YYYY
         - MM/DD/YYYY, MM/YYYY
-        
+- [x] **Russian language support**: Add Russian language support for the UI. 
+- [x] **Export to PNG/JPG/SVG for Tree and Timeline** : Add in tree settings the section with ability to export tree and timeline to PNG/JPG/SVG. Export options: Export Tree, Export Timeline. Tree should be exported with current settings and with items shown, e.g. node style, celebration badges, etc. Export with high quality. 
+- [ ] **Kinship in media gallery configuration**: add option to configure facts including in media gallery for chained person( only own facts, own and closest family members, all). add only facts which date is close (birtday, marriage, anniversary, death) and config for period before date.
+- [ ] **Refactoring: Export to PNG/JPG/SVG** : move **Export to PNG/JPG/SVG for Tree and Timeline** section under csv import export section.
+
 ### Security, Access Control & Admin
 - [x] **Authentication & Route Guards**: User login, JWT sessions, and route protection. Protect the admin panel and Face Registry. Only the admin should have access to these. In the first iteration, we can just have one user/admin.
 - [x] **User & Role Management (RBAC)**: Multi-user support with custom roles and permission levels. Admin can give specific permissions to users. For example: view-only mode for some users. Admin can manage user accounts (create, edit, delete).

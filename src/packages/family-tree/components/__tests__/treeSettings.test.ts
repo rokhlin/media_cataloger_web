@@ -65,12 +65,11 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(content.includes('activeSubTab === \'settings\''), 'FamilyTreeTab should toggle TreeSettingsTab');
   });
 
-  it('should verify CanvasToolbar.tsx has a shortcut to open Tree Settings', () => {
+  it('should verify CanvasToolbar.tsx does not duplicate Settings button since navigation has it', () => {
     const toolbarPath = path.join(componentsDir, 'canvas', 'controls', 'CanvasToolbar.tsx');
-    const content = fs.readFileSync(toolbarPath, 'utf8');
+    const toolbarContent = fs.readFileSync(toolbarPath, 'utf8');
 
-    assert.ok(content.includes('toolbar-tree-settings-btn'), 'CanvasToolbar should have Settings button');
-    assert.ok(content.includes('setActiveSubTab(\'settings\')'), 'Clicking Settings button should open settings');
+    assert.ok(!toolbarContent.includes('toolbar-tree-settings-btn'), 'CanvasToolbar should not have duplicate Settings button');
   });
 
   it('should verify PersonCardNode.tsx renders spouse details and click action', () => {
@@ -89,5 +88,68 @@ describe('Family Tree Settings & UI Features', () => {
     assert.ok(content.includes('relativeEvents'), 'PersonTimelineView should track relativeEvents');
     assert.ok(content.includes('showParentsFacts'), 'PersonTimelineView should check showParentsFacts');
     assert.ok(content.includes('showChildrenFacts'), 'PersonTimelineView should check showChildrenFacts');
+    assert.ok(content.includes('filterRelativeEvents'), 'PersonTimelineView should filter relative events');
+    assert.ok(content.includes('deduplicateTimelineEvents'), 'PersonTimelineView should deduplicate timeline events');
+  });
+
+  it('should verify TreeSettingsTab.tsx has expandable sections and correct subtext margins (Issue 12)', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    // Expandable sections check
+    assert.ok(content.includes('expandedSections'), 'TreeSettingsTab should maintain expandedSections state');
+    assert.ok(content.includes('toggleSection'), 'TreeSettingsTab should provide toggleSection handler');
+    assert.ok(content.includes('toggle-all-sections-btn'), 'TreeSettingsTab should have Collapse/Expand All button');
+
+    // Section headers clickable
+    assert.ok(content.includes('section-header-view-styles'), 'View styles section should have clickable header');
+    assert.ok(content.includes('section-header-celebrations'), 'Celebrations section should have clickable header');
+    assert.ok(content.includes('section-header-date-formats'), 'Date formats section should have clickable header');
+    assert.ok(content.includes('section-header-life-facts'), 'Life facts section should have clickable header');
+    assert.ok(content.includes('section-header-csv-backup'), 'CSV backup section should have clickable header');
+
+    // Issue 12: Subtext margins should NOT overlap title (no negative marginTop)
+    assert.ok(!content.includes('marginTop: -8'), 'sectionSubtextStyle should NOT have negative marginTop causing overlap');
+    assert.ok(content.includes('marginTop: 6'), 'sectionSubtextStyle should have positive marginTop for clean spacing');
+  });
+
+  it('should verify Celebration & Milestone Badges support icon-only mode with hover details', () => {
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const content = fs.readFileSync(settingsPath, 'utf8');
+
+    assert.ok(content.includes('celebration-mode-icon-and-text'), 'Settings should have Icon & Text selector');
+    assert.ok(content.includes('celebration-mode-icon-only'), 'Settings should have Icon only selector');
+    assert.ok(content.includes('contentDisplay: \'icon_only\''), 'Settings should allow setting contentDisplay to icon_only');
+
+    const nodePath = path.join(componentsDir, 'canvas', 'nodes', 'PersonCardNode.tsx');
+    const nodeContent = fs.readFileSync(nodePath, 'utf8');
+    assert.ok(nodeContent.includes('isIconOnly = celebrationConfig.contentDisplay === \'icon_only\''), 'PersonCardNode should check icon_only');
+    assert.ok(nodeContent.includes('title={detailedTooltip}'), 'PersonCardNode should set detailed hover tooltip');
+  });
+
+  it('should verify ELK layout worker engine and service filter out empty/orphaned unions (Issue 13)', () => {
+    const workerPath = path.join(componentsDir, '..', 'workers', 'elk-layout.worker.ts');
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+
+    // ELK worker should ensure only valid unions with partners or multiple children are rendered
+    assert.ok(workerContent.includes('validPartners.length >= 2'), 'Should allow valid partner unions');
+    assert.ok(workerContent.includes('validPartners.length >= 1 && validChildren.length >= 1'), 'Should allow single parent unions');
+    assert.ok(workerContent.includes('validPartners.length === 0 && validChildren.length >= 2'), 'Should allow sibling unions');
+
+    const servicePath = path.resolve(componentsDir, '..', '..', '..', '..', 'server', 'family-tree', 'family-tree.service.ts');
+    const serviceContent = fs.readFileSync(servicePath, 'utf8');
+    assert.ok(serviceContent.includes('cleanUpOrphanedUnions'), 'FamilyTreeService should have cleanUpOrphanedUnions');
+  });
+
+  it('should verify TreeSettingsTab and FamilyTreeTab use theme tokens instead of hardcoded dark backgrounds', () => {
+    const tabPath = path.join(componentsDir, 'FamilyTreeTab.tsx');
+    const tabContent = fs.readFileSync(tabPath, 'utf8');
+    assert.ok(!tabContent.includes('--bg-main, #0f172a'), 'FamilyTreeTab should not hardcode dark --bg-main');
+    assert.ok(tabContent.includes('var(--bg-color)'), 'FamilyTreeTab settings container should adapt to theme --bg-color');
+
+    const settingsPath = path.join(componentsDir, 'settings', 'TreeSettingsTab.tsx');
+    const settingsContent = fs.readFileSync(settingsPath, 'utf8');
+    assert.ok(settingsContent.includes('var(--primary-gradient'), 'TreeSettingsTab should use --primary-gradient');
+    assert.ok(settingsContent.includes('var(--nav-tab-active-bg)'), 'TreeSettingsTab should use --nav-tab-active-bg');
   });
 });

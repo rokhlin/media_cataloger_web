@@ -912,13 +912,6 @@ function AppMain() {
             <DuplicatesScreen
               onRefreshMedia={() => loadMediaFiles(true)}
               activeInputFolders={settings?.input_folders || []}
-              onOpenViewer={(filePath) => {
-                const match = mediaFiles.find((m) => m.file_path === filePath || m.filename === filePath);
-                if (match) {
-                  // Switch to main gallery tab with viewer open or handle directly
-                  setActiveTab('main');
-                }
-              }}
             />
           )}
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { TreeGraphPerson } from '../../types/tree.types.js';
+import { useLanguage } from '../../../../i18n/LanguageContext.js';
 
 interface FaceLinkModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const FaceLinkModal = ({
   onLinkFace,
   onUnlinkFace,
 }: FaceLinkModalProps) => {
+  const { t } = useLanguage();
   const [knownPersons, setKnownPersons] = useState<any[]>([]);
   const [unrecognizedFaces, setUnrecognizedFaces] = useState<any[]>([]);
   const [personFaceLinks, setPersonFaceLinks] = useState<any[]>([]);
@@ -124,10 +126,10 @@ export const FaceLinkModal = ({
         >
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Link Face Crop & Photo Avatar
+              {t('modalFaceLinkTitle')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Connecting recognized visual identity for {person.full_name || person.first_name}
+              {t('connectingVisualIdentityFor')} {person.full_name || person.first_name}
             </div>
           </div>
           <button
@@ -168,7 +170,7 @@ export const FaceLinkModal = ({
             }}
             onClick={() => setActiveTab('known')}
           >
-            👥 Known Persons ({knownPersons.length})
+            👥 {t('tabKnownFaces')} ({knownPersons.length})
           </button>
 
           <button
@@ -185,7 +187,7 @@ export const FaceLinkModal = ({
             }}
             onClick={() => setActiveTab('unrecognized')}
           >
-            👤 Unrecognized Faces ({unrecognizedFaces.length})
+            👤 {t('tabUnrecFaces')} ({unrecognizedFaces.length})
           </button>
 
           <button
@@ -202,7 +204,7 @@ export const FaceLinkModal = ({
             }}
             onClick={() => setActiveTab('linked')}
           >
-            🔗 Active Links ({personFaceLinks.length})
+            🔗 {t('tabActiveLinks')} ({personFaceLinks.length})
           </button>
         </div>
 
@@ -214,7 +216,7 @@ export const FaceLinkModal = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter known persons..."
+                placeholder={t('filterKnownPersonsPlaceholder')}
                 style={{
                   width: '100%',
                   background: 'var(--input-bg)',
@@ -230,9 +232,9 @@ export const FaceLinkModal = ({
               />
 
               {isLoading ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>Loading faces...</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>{t('loadingFaces')}</div>
               ) : filteredKnown.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>No matching known persons found.</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>{t('noMatchingKnownPersons')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
                   {filteredKnown.map((p) => {
@@ -285,7 +287,7 @@ export const FaceLinkModal = ({
                           {p.name}
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                          {p.reference_count || 1} photo(s)
+                          {p.reference_count || 1} {p.reference_count === 1 ? t('photoCountSingle') : t('photoCountPlural')}
                         </div>
                       </div>
                     );
@@ -298,9 +300,9 @@ export const FaceLinkModal = ({
           {activeTab === 'unrecognized' && (
             <div>
               {isLoading ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>Loading faces...</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>{t('loadingFaces')}</div>
               ) : unrecognizedFaces.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>No unrecognized face crops available.</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>{t('noUnrecognizedFaces')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
                   {unrecognizedFaces.slice(0, 50).map((f) => {
@@ -345,7 +347,7 @@ export const FaceLinkModal = ({
             <div>
               {personFaceLinks.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>
-                  No face crops currently linked to this person.
+                  {t('noLinkedFaces')}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -376,7 +378,7 @@ export const FaceLinkModal = ({
                             {link.media_person_name}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                            Face ID: {link.media_face_id} {link.is_primary_avatar ? '• ⭐ Primary Avatar' : ''}
+                            Face ID: {link.media_face_id} {link.is_primary_avatar ? `• ⭐ ${t('primaryAvatarBadge')}` : ''}
                           </div>
                         </div>
                       </div>
@@ -398,7 +400,7 @@ export const FaceLinkModal = ({
                           setPersonFaceLinks((prev) => prev.filter((l) => l.id !== link.id));
                         }}
                       >
-                        Unlink
+                        {t('btnUnlinkFace')}
                       </button>
                     </div>
                   ))}

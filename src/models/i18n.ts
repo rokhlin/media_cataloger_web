@@ -395,6 +395,8 @@ export interface AdminPanelTranslations {
   btnImportFlags: string;
   flagKeyLabel: string;
   flagClassesLabel: string;
+  flagButtonIdsLabel: string;
+  flagButtonIdsHint: string;
   flagDescLabel: string;
   flagStatusLabel: string;
   flagEnabled: string;
@@ -411,6 +413,9 @@ export interface AdminPanelTranslations {
   testSandboxDesc: string;
   systemHealthTitle: string;
   systemStorageTitle: string;
+  adminPrivilegesRequiredTitle: string;
+  adminPrivilegesRequiredDesc: string;
+  btnSignInAsAdmin: string;
 }
 
 export interface AuthAndVaultTranslations {
@@ -460,6 +465,10 @@ export interface AuthAndVaultTranslations {
   vaultLockNowButton: string;
   vaultAddToVault: string;
   vaultRemoveFromVault: string;
+  vaultScreenLockedTitle: string;
+  vaultScreenLockedDesc: string;
+  btnUnlockVaultScreen: string;
+  btnSetupMasterPinScreen: string;
 
   adminTabFlags: string;
   adminTabUsers: string;
@@ -538,6 +547,349 @@ export interface DuplicateTranslations {
   toggleSimilarityGrouping: string;
 }
 
+export interface FamilyTreeTranslations {
+  tabInteractiveTree: string;
+  tabTreeSettings: string;
+  labelPersonsCount: string;
+  labelUnionsCount: string;
+  countPersonsSuffix: string;
+  countUnionsSuffix: string;
+
+  toolbarZoomIn: string;
+  toolbarZoomOut: string;
+  toolbarFitView: string;
+  toolbarCenterRoot: string;
+  toolbarRecalculate: string;
+  toolbarLayoutVertical: string;
+  toolbarLayoutHorizontal: string;
+  toolbarAddMember: string;
+
+  hudRelationshipTo: string;
+  hudDirectBlood: string;
+  hudGeneration: string;
+  hudViewLifeStory: string;
+  hudMe: string;
+  hudRelative: string;
+  statusLiving: string;
+  statusDeceased: string;
+  bornPrefix: string;
+  diedPrefix: string;
+  unionDivorced: string;
+  unionSpouse: string;
+  unionMarriage: string;
+  celebrationToday: string;
+  celebrationDaysRemaining: string;
+
+  searchRelativesPlaceholder: string;
+  searchNoResults: string;
+  searchFilterAll: string;
+  searchFilterLiving: string;
+  searchFilterDeceased: string;
+
+  emptyTreeTitle: string;
+  emptyTreeDesc: string;
+  emptyTreeAddButton: string;
+  computingLayoutNotice: string;
+
+  drawerTabBio: string;
+  drawerTabFamily: string;
+  drawerTabTimeline: string;
+  labelFirstName: string;
+  labelMiddleName: string;
+  labelLastName: string;
+  labelMaidenName: string;
+  labelGender: string;
+  genderMale: string;
+  genderFemale: string;
+  genderOther: string;
+  genderUnknown: string;
+  labelBirthDate: string;
+  labelBirthPlace: string;
+  labelIsLiving: string;
+  labelDeathDate: string;
+  labelDeathPlace: string;
+  labelBioNotes: string;
+  btnEditBio: string;
+  btnSaveBio: string;
+  btnDeletePerson: string;
+  btnSetRoot: string;
+  btnLinkFace: string;
+  btnAddRelative: string;
+  confirmDeletePersonTitle: string;
+  confirmDeletePersonMsg: string;
+
+  sectionSpousesPartners: string;
+  btnAddPartner: string;
+  btnEditUnion: string;
+  btnDeleteUnion: string;
+  labelUnionType: string;
+  unionTypeMarriage: string;
+  unionTypeDivorced: string;
+  unionTypeCivilUnion: string;
+  unionTypeUnmarried: string;
+  labelUnionStartDate: string;
+  labelUnionEndDate: string;
+  labelUnionPlace: string;
+  labelUnionNotes: string;
+  labelChildrenInUnion: string;
+  btnAddChild: string;
+  noChildrenInUnion: string;
+  noSpousesRecorded: string;
+
+  quickAddTitle: string;
+  relationParent: string;
+  relationChild: string;
+  relationSpouse: string;
+  relationSibling: string;
+  btnQuickAddSubmit: string;
+  quickAddSelectTarget: string;
+
+  faceLinkTitle: string;
+  searchFacesPlaceholder: string;
+  btnLinkSelectedFace: string;
+  btnUnlinkFace: string;
+  noFacesFound: string;
+  linkedFaceSuccess: string;
+
+  datePickerTitle: string;
+  datePickerHint: string;
+  datePickerMonth: string;
+  datePickerYear: string;
+  datePickerDay: string;
+  btnToday: string;
+  btnClearDate: string;
+  dateFormatDetected: string;
+
+  timelineTitle: string;
+  timelineSubtitle: string;
+  btnAddFact: string;
+  btnEditFact: string;
+  btnDeleteFact: string;
+  confirmDeleteFact: string;
+  filterAllFacts: string;
+  factTypeBirth: string;
+  factTypeDeath: string;
+  factTypeMarriage: string;
+  factTypeDivorce: string;
+  factTypeRelationship: string;
+  factTypeChildBirth: string;
+  factTypeEducation: string;
+  factTypeCareer: string;
+  factTypeMilitary: string;
+  factTypeResidence: string;
+  factTypeAward: string;
+  factTypeOther: string;
+  labelFactType: string;
+  labelFactDate: string;
+  labelFactTitle: string;
+  labelFactDescription: string;
+  labelFactPlace: string;
+  labelFactPhotos: string;
+  emptyTimelineNotice: string;
+  modalAddFactTitle: string;
+  modalEditFactTitle: string;
+  btnSaveFact: string;
+  btnSelectGalleryPhotos: string;
+
+  settingsViewStylesTitle: string;
+  settingsViewStylesDesc: string;
+  settingsStyleDefault: string;
+  settingsStyleDefaultDesc: string;
+  settingsStyleCircle: string;
+  settingsStyleCircleDesc: string;
+  settingsStyleSquare: string;
+  settingsStyleSquareDesc: string;
+  settingsCelebrationsTitle: string;
+  settingsCelebrationsDesc: string;
+  settingsEnableCelebrations: string;
+  settingsDaysThreshold: string;
+  settingsShowBirthdays: string;
+  settingsShowAnniversaries: string;
+  settingsShowMemorials: string;
+  settingsBadgeStyle: string;
+  settingsBadgeColor: string;
+  settingsCustomIcon: string;
+  settingsDisplayContent: string;
+  settingsDateFormatsTitle: string;
+  settingsDateFormatsDesc: string;
+  settingsLifeFactsTitle: string;
+  settingsLifeFactsDesc: string;
+  settingsOwnFacts: string;
+  settingsCloseRelativesFacts: string;
+  settingsCsvBackupTitle: string;
+  settingsCsvBackupDesc: string;
+  btnExportCsv: string;
+  btnDownloadSampleCsv: string;
+  labelImportCsvFile: string;
+  btnChooseCsvFile: string;
+  dropCsvHere: string;
+  btnPreviewCsv: string;
+  btnCommitCsvImport: string;
+  importSuccessMessage: string;
+  importErrorMessage: string;
+  csvPreviewPersons: string;
+  csvPreviewUnions: string;
+
+  // Drawer extra keys
+  btnFocusInCanvas: string;
+  confirmDeletePersonPrompt: string;
+  deletingPerson: string;
+  birthInformation: string;
+  passingInformation: string;
+  dateUnknown: string;
+  noBioWritten: string;
+  labelParents: string;
+  labelSiblings: string;
+  labelChildren: string;
+  btnAddParent: string;
+  btnAddSibling: string;
+  sincePrefix: string;
+  endedPrefix: string;
+  spouseUnionDetailsModalTitle: string;
+  relationshipBetween: string;
+  labelAnd: string;
+  btnSaveUnion: string;
+  btnSavingUnion: string;
+
+  // Quick Add Relative extra keys
+  modalAddRelativeTitle: string;
+  connectingRelativeTo: string;
+  relationshipToPerson: string;
+  relationParentDetailed: string;
+  relationSpouseDetailed: string;
+  relationSiblingDetailed: string;
+  relationChildDetailed: string;
+  labelOtherParent: string;
+  unknownOtherParent: string;
+  filiationTypeLabel: string;
+  filiationBiological: string;
+  filiationAdopted: string;
+  filiationFoster: string;
+  filiationStep: string;
+  filiationSurrogate: string;
+  currentlyLivingCheckbox: string;
+  btnAddFamilyMember: string;
+  addingFamilyMember: string;
+
+  // Face Link extra keys
+  modalFaceLinkTitle: string;
+  connectingVisualIdentityFor: string;
+  tabKnownFaces: string;
+  tabUnrecFaces: string;
+  tabActiveLinks: string;
+  filterKnownPersonsPlaceholder: string;
+  loadingFaces: string;
+  noMatchingKnownPersons: string;
+  noUnrecognizedFaces: string;
+  noLinkedFaces: string;
+  primaryAvatarBadge: string;
+  photoCountSingle: string;
+  photoCountPlural: string;
+
+  // CustomDatePicker extra keys
+  calendarPickerTooltip: string;
+  unrecognizedDateFormat: string;
+  saveApproximateYear: string;
+  saveMonthYear: string;
+
+  // Timeline extra keys
+  timelineChronologicalTitle: string;
+  timelineMilestonesCount: string;
+  filterCategoryAll: string;
+  filterCategoryMilestones: string;
+  filterCategoryRelationships: string;
+  filterCategoryEducation: string;
+  filterCategoryRelocation: string;
+  filterCategoryTravel: string;
+  filterCategoryCareer: string;
+  filterCategoryMilitary: string;
+  filterCategoryCustom: string;
+  noFactsRecordedInCategory: string;
+  clickAddFactToDocument: string;
+  loadingTimelineFacts: string;
+  modalEditLifeFactTitle: string;
+  recordingEventFor: string;
+  relationshipDetailsSection: string;
+  relationshipStatusLabel: string;
+  connectWithLabel: string;
+  connectWithExternal: string;
+  connectWithMember: string;
+  connectWithBranch: string;
+  connectWithTwoFamilies: string;
+  partnerOrFamilyNameLabel: string;
+  approximateCircaCheckbox: string;
+  storyNotesLabel: string;
+  attachedGalleryPhotosLabel: string;
+  btnBrowseGallery: string;
+  btnUpdateFact: string;
+  btnCreateFact: string;
+  factDateUnrecorded: string;
+  btnPinPhoto: string;
+  unpinPhotoTooltip: string;
+  pinnedPhotosCount: string;
+  fullResolutionPhoto: string;
+
+  // Photo picker extra keys
+  modalPhotoPickerTitle: string;
+  modalPhotoPickerSubtitle: string;
+  searchPhotosPlaceholder: string;
+  filterByPersonBtn: string;
+  loadingMediaLibrary: string;
+  noPhotosFoundSearch: string;
+  captionForPinnedPhotosPlaceholder: string;
+  btnPinSelectedPhotos: string;
+
+  // Tree settings extra keys
+  settingsHeaderTitle: string;
+  settingsHeaderSubtitle: string;
+  btnCollapseAllSections: string;
+  btnExpandAllSections: string;
+  btnBackToCanvas: string;
+
+  // Timeline in Calendar keys
+  calendarViewSubtab: string;
+  timelineListSubtab: string;
+  calendarMonthPrev: string;
+  calendarMonthNext: string;
+  calendarToday: string;
+  calendarPhotosThisMonth: string;
+  calendarPhotosOnDate: string;
+  calendarMorePhotosBadge: string;
+  calendarDayModalTitle: string;
+  calendarEmptyDay: string;
+  calendarWeekdayMon: string;
+  calendarWeekdayTue: string;
+  calendarWeekdayWed: string;
+  calendarWeekdayThu: string;
+  calendarWeekdayFri: string;
+  calendarWeekdaySat: string;
+  calendarWeekdaySun: string;
+
+  // Tree and Timeline Export keys
+  exportSectionTitle: string;
+  exportSectionDesc: string;
+  exportTabTree: string;
+  exportTabTimeline: string;
+  exportFormatLabel: string;
+  exportQualityLabel: string;
+  exportQualityStandard: string;
+  exportQualityHigh: string;
+  exportQualityUltra: string;
+  exportBackgroundLabel: string;
+  exportBgTheme: string;
+  exportBgDark: string;
+  exportBgLight: string;
+  exportBgTransparent: string;
+  exportCurrentSettingsNotice: string;
+  exportBtnExportTree: string;
+  exportBtnExportTimeline: string;
+  exportSelectPersonPlaceholder: string;
+  exportExporting: string;
+  exportSuccess: string;
+  exportError: string;
+  exportQuickBtn: string;
+}
+
 export type TranslationDictionary = HeaderTranslations &
   ExecutionControlsTranslations &
   GalleryTranslations &
@@ -549,4 +901,5 @@ export type TranslationDictionary = HeaderTranslations &
   CommonTranslations &
   AdminPanelTranslations &
   AuthAndVaultTranslations &
-  DuplicateTranslations;
+  DuplicateTranslations &
+  FamilyTreeTranslations;

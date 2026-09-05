@@ -1,4 +1,5 @@
 import { useLanguage } from '../../i18n/LanguageContext';
+import { Button } from '../common';
 
 export interface HeaderLogsToggleProps {
   showLogs?: boolean;
@@ -9,16 +10,17 @@ export default function HeaderLogsToggle({ showLogs = false, onToggleLogs }: Hea
   const { t } = useLanguage();
 
   return (
-    <button
-      className={`btn btn-secondary btn-logs-toggle ${showLogs ? 'active' : ''}`}
+    <Button
+      variant="secondary"
+      active={showLogs}
+      className="btn-logs-toggle"
       onClick={onToggleLogs}
-      id="btn-toggle-logs"
-      type="button"
+      id="btn-logs-toggle"
       title={showLogs ? t('btnHideLogs') : t('btnShowLogs')}
       style={{ padding: '0.55rem 1.1rem', fontSize: '0.88rem' }}
     >
       📋 {showLogs ? t('btnHideLogs') : t('btnShowLogs')}
-    </button>
+    </Button>
   );
 }
 

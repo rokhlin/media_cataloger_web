@@ -1,5 +1,7 @@
 import InputSourcesGallery, { type GalleryMediaFile } from '../components/gallery';
 import type { PersonItem, UISettings } from '../models';
+import { useLanguage } from '../i18n/LanguageContext';
+import { Button } from '../components/common';
 
 export interface VaultScreenProps {
   isUnlocked: boolean;
@@ -44,6 +46,7 @@ export default function VaultScreen({
   scannedFilesCount,
   activeInputFolders,
 }: VaultScreenProps) {
+  const { t } = useLanguage();
   const vaultFiles = mediaFiles.filter((m) => m.is_vault);
 
   return (
@@ -66,20 +69,19 @@ export default function VaultScreen({
         >
           <span style={{ fontSize: '3.5rem' }}>🔒</span>
           <div>
-            <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>Secret Vault is Locked</h2>
+            <h2 style={{ margin: '0 0 0.5rem', color: '#fff' }}>{t('vaultScreenLockedTitle')}</h2>
             <p style={{ margin: 0, color: '#9aa0a6', maxWidth: '420px' }}>
-              Private media files in the secret vault are isolated and hidden. Enter your PIN or Master Passphrase to view and manage vault items.
+              {t('vaultScreenLockedDesc')}
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={onOpenVaultModal}
             style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', borderRadius: '12px' }}
             id="btn-unlock-vault-pane"
           >
-            🔓 {isConfigured ? 'Unlock Secret Vault' : 'Setup Master PIN'}
-          </button>
+            🔓 {isConfigured ? t('btnUnlockVaultScreen') : t('btnSetupMasterPinScreen')}
+          </Button>
         </div>
       ) : (
         <InputSourcesGallery
