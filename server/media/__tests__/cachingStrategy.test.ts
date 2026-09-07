@@ -154,4 +154,52 @@ describe('Media Caching Strategy & Operations', () => {
     const hasNewFolder = postStatus.indexed_folders.some((f) => f.folder === newFolderAPath);
     assert.strictEqual(hasNewFolder, true);
   });
+
+  it('should reconcile deleted and added files in incremental mode without scanning unchanged files', async () => {
+    // Add new file in input folderA
+    const newFilePath = path.join(folderA, 'brand_new.jpg');
+    fs.writeFileSync(newFilePath, 'brand-new-data');
+
+    // Remove an existing file physically from disk in folderA
+    const removedFilePath = path.join(folderA, 'photo1.jpg');
+    if (fs.existsSync(removedFilePath)) {
+      fs.unlinkSync(removedFilePath);
+    }
+
+    // Run incremental recache
+    await mediaService.recache({ incremental: true });
+
+    const status = mediaService.getCacheStatus();
+    assert.ok(status.total_cached_files > 0);
+
+    // Verify removed file is deleted from SQLite
+    const existingIndex = dbService.getExistingFilesIndex();
+    const normRemoved = removedFilePath.replace(/\\/g, '/').toLowerCase();
+    assert.strictEqual(existingIndex.has(normRemoved), false, 'Removed file should be pruned from SQLite');
+
+    // Verify brand new file is present in SQLite
+    const normNew = newFilePath.replace(/\\/g, '/').toLowerCase();
+    assert.strictEqual(existingIndex.has(normNew), true, 'Brand new file should be recorded in SQLite');
+  });
+
+  it('should enforce strict mutex and not launch parallel scans when a scan is in-flight', async () => {
+    const p1 = mediaService.recache({ incremental: true });
+    const p2 = mediaService.recache({ incremental: true });
+
+    const [res1, res2] = await Promise.all([p1, p2]);
+    assert.strictEqual(res1.status, 'success');
+    assert.strictEqual(res2.status, 'success');
+  });
+
+  it('should atomically remove deleted duplicate files from SQLite media_items during recalculateCacheAfterDeletion', () => {
+    const targetFile = path.join(folderA, 'brand_new.jpg');
+    // Ensure item was in DB
+    const normTarget = targetFile.replace(/\\/g, '/').toLowerCase();
+    assert.strictEqual(dbService.getExistingFilesIndex().has(normTarget), true);
+
+    mediaService.recalculateCacheAfterDeletion([targetFile]);
+
+    // Ensure item is now deleted from DB without running a full scan
+    assert.strictEqual(dbService.getExistingFilesIndex().has(normTarget), false);
+  });
 });

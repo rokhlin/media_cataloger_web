@@ -107,12 +107,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         id TEXT PRIMARY KEY,
         file_path TEXT UNIQUE NOT NULL,
         file_name TEXT NOT NULL,
+        folder TEXT,
         media_type TEXT NOT NULL,
         file_size INTEGER NOT NULL,
         mtime REAL,
         duration REAL,
         media_date TEXT,
         phash TEXT,
+        sidecar_path TEXT,
         is_vault INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'PROCESSED',
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -257,6 +259,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       if (!miCols.has('is_vault')) {
         this.db.exec('ALTER TABLE media_items ADD COLUMN is_vault INTEGER DEFAULT 0;');
       }
+      if (!miCols.has('folder')) {
+        this.db.exec('ALTER TABLE media_items ADD COLUMN folder TEXT;');
+      }
+      if (!miCols.has('sidecar_path')) {
+        this.db.exec('ALTER TABLE media_items ADD COLUMN sidecar_path TEXT;');
+      }
 
       // Migrate media_faces columns if missing
       const mfCols = new Set((this.db.pragma('table_info(media_faces)') as any[]).map((c: any) => c.name.toLowerCase()));
@@ -366,6 +374,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type);
         CREATE INDEX IF NOT EXISTS idx_media_date ON media_items(media_date DESC);
         CREATE INDEX IF NOT EXISTS idx_media_filename ON media_items(file_name);
+        CREATE INDEX IF NOT EXISTS idx_media_folder ON media_items(folder);
+        CREATE INDEX IF NOT EXISTS idx_media_status ON media_items(status);
+        CREATE INDEX IF NOT EXISTS idx_media_mtime ON media_items(mtime DESC);
         CREATE INDEX IF NOT EXISTS idx_media_is_vault ON media_items(is_vault);
         CREATE INDEX IF NOT EXISTS idx_media_faces_media_id ON media_faces(media_id);
         CREATE INDEX IF NOT EXISTS idx_media_faces_face_id ON media_faces(face_id);
@@ -549,6 +560,205 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     });
 
     transaction();
+  }
+
+  /**
+   * Batch upsert media items into SQLite within a single fast transaction.
+   */
+  saveMediaItemsBatch(items: any[]): void {
+    if (!items || items.length === 0) return;
+    const db = this.getDb();
+    const upsertItem = db.prepare(`
+      INSERT INTO media_items (
+        id, file_path, file_name, folder, media_type, file_size, mtime,
+        status, sidecar_path, media_date, phash, is_vault, updated_at
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, datetime('now', 'localtime')
+      )
+      ON CONFLICT(file_path) DO UPDATE SET
+        file_name = excluded.file_name,
+        folder = COALESCE(excluded.folder, media_items.folder),
+        media_type = excluded.media_type,
+        file_size = excluded.file_size,
+        mtime = excluded.mtime,
+        status = excluded.status,
+        sidecar_path = COALESCE(excluded.sidecar_path, media_items.sidecar_path),
+        media_date = COALESCE(excluded.media_date, media_items.media_date),
+        phash = COALESCE(excluded.phash, media_items.phash),
+        is_vault = excluded.is_vault,
+        updated_at = datetime('now', 'localtime')
+    `);
+
+    const upsertSync = db.prepare(`
+      INSERT INTO sync_history (file_path, file_size, mtime, status, sidecar_path, processed_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(file_path) DO UPDATE SET
+        file_size = excluded.file_size,
+        mtime = excluded.mtime,
+        status = excluded.status,
+        sidecar_path = COALESCE(excluded.sidecar_path, sync_history.sidecar_path),
+        processed_at = datetime('now', 'localtime')
+    `);
+
+    const tx = db.transaction((batch: any[]) => {
+      for (const item of batch) {
+        const fp = item.file_path || item.filePath;
+        if (!fp) continue;
+        const id = item.id || `media_${crypto.createHash('md5').update(fp).digest('hex').slice(0, 16)}`;
+        const fileName = item.filename || item.file_name || path.basename(fp);
+        const folder = item.folder || null;
+        const mediaType = item.media_type || (item.is_video ? 'video' : 'photo');
+        const fileSize = Number(item.file_size || item.size) || 0;
+        const mtime = Number(item.mtime) || 0;
+        const status = item.status || 'UNPROCESSED';
+        const sidecarPath = item.sidecar_path || item.sidecarPath || null;
+        const mediaDate = item.media_date || item.capture_date || null;
+        const phash = item.phash || null;
+        const isVault = item.is_vault ? 1 : 0;
+
+        upsertItem.run(
+          id, fp, fileName, folder, mediaType, fileSize, mtime,
+          status, sidecarPath, mediaDate, phash, isVault
+        );
+
+        upsertSync.run(fp, fileSize, mtime, status, sidecarPath);
+      }
+    });
+
+    tx(items);
+  }
+
+  /**
+   * Delete media items, metadata, sync records and face references for deleted file paths
+   * in a single atomic transaction.
+   */
+  deleteMediaItemsBatch(filePaths: string[]): void {
+    if (!filePaths || filePaths.length === 0) return;
+    const db = this.getDb();
+    const deleteItem = db.prepare(`
+      DELETE FROM media_items 
+      WHERE file_path = ? OR file_path = ? 
+         OR LOWER(REPLACE(file_path, '\\', '/')) = ?
+    `);
+    const deleteSync = db.prepare(`
+      DELETE FROM sync_history 
+      WHERE file_path = ? OR file_path = ? 
+         OR LOWER(REPLACE(file_path, '\\', '/')) = ?
+    `);
+    const deleteMeta = db.prepare(`
+      DELETE FROM media_metadata 
+      WHERE media_id IN (
+        SELECT id FROM media_items 
+        WHERE file_path = ? OR file_path = ? 
+           OR LOWER(REPLACE(file_path, '\\', '/')) = ?
+      )
+    `);
+    const deleteFaces = db.prepare(`
+      DELETE FROM media_faces 
+      WHERE source_file = ? OR source_file = ? 
+         OR LOWER(REPLACE(source_file, '\\', '/')) = ?
+    `);
+    const deleteHashes = db.prepare(`
+      DELETE FROM media_hashes 
+      WHERE file_path = ? OR file_path = ? 
+         OR LOWER(REPLACE(file_path, '\\', '/')) = ?
+    `);
+
+    const tx = db.transaction((paths: string[]) => {
+      for (const p of paths) {
+        if (!p) continue;
+        const norm = p.replace(/\\/g, '/');
+        const back = p.replace(/\//g, '\\');
+        const normLower = norm.toLowerCase();
+        deleteMeta.run(norm, back, normLower);
+        deleteFaces.run(norm, back, normLower);
+        deleteHashes.run(norm, back, normLower);
+        deleteSync.run(norm, back, normLower);
+        deleteItem.run(norm, back, normLower);
+      }
+    });
+
+    tx(filePaths);
+  }
+
+  /**
+   * Read lightweight existing files map (path -> { mtime, size, status, folder, sidecar_path })
+   * for sub-second incremental reconciliation with physical storage.
+   */
+  getExistingFilesIndex(): Map<string, { mtime: number; size: number; status: string; sidecar_path: string | null; folder: string | null }> {
+    const db = this.getDb();
+    const index = new Map<string, { mtime: number; size: number; status: string; sidecar_path: string | null; folder: string | null }>();
+    try {
+      const rows = db.prepare('SELECT file_path, file_size, mtime, status, sidecar_path, folder FROM media_items').all() as any[];
+      for (const r of rows) {
+        if (!r.file_path) continue;
+        const norm = r.file_path.replace(/\\/g, '/').toLowerCase();
+        index.set(norm, {
+          mtime: Number(r.mtime) || 0,
+          size: Number(r.file_size) || 0,
+          status: r.status || 'UNPROCESSED',
+          sidecar_path: r.sidecar_path || null,
+          folder: r.folder || null,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Failed reading existing files index: ${err}`);
+    }
+    return index;
+  }
+
+  /**
+   * Load all persisted media items from SQLite with joined metadata and faces.
+   */
+  getAllPersistedMediaItems(): any[] {
+    const db = this.getDb();
+    try {
+      const rows = db.prepare(`
+        SELECT 
+          m.id,
+          m.file_path,
+          m.file_name as filename,
+          m.folder,
+          m.media_type,
+          m.file_size,
+          m.mtime,
+          m.status,
+          m.sidecar_path,
+          m.media_date,
+          m.phash,
+          m.is_vault,
+          md.summary,
+          md.summary_ru,
+          md.description,
+          md.description_ru,
+          md.environment,
+          md.lighting,
+          md.lighting_ru,
+          md.weather,
+          md.weather_ru,
+          md.time_of_day,
+          md.time_of_day_ru,
+          md.ocr_text,
+          md.exif_analysis,
+          md.exif_analysis_ru,
+          md.transcription,
+          md.transcription_ru,
+          md.timeline_events,
+          md.camera_make,
+          md.camera_model,
+          md.location_name
+        FROM media_items m
+        LEFT JOIN media_metadata md ON m.id = md.media_id
+        ORDER BY m.media_date DESC, m.mtime DESC
+      `).all() as any[];
+
+      return rows;
+    } catch (err) {
+      this.logger.warn(`Failed reading persisted media items: ${err}`);
+      return [];
+    }
   }
 
   /**

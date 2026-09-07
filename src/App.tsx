@@ -238,7 +238,7 @@ function AppMain() {
   // Automatically reload media files and recalculate series when background indexing completes
   useEffect(() => {
     if (wasScanningRef.current && !scanProgress?.is_scanning) {
-      loadMediaFiles(true);
+      loadMediaFiles(false);
     }
     wasScanningRef.current = Boolean(scanProgress?.is_scanning);
   }, [scanProgress?.is_scanning, loadMediaFiles]);

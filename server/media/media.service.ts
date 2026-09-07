@@ -47,11 +47,66 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
 
   private cachedMediaList: any[] | null = null;
   private cacheTimestamp: number = 0;
-  private readonly CACHE_TTL_MS = 300000; // 5 minutes cache TTL for large media libraries
+  private readonly CACHE_TTL_MS = 86400000; // 24 hours cache TTL (persisted in SQLite, daily incremental sync)
   private sidecarCache: Map<string, { mtime: number; data: any }> = new Map();
   private filePathMap: Map<string, string> = new Map();
   private baseNamePathMap: Map<string, string> = new Map();
   private automationTimer: NodeJS.Timeout | null = null;
+  private hasInitialScanRun = false;
+
+  private hydrateItemsFromPersisted(rows: any[]): any[] {
+    const faceCounts = this.db.getFacesCountBySourceFile();
+    const allFacesByFile = this.db.getAllFacesBySourceFile();
+
+    return rows.map((r) => {
+      const ext = path.extname(r.file_path || r.filename || '').toLowerCase();
+      const isVideo = this.config.supportedVideoExts.has(ext) || r.media_type === 'video';
+      const isImage = this.config.supportedPhotoExts.has(ext) || r.media_type === 'photo';
+      const fileFaces = allFacesByFile[r.file_path] || [];
+      const faceNames = fileFaces.map((f: any) => f.name || f.person_name).filter(Boolean);
+
+      return {
+        file_path: r.file_path,
+        filename: r.filename || path.basename(r.file_path),
+        folder: r.folder,
+        file_size: r.file_size,
+        mtime: r.mtime,
+        capture_date: r.media_date,
+        media_date: r.media_date,
+        phash: r.phash,
+        is_video: isVideo,
+        is_image: isImage,
+        status: r.status || 'PROCESSED',
+        sidecar_path: r.sidecar_path,
+        description: r.description,
+        description_ru: r.description_ru,
+        summary: r.summary,
+        summary_ru: r.summary_ru,
+        environment: r.environment,
+        lighting: r.lighting,
+        lighting_ru: r.lighting_ru,
+        weather: r.weather,
+        weather_ru: r.weather_ru,
+        time_of_day: r.time_of_day,
+        time_of_day_ru: r.time_of_day_ru,
+        ocr_text: r.ocr_text,
+        exif_analysis: r.exif_analysis,
+        exif_analysis_ru: r.exif_analysis_ru,
+        transcription: r.transcription,
+        transcription_ru: r.transcription_ru,
+        timeline_events: r.timeline_events,
+        camera_make: r.camera_make,
+        camera_model: r.camera_model,
+        location_name: r.location_name,
+        face_count: fileFaces.length || faceCounts[r.file_path] || 0,
+        faces: fileFaces,
+        face_names: faceNames,
+        has_unassigned_faces: fileFaces.some((f: any) => !f.is_reference || f.name?.startsWith('face_')),
+        is_vault: Boolean(r.is_vault),
+        error_message: null,
+      };
+    });
+  }
 
   onModuleInit() {
     this.startDailyAutomation();
@@ -149,6 +204,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   invalidateCache(): void {
     this.cachedMediaList = null;
     this.cacheTimestamp = 0;
+    this.hasInitialScanRun = false;
     this.sidecarCache.clear();
     this.filePathMap.clear();
     this.baseNamePathMap.clear();
@@ -266,6 +322,14 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     if (!deletedPaths || deletedPaths.length === 0) return;
     const deletedNorms = new Set(deletedPaths.map((p) => p.replace(/\\/g, '/').toLowerCase()));
 
+    // 1. Delete from SQLite in an atomic transaction
+    try {
+      this.db.deleteMediaItemsBatch(deletedPaths);
+    } catch (e) {
+      this.logger.warn(`Failed deleting media items from database: ${e}`);
+    }
+
+    // 2. Update in-memory cache
     if (this.cachedMediaList) {
       this.cachedMediaList = this.cachedMediaList.filter((item) => {
         const itemNorm = (item.file_path || '').replace(/\\/g, '/').toLowerCase();
@@ -274,8 +338,13 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       this.cacheTimestamp = Date.now();
       this.scanStatus.scanned_count = this.cachedMediaList.length;
     } else {
-      // Rebuild in background if cache was empty
-      this.buildMediaIndex(false).catch((e) => this.logger.warn(`Failed rebuilding cache after duplicate deletion: ${e}`));
+      // Hydrate from SQLite if cache was empty rather than running a full disk scan
+      const persisted = this.db.getAllPersistedMediaItems();
+      if (persisted && persisted.length > 0) {
+        this.cachedMediaList = persisted;
+        this.cacheTimestamp = Date.now();
+        this.scanStatus.scanned_count = persisted.length;
+      }
     }
 
     for (const dp of deletedPaths) {
@@ -340,6 +409,23 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
 
       this.cacheTimestamp = Date.now();
       this.scanStatus.scanned_count = this.cachedMediaList.length;
+    }
+
+    // Synchronize folder changes to SQLite
+    try {
+      const db = this.db.getDb();
+      for (const rf of removedFolders) {
+        const normF = rf.replace(/\\/g, '/');
+        db.prepare('DELETE FROM media_items WHERE folder = ? OR file_path LIKE ?').run(normF, `${normF}/%`);
+      }
+      for (const { oldPath, newPath } of renamedFolders) {
+        const normOld = oldPath.replace(/\\/g, '/');
+        const normNew = newPath.replace(/\\/g, '/');
+        db.prepare('UPDATE media_items SET folder = ? WHERE folder = ?').run(normNew, normOld);
+        db.prepare('UPDATE media_items SET file_path = ? || SUBSTR(file_path, ?) WHERE file_path LIKE ?').run(normNew, normOld.length + 1, `${normOld}/%`);
+      }
+    } catch (e) {
+      this.logger.warn(`Failed syncing folder change to SQLite: ${e}`);
     }
 
     // Rebuild lookup maps
@@ -630,10 +716,20 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       }
 
       const existingMap = new Map<string, any>();
-      if (isIncremental && this.cachedMediaList) {
-        for (const it of this.cachedMediaList) {
-          if (it && it.file_path) {
-            existingMap.set(it.file_path.toLowerCase().replace(/\\/g, '/'), it);
+      if (isIncremental) {
+        if (this.cachedMediaList) {
+          for (const it of this.cachedMediaList) {
+            if (it && it.file_path) {
+              existingMap.set(it.file_path.toLowerCase().replace(/\\/g, '/'), it);
+            }
+          }
+        }
+        if (existingMap.size === 0) {
+          const persisted = this.db.getAllPersistedMediaItems();
+          for (const it of persisted) {
+            if (it && it.file_path) {
+              existingMap.set(it.file_path.toLowerCase().replace(/\\/g, '/'), it);
+            }
           }
         }
       }
@@ -987,6 +1083,42 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+      // Reconcile deleted files in incremental mode
+      if (isIncremental) {
+        const dbIndex = this.db.getExistingFilesIndex();
+        const allKnownPaths = new Set([...existingMap.keys(), ...dbIndex.keys()]);
+        if (allKnownPaths.size > 0) {
+          const scannedNormPaths = new Set(scanned.map((s) => s.filePath.toLowerCase().replace(/\\/g, '/')));
+          const deletedPaths: string[] = [];
+          for (const existingPath of allKnownPaths) {
+            if (targetFolder) {
+              const normTarget = targetFolder.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+              if (!existingPath.startsWith(normTarget + '/') && !existingPath.includes(`/${normTarget}/`)) {
+                continue;
+              }
+            }
+            if (!scannedNormPaths.has(existingPath)) {
+              deletedPaths.push(existingPath);
+            }
+          }
+          if (deletedPaths.length > 0) {
+            this.logger.log(`Incremental sync reconciled ${deletedPaths.length} removed files`);
+            try {
+              this.db.deleteMediaItemsBatch(deletedPaths);
+            } catch (err) {
+              this.logger.warn(`Failed batch deleting reconciled removed files: ${err}`);
+            }
+          }
+        }
+      }
+
+      // Batch persist all items to SQLite
+      try {
+        this.db.saveMediaItemsBatch(items);
+      } catch (err) {
+        this.logger.warn(`Failed persisting media items batch to SQLite: ${err}`);
+      }
+
       if (targetFolder && this.cachedMediaList) {
         const normTarget = targetFolder.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
         const remaining = this.cachedMediaList.filter((it) => {
@@ -999,6 +1131,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         this.cachedMediaList = items;
       }
       this.cacheTimestamp = Date.now();
+      this.hasInitialScanRun = true;
       return this.cachedMediaList;
     } finally {
       this.scanStatus.is_scanning = false;
@@ -1030,23 +1163,40 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     const targetLimit = Number(query?.limit) || 100;
     const targetCount = targetOffset + targetLimit;
 
-    // If cache is empty, expired, or refresh requested, start scan
-    if (!this.cachedMediaList || isRefresh || now - this.cacheTimestamp > this.CACHE_TTL_MS) {
-      if (!this.inFlightScanPromise || isRefresh) {
-        this.inFlightScanPromise = this.buildMediaIndex(isRefresh).finally(() => {
+    // 1. If in-memory cache is empty and not a forced refresh, first hydrate instantly from SQLite
+    if (!this.cachedMediaList && !isRefresh) {
+      const persisted = this.db.getAllPersistedMediaItems();
+      if (persisted && persisted.length > 0) {
+        this.cachedMediaList = this.hydrateItemsFromPersisted(persisted);
+        this.cacheTimestamp = Date.now();
+        for (const it of this.cachedMediaList) {
+          this.registerIndexedFile(it.file_path, it.folder);
+        }
+        this.logger.log(`Hydrated ${persisted.length} media items instantly from SQLite database`);
+      }
+    }
+
+    // 2. Strict Mutex on scanning: never launch parallel scans
+    const needsScan = !this.cachedMediaList || isRefresh || !this.hasInitialScanRun || now - this.cacheTimestamp > this.CACHE_TTL_MS;
+    if (needsScan) {
+      if (!this.inFlightScanPromise && !this.scanStatus.is_scanning) {
+        const shouldRunIncremental = Boolean(this.cachedMediaList && !isRefresh);
+        this.inFlightScanPromise = this.buildMediaIndex(isRefresh, undefined, shouldRunIncremental).finally(() => {
           this.inFlightScanPromise = null;
         });
       }
 
-      // Wait up to 3 seconds for initial chunk if in-flight list is still building
-      let waitIter = 0;
-      while (
-        this.scanStatus.is_scanning &&
-        (!this.cachedMediaList || this.cachedMediaList.length < targetCount) &&
-        waitIter < 30
-      ) {
-        waitIter++;
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      // If cache is empty, initial scan has not completed, or explicit refresh requested, wait for initial chunk
+      if (!this.cachedMediaList || !this.hasInitialScanRun || isRefresh) {
+        let waitIter = 0;
+        while (
+          this.scanStatus.is_scanning &&
+          (!this.cachedMediaList || this.cachedMediaList.length < targetCount) &&
+          waitIter < 30
+        ) {
+          waitIter++;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
     }
 

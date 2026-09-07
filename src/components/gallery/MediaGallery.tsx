@@ -237,10 +237,10 @@ export default function InputSourcesGallery({
     return match?.similar_group_files;
   }, [selectedMedia, filteredFiles]);
 
-  // Async process for filtering and sorting
+  // Async process for filtering and sorting (debounced to avoid UI freezes on rapid chunk arrivals)
   useEffect(() => {
     let isActive = true;
-    const processFilters = async () => {
+    const timer = setTimeout(async () => {
       try {
         const filtered = await mediaOrganizationService.filterMediaFiles(mediaFiles, {
           searchQuery,
@@ -278,15 +278,18 @@ export default function InputSourcesGallery({
         console.error("Filter error", e);
         errorInterceptor.emitLog('ERROR', 'MediaGallery', `Filter error: ${e instanceof Error ? e.message : String(e)}`);
       }
+    }, 120);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
     };
-    processFilters();
-    return () => { isActive = false; };
   }, [mediaFiles, searchQuery, typeFilter, statusFilter, faceFilter, selectedPerson, selectedFolder, sortBy, sortOrder, isSimilarityGrouped]);
 
-  // Async process for folder tree (depends only on mediaFiles)
+  // Async process for folder tree (depends only on mediaFiles, debounced)
   useEffect(() => {
     let isActive = true;
-    const processTree = async () => {
+    const timer = setTimeout(async () => {
       try {
         const tree = await mediaOrganizationService.buildFolderTree(mediaFiles);
         if (isActive) {
@@ -297,15 +300,18 @@ export default function InputSourcesGallery({
       } catch (e) {
         console.error("Tree error", e);
       }
+    }, 200);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
     };
-    processTree();
-    return () => { isActive = false; };
   }, [mediaFiles]);
 
-  // Async process for date groups (depends on filteredFiles and language)
+  // Async process for date groups (depends on filteredFiles and language, debounced)
   useEffect(() => {
     let isActive = true;
-    const processDates = async () => {
+    const timer = setTimeout(async () => {
       try {
         const dates = await mediaOrganizationService.groupByDate(filteredFiles, language === 'ru' ? 'ru' : 'en');
         if (isActive) {
@@ -316,15 +322,18 @@ export default function InputSourcesGallery({
       } catch (e) {
         console.error("Dates error", e);
       }
+    }, 180);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
     };
-    processDates();
-    return () => { isActive = false; };
   }, [filteredFiles, language]);
 
-  // Async process for person groups
+  // Async process for person groups (debounced)
   useEffect(() => {
     let isActive = true;
-    const processPersons = async () => {
+    const timer = setTimeout(async () => {
       try {
         const personsResult = await mediaOrganizationService.groupByPerson(filteredFiles, knownPersonOptions);
         if (isActive) {
@@ -335,9 +344,12 @@ export default function InputSourcesGallery({
       } catch (e) {
         console.error("Persons error", e);
       }
+    }, 180);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
     };
-    processPersons();
-    return () => { isActive = false; };
   }, [filteredFiles, knownPersonOptions]);
 
   const hasActiveFilters =
