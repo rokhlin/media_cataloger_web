@@ -44,8 +44,11 @@ cp .env.example .env
 # CATALOGER_API_URL=http://192.168.1.50:8001
 
 # 3. Launch container on port 8000
-docker compose up -d
+docker compose up -d --build
 ```
+
+> [!TIP]
+> **Windows Docker Users**: See the comprehensive step-by-step Windows deployment guide: [DOCKER_WINDOWS_SETUP.md](file:///c:/Users/rokhl/.gemini/antigravity/scratch/media_cataloger_web/DOCKER_WINDOWS_SETUP.md).
 
 Open `http://localhost:8000` in your browser!
 
