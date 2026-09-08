@@ -140,6 +140,49 @@ describe('Gemini Integration on Web Backend', () => {
         service.getClient();
       }, /GEMINI_API_KEY is not configured/);
     });
+
+    it('should validate connection failure when key is empty', async () => {
+      const unconfiguredConfig = new AppConfigService();
+      Object.defineProperty(unconfiguredConfig, 'geminiApiKey', { value: '' });
+
+      const service = new GeminiService(unconfiguredConfig, dbService);
+      const res = await service.validateConnection('');
+      assert.strictEqual(res.ok, false);
+      assert.ok(res.message.includes('No Google Gemini API Key'));
+    });
+
+    it('should validate connection success with working mock client', async () => {
+      const service = new GeminiService(configService, dbService);
+      (service as any).client = {
+        models: {
+          generateContent: async () => ({ text: 'Pong' }),
+        },
+      };
+      (service as any).currentApiKey = 'test-api-key-12345';
+
+      const res = await service.validateConnection();
+      assert.strictEqual(res.ok, true);
+      assert.ok(res.message.includes('Connection successful'));
+      assert.strictEqual(typeof res.latencyMs, 'number');
+      assert.strictEqual(res.model, 'gemini-3.6-flash');
+    });
+
+    it('should catch and sanitize connection failure with friendly message', async () => {
+      const service = new GeminiService(configService, dbService);
+      (service as any).client = {
+        models: {
+          generateContent: async () => {
+            throw new Error('API_KEY_INVALID: Key AIzaSyDemoInvalidKey999 is not authorized.');
+          },
+        },
+      };
+      (service as any).currentApiKey = 'test-api-key-12345';
+
+      const res = await service.validateConnection();
+      assert.strictEqual(res.ok, false);
+      assert.ok(res.message.includes('Invalid Gemini API key'));
+      assert.ok(res.errorDetails?.includes('AIza[REDACTED]'));
+    });
   });
 
   describe('Gemini Mock Analysis Execution & Sidecar Persistence', () => {

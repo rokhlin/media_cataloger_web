@@ -27,6 +27,16 @@ export class SettingsUpdateRequestDto {
   @IsString()
   gemini_api_key?: string;
 
+  @ApiPropertyOptional({ description: 'Explicitly remove configured Gemini API Key', example: false })
+  @IsOptional()
+  @IsBoolean()
+  clear_gemini_api_key?: boolean;
+
+  @ApiPropertyOptional({ description: 'Gemini rate limit in requests per minute (RPM)', example: 15 })
+  @IsOptional()
+  @IsNumber()
+  rpm_limit?: number;
+
   @ApiPropertyOptional({ description: 'Local Model Name', example: 'qwen2.5-vl-7b-instruct' })
   @IsOptional()
   @IsString()

@@ -8,7 +8,10 @@ export interface SettingsData {
   model_provider?: string;
   gemini_model?: string;
   gemini_api_key?: string;
+  gemini_api_key_masked?: string;
   is_gemini_api_key_set?: boolean;
+  clear_gemini_api_key?: boolean;
+  rpm_limit?: number;
   local_model_name?: string;
   gemini_max_workers?: number;
   local_max_workers?: number;

@@ -19,6 +19,22 @@ export class GeminiController {
     return this.geminiService.getStatus();
   }
 
+  @Post('validate')
+  @RequirePermissions('admin_panel')
+  @ApiOperation({ summary: 'Validate Google Gemini API credentials and model connection' })
+  @ApiResponse({ status: 200, description: 'Validation results with latency and diagnostic details' })
+  async validateCredentials(@Body() body?: { apiKey?: string; model?: string }) {
+    return await this.geminiService.validateConnection(body?.apiKey, body?.model);
+  }
+
+  @Get('validate')
+  @RequirePermissions('admin_panel')
+  @ApiOperation({ summary: 'Validate active Google Gemini credentials and model connection' })
+  @ApiResponse({ status: 200, description: 'Validation results of active configuration' })
+  async validateActiveCredentials() {
+    return await this.geminiService.validateConnection();
+  }
+
   @Post('analyze-photo')
   @RequirePermissions('admin_panel', 'edit_metadata')
   @ApiOperation({ summary: 'Perform direct Gemini semantic analysis on a single photo' })

@@ -17,6 +17,16 @@ import {
   GroupDuplicateAnalysisSchema,
   normalizeTags,
 } from './gemini.types.js';
+import { sanitizeErrorString } from '../config/encryption.util.js';
+
+export interface GeminiValidationResult {
+  ok: boolean;
+  message: string;
+  model: string;
+  latencyMs?: number;
+  timestamp: string;
+  errorDetails?: string;
+}
 
 @Injectable()
 export class GeminiService {
@@ -441,14 +451,84 @@ export class GeminiService {
     return metadataPayload;
   }
 
+  private lastValidation: GeminiValidationResult | null = null;
+
+  public async validateConnection(apiKey?: string, model?: string): Promise<GeminiValidationResult> {
+    const rawKey = (apiKey && apiKey.trim()) || this.config.geminiApiKey;
+    const effectiveModel = (model && model.trim()) || this.config.geminiModel || 'gemini-3.6-flash';
+    const timestamp = new Date().toISOString();
+
+    if (!rawKey) {
+      this.lastValidation = {
+        ok: false,
+        message: 'No Google Gemini API Key configured or provided.',
+        model: effectiveModel,
+        timestamp,
+      };
+      return this.lastValidation;
+    }
+
+    const startTime = Date.now();
+    try {
+      const testClient = (apiKey && apiKey.trim())
+        ? new GoogleGenAI({ apiKey: rawKey })
+        : this.getClient();
+
+      await testClient.models.generateContent({
+        model: effectiveModel,
+        contents: 'Ping',
+        config: {
+          maxOutputTokens: 5,
+        },
+      });
+
+      const latencyMs = Date.now() - startTime;
+      this.lastValidation = {
+        ok: true,
+        message: 'Connection successful. Google Gemini API is fully reachable and operational.',
+        model: effectiveModel,
+        latencyMs,
+        timestamp,
+      };
+      return this.lastValidation;
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      const rawMsg = err.message || 'Unknown error during Gemini connection validation';
+      let userFriendlyMessage = sanitizeErrorString(rawMsg);
+
+      if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('API key not valid') || rawMsg.includes('400')) {
+        userFriendlyMessage = 'Invalid Gemini API key. Please verify your credentials from Google AI Studio.';
+      } else if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED')) {
+        userFriendlyMessage = 'Gemini API rate limit or quota exceeded. Please check your Google AI Studio plan/billing.';
+      } else if (rawMsg.includes('404') || rawMsg.includes('NOT_FOUND')) {
+        userFriendlyMessage = `Model '${effectiveModel}' was not found or is unavailable for this API key tier.`;
+      } else if (rawMsg.includes('ENOTFOUND') || rawMsg.includes('ETIMEDOUT') || rawMsg.includes('fetch failed')) {
+        userFriendlyMessage = 'Network connection failed: unable to reach Google Gemini API endpoints.';
+      }
+
+      this.lastValidation = {
+        ok: false,
+        message: userFriendlyMessage,
+        model: effectiveModel,
+        latencyMs,
+        timestamp,
+        errorDetails: sanitizeErrorString(err.stack || rawMsg),
+      };
+      return this.lastValidation;
+    }
+  }
+
   public getStatus() {
     const hasKey = Boolean(this.config.geminiApiKey);
     return {
       configured: hasKey,
+      is_gemini_api_key_set: hasKey,
+      gemini_api_key_masked: this.config.geminiApiKeyMasked,
       model: this.config.geminiModel || 'gemini-3.6-flash',
       rpm_limit: this.config.geminiRpmLimit,
       active_slots: this.rateLimiter.getActiveSlots(),
       provider: 'gemini',
+      lastValidation: this.lastValidation,
     };
   }
 

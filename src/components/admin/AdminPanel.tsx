@@ -4,6 +4,7 @@ import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, D
 import UserManagementTab from './UserManagementTab';
 import AdminVaultTab from './AdminVaultTab';
 import AdminBackupTab from './AdminBackupTab';
+import AdminGeminiTab from './AdminGeminiTab';
 import type { FeatureFlag } from '../../models/featureFlags';
 import type { StatusInfo } from '../../models/status';
 import type { GalleryMediaFile } from '../gallery/MediaGallery';
@@ -20,7 +21,7 @@ interface AdminPanelProps {
   uiSettings?: UISettings;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
-  initialSubTab?: 'flags' | 'users' | 'vault' | 'backups';
+  initialSubTab?: 'flags' | 'users' | 'vault' | 'backups' | 'gemini';
 }
 
 export default function AdminPanel({
@@ -48,7 +49,7 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault' | 'backups'>(initialSubTab);
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault' | 'backups' | 'gemini'>(initialSubTab);
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -434,6 +435,15 @@ export default function AdminPanel({
         >
           💾 {t('adminTabBackups' as any) || 'System Backups'}
         </button>
+        <button
+          type="button"
+          className={`btn ${activeAdminSubTab === 'gemini' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveAdminSubTab('gemini')}
+          id="tab-btn-admin-gemini"
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
+        >
+          🤖 {t('adminTabGemini' as any) || 'Gemini AI'}
+        </button>
       </div>
 
       {activeAdminSubTab === 'users' ? (
@@ -449,6 +459,8 @@ export default function AdminPanel({
         />
       ) : activeAdminSubTab === 'backups' ? (
         <AdminBackupTab />
+      ) : activeAdminSubTab === 'gemini' ? (
+        <AdminGeminiTab />
       ) : (
         <>
           {/* 1. Feature Flags Management Dropdown / Accordion Section */}

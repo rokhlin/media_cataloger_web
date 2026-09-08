@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
+import { encryptSecret, decryptSecret, maskSecret } from './encryption.util.js';
 
 export interface NormalizePathOptions {
   isDev?: boolean;
@@ -258,9 +259,24 @@ export class AppConfigService {
     const existing = this.getSavedSettings();
     const data: Record<string, any> = {
       ...existing,
-      ...(additionalSettings || {}),
       updated_at: new Date().toISOString(),
     };
+
+    if (additionalSettings) {
+      for (const [k, v] of Object.entries(additionalSettings)) {
+        if (k === 'GEMINI_API_KEY') {
+          if (typeof v === 'string' && v.trim()) {
+            data[k] = encryptSecret(v.trim());
+          } else {
+            delete data.GEMINI_API_KEY;
+            delete data.gemini_api_key;
+          }
+        } else {
+          data[k] = v;
+        }
+      }
+    }
+
     if (inputFolders !== undefined) {
       if (inputFolders.length > 0) {
         data.INPUT_FOLDERS = inputFolders;
@@ -283,6 +299,11 @@ export class AppConfigService {
       fs.mkdirSync(targetDir, { recursive: true });
     }
     fs.writeFileSync(targetFile, JSON.stringify(data, null, 2), 'utf-8');
+    try {
+      if (process.platform !== 'win32') {
+        fs.chmodSync(targetFile, 0o600);
+      }
+    } catch {}
   }
 
   get inputFolders(): string[] {
@@ -377,10 +398,10 @@ export class AppConfigService {
   get geminiApiKey(): string {
     const saved = this.getSavedSettings();
     if (saved.GEMINI_API_KEY && String(saved.GEMINI_API_KEY).trim()) {
-      return String(saved.GEMINI_API_KEY).trim();
+      return decryptSecret(String(saved.GEMINI_API_KEY).trim());
     }
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
-      return process.env.GEMINI_API_KEY.trim();
+      return decryptSecret(process.env.GEMINI_API_KEY.trim());
     }
     // Check if configured in media_cataloger .env as a seamless fallback
     const candidatePaths = [
@@ -396,13 +417,18 @@ export class AppConfigService {
           if (match && match[1]) {
             const val = match[1].trim();
             if (val && !val.includes('your_gemini_api_key')) {
-              return val;
+              return decryptSecret(val);
             }
           }
         } catch {}
       }
     }
     return '';
+  }
+
+  get geminiApiKeyMasked(): string {
+    const raw = this.geminiApiKey;
+    return raw ? maskSecret(raw) : '';
   }
 
   get geminiModel(): string {

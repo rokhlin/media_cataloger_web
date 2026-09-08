@@ -211,7 +211,14 @@ export class BackupService {
       if (fs.existsSync(settingsPath)) {
         try {
           const rawSettings = fs.readFileSync(settingsPath, 'utf8');
-          fs.writeFileSync(path.join(tempDir, 'settings.json'), rawSettings, 'utf8');
+          try {
+            const parsed = JSON.parse(rawSettings);
+            if (parsed.GEMINI_API_KEY) parsed.GEMINI_API_KEY = '[REDACTED_BY_BACKUP]';
+            if (parsed.gemini_api_key) parsed.gemini_api_key = '[REDACTED_BY_BACKUP]';
+            fs.writeFileSync(path.join(tempDir, 'settings.json'), JSON.stringify(parsed, null, 2), 'utf8');
+          } catch {
+            fs.writeFileSync(path.join(tempDir, 'settings.json'), rawSettings, 'utf8');
+          }
           stagedFiles.push('config/settings.json');
         } catch (err: any) {
           this.logger.warn(`Failed to copy settings.json: ${err.message}`);

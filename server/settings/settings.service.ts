@@ -52,8 +52,10 @@ export class SettingsService {
       is_dev: this.config.isDev,
       model_provider: saved.MODEL_PROVIDER || process.env.MODEL_PROVIDER || 'gemini',
       gemini_model: saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
-      gemini_api_key: this.config.geminiApiKey,
+      gemini_api_key: '',
+      gemini_api_key_masked: this.config.geminiApiKeyMasked,
       is_gemini_api_key_set: Boolean(this.config.geminiApiKey),
+      rpm_limit: this.config.geminiRpmLimit,
       local_model_name: saved.LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || '',
       gemini_max_workers: saved.GEMINI_MAX_WORKERS ? Number(saved.GEMINI_MAX_WORKERS) : Number(process.env.GEMINI_MAX_WORKERS || 3),
       local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),
@@ -79,7 +81,15 @@ export class SettingsService {
     const additional: Record<string, any> = {};
     if (dto.model_provider !== undefined) additional.MODEL_PROVIDER = dto.model_provider;
     if (dto.gemini_model !== undefined) additional.GEMINI_MODEL = dto.gemini_model;
-    if (dto.gemini_api_key !== undefined) additional.GEMINI_API_KEY = dto.gemini_api_key.trim();
+    if (dto.clear_gemini_api_key === true) {
+      additional.GEMINI_API_KEY = '';
+    } else if (dto.gemini_api_key !== undefined) {
+      const keyVal = dto.gemini_api_key.trim();
+      if (keyVal && !keyVal.includes('••••')) {
+        additional.GEMINI_API_KEY = keyVal;
+      }
+    }
+    if (dto.rpm_limit !== undefined) additional.RPM_LIMIT = Math.max(1, Number(dto.rpm_limit));
     if (dto.local_model_name !== undefined) additional.LOCAL_MODEL_NAME = dto.local_model_name;
     if (dto.gemini_max_workers !== undefined) additional.GEMINI_MAX_WORKERS = Number(dto.gemini_max_workers);
     if (dto.local_max_workers !== undefined) additional.LOCAL_MAX_WORKERS = Number(dto.local_max_workers);
