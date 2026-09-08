@@ -66,6 +66,7 @@ describe('Theme Presets & Tokens', () => {
     assert.strictEqual(props['--bg-color'], sampleTokens.bgColor);
     assert.strictEqual(props['--primary-color'], sampleTokens.primaryColor);
     assert.strictEqual(props['--text-primary'], sampleTokens.textPrimary);
+    assert.strictEqual(props['--text-color'], sampleTokens.textPrimary);
     assert.strictEqual(props['--card-bg'], sampleTokens.cardBg);
   });
 });

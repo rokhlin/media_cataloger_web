@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import sharp from 'sharp';
 import { GeminiRateLimiter } from '../gemini.rate-limiter.js';
-import { normalizeTags, PhotoAnalysisSchema } from '../gemini.types.js';
+import { normalizeTags } from '../gemini.types.js';
 import { GeminiService } from '../gemini.service.js';
 import { AppConfigService } from '../../config/config.service.js';
 import { DatabaseService } from '../../database/database.service.js';

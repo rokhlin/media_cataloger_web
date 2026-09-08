@@ -633,7 +633,7 @@ export default function LibraryOrganizationPanel({ onRefreshMedia }: LibraryOrga
             <span className={`lib-org-badge ${jobStatus.status}`}>
               ● {jobStatus.status.replace('_', ' ')}
             </span>
-            <span style={{ fontWeight: 600, color: 'var(--text-color, #f8fafc)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
               {jobStatus.percent}% ({jobStatus.processed_files} / {jobStatus.total_files})
             </span>
           </div>
@@ -733,7 +733,7 @@ export default function LibraryOrganizationPanel({ onRefreshMedia }: LibraryOrga
                       </td>
 
                       <td>
-                        <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                           {item.detected_content_type || 'other'}
                         </span>
                       </td>
@@ -779,7 +779,7 @@ export default function LibraryOrganizationPanel({ onRefreshMedia }: LibraryOrga
                                 ? '#f87171'
                                 : item.status === 'rolled_back'
                                 ? '#fbbf24'
-                                : '#cbd5e1',
+                                : 'var(--text-secondary)',
                           }}
                         >
                           {item.status}

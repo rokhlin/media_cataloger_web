@@ -53,13 +53,13 @@
 .dup-metric-value {
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--text-color, #f8fafc);
+  color: var(--text-primary, #f8fafc);
   letter-spacing: -0.02em;
 }
 
 .dup-metric-label {
   font-size: 0.85rem;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-secondary, #94a3b8);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -91,7 +91,7 @@
   gap: 0.75rem;
   font-size: 1.2rem;
   font-weight: 600;
-  color: var(--text-color, #f8fafc);
+  color: var(--text-primary, #f8fafc);
   margin: 0;
 }
 
@@ -111,26 +111,32 @@
 .dup-form-group label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-muted, #cbd5e1);
+  color: var(--text-secondary, #cbd5e1);
   display: flex;
   justify-content: space-between;
 }
 
 .dup-form-select,
 .dup-form-input {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--input-bg, rgba(15, 23, 42, 0.6));
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
   border-radius: 8px;
   padding: 0.6rem 0.85rem;
-  color: #fff;
+  color: var(--text-primary, #fff);
   font-size: 0.9rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 
 .dup-form-select:focus,
 .dup-form-input:focus {
+  background: var(--input-focus-bg, var(--input-bg));
   border-color: var(--primary-color, #6366f1);
+}
+
+.dup-form-select option {
+  background: var(--card-bg-solid, #1e293b);
+  color: var(--text-primary, #f8fafc);
 }
 
 .dup-range-wrap {
@@ -177,7 +183,7 @@
   justify-content: space-between;
   align-items: center;
   font-size: 0.9rem;
-  color: #e2e8f0;
+  color: var(--text-primary, #e2e8f0);
 }
 
 .dup-progress-bar-bg {
@@ -247,7 +253,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   padding-bottom: 0.75rem;
 }
 
@@ -291,8 +297,8 @@
 }
 
 .dup-item-card {
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--card-bg-solid, rgba(15, 23, 42, 0.5));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
   border-radius: 12px;
   overflow: hidden;
   display: flex;
@@ -390,12 +396,12 @@
   flex-direction: column;
   gap: 0.4rem;
   font-size: 0.82rem;
-  color: #cbd5e1;
+  color: var(--text-secondary, #cbd5e1);
 }
 
 .dup-item-filename {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary, #fff);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -404,11 +410,11 @@
 .dup-item-meta-row {
   display: flex;
   justify-content: space-between;
-  color: #94a3b8;
+  color: var(--text-muted, #94a3b8);
 }
 
 .dup-item-meta-row strong {
-  color: #e2e8f0;
+  color: var(--text-primary, #e2e8f0);
 }
 
 /* Split Visual Comparator Modal */
@@ -455,10 +461,10 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--card-bg-solid, rgba(15, 23, 42, 0.6));
   border-radius: 12px;
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
 .dup-comparator-preview {
@@ -477,11 +483,12 @@
 
 .dup-comparator-meta-table td {
   padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary);
 }
 
 .dup-comparator-meta-table td:first-child {
-  color: #94a3b8;
+  color: var(--text-secondary, #94a3b8);
   font-weight: 500;
 }
 
@@ -518,10 +525,10 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--card-bg-solid, rgba(15, 23, 42, 0.6));
   border-radius: 12px;
   padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
 .dup-preview-modal-actions {
@@ -531,7 +538,7 @@
   gap: 1rem;
   flex-wrap: wrap;
   padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
 .dup-preview-modal-video {

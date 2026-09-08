@@ -18,6 +18,7 @@
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
+  --text-color: var(--text-primary);
   --input-bg: #111827;
   --input-focus-bg: #1f2937;
   --success-color: #10b981;

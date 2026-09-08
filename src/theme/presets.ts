@@ -281,6 +281,7 @@ export function applyTokensToElement(tokens: ThemeTokens, element: HTMLElement =
   element.style.setProperty('--text-primary', tokens.textPrimary);
   element.style.setProperty('--text-secondary', tokens.textSecondary);
   element.style.setProperty('--text-muted', tokens.textMuted);
+  element.style.setProperty('--text-color', tokens.textPrimary);
   element.style.setProperty('--input-bg', tokens.inputBg);
   element.style.setProperty('--input-focus-bg', tokens.inputFocusBg);
   element.style.setProperty('--console-bg', tokens.consoleBg);
