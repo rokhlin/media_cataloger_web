@@ -182,7 +182,7 @@ class ErrorInterceptorService {
     lines.push(`Status Code: ${status}`);
 
     if (status === 502) {
-      lines.push('Diagnosis: Bad Gateway - The backend cataloger AI daemon appears to be offline or unreachable on port 8000.');
+      lines.push('Diagnosis: Bad Gateway - The backend cataloger AI daemon appears to be offline or unreachable on port 8001.');
       lines.push('Suggestion: Ensure the Python media_cataloger service is running or check server logs.');
     } else if (status === 404) {
       lines.push('Diagnosis: Resource not found.');

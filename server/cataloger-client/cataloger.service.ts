@@ -1,5 +1,7 @@
 import { Injectable, Logger, Inject, BadRequestException, Optional } from '@nestjs/common';
 import axios from 'axios';
+import * as http from 'http';
+import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppConfigService } from '../config/config.service.js';
@@ -7,6 +9,9 @@ import { MediaService } from '../media/media.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { LogBufferService, LogLevel } from '../logging/log-buffer.service.js';
 import { GeminiService } from '../gemini/gemini.service.js';
+
+const noKeepAliveHttpAgent = new http.Agent({ keepAlive: false });
+const noKeepAliveHttpsAgent = new https.Agent({ keepAlive: false });
 
 @Injectable()
 export class CatalogerClientService {
@@ -76,10 +81,27 @@ export class CatalogerClientService {
         geminiModel: execConfig.gemini_model,
       });
 
-      const res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
-        timeout: 15000,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      let res;
+      try {
+        res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
+          timeout: 20000,
+          headers: { 'Content-Type': 'application/json' },
+          httpAgent: noKeepAliveHttpAgent,
+          httpsAgent: noKeepAliveHttpsAgent,
+        });
+      } catch (postErr: any) {
+        if (postErr.message?.includes('socket hang up') || postErr.code === 'ECONNRESET') {
+          this.logger.warn(`Initial triggerRun request had socket hang up, retrying on fresh socket: ${postErr.message}`);
+          res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
+            timeout: 20000,
+            headers: { 'Content-Type': 'application/json' },
+            httpAgent: new http.Agent({ keepAlive: false }),
+            httpsAgent: new https.Agent({ keepAlive: false }),
+          });
+        } else {
+          throw postErr;
+        }
+      }
 
       this.logBuffer?.info('Pipeline', `Cataloger pipeline started successfully: ${res.data?.message || 'Processing in background'}`, res.data);
 
@@ -184,14 +206,35 @@ export class CatalogerClientService {
         size,
       });
 
-      const res = await axios.post(
-        `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
-        payload,
-        {
-          timeout: 15000,
-          headers: { 'Content-Type': 'application/json' },
+      let res;
+      try {
+        res = await axios.post(
+          `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
+          payload,
+          {
+            timeout: 20000,
+            headers: { 'Content-Type': 'application/json' },
+            httpAgent: noKeepAliveHttpAgent,
+            httpsAgent: noKeepAliveHttpsAgent,
+          }
+        );
+      } catch (postErr: any) {
+        if (postErr.message?.includes('socket hang up') || postErr.code === 'ECONNRESET') {
+          this.logger.warn(`Initial analyze-file request had socket hang up, retrying on fresh socket: ${postErr.message}`);
+          res = await axios.post(
+            `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
+            payload,
+            {
+              timeout: 20000,
+              headers: { 'Content-Type': 'application/json' },
+              httpAgent: new http.Agent({ keepAlive: false }),
+              httpsAgent: new https.Agent({ keepAlive: false }),
+            }
+          );
+        } else {
+          throw postErr;
         }
-      );
+      }
 
       this.logBuffer?.info('Pipeline', `Single file analysis successfully queued for '${path.basename(resolvedPath)}'`, res.data);
 
