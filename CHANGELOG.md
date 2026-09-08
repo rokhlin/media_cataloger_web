@@ -9,6 +9,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.8.0] - Unreleased
 
 ### Added
+- **Organize Files Workspace & Media Library Organization (`server/organize/`, `DuplicatesManagerTab`, `LibraryOrganizationPanel`)**:
+  - Renamed `Duplicates Manager` tab, header title, and navigation breadcrumbs to **`Organize files`** (рус: **`Организация файлов`**).
+  - Reorganized workspace into two independently collapsible accordion sections:
+    1. **Media Library Organization** (`Организация медиатеки`): Full background reorganization by Year, Month, Common Event, and Content Type.
+    2. **Duplicates & Cleanup Manager** (`Поиск и управление дубликатами`): Preserves duplicate search, thresholding, visual comparison, and batch cleanup.
+  - **Heuristic Content Type Classifier**: Automatically classifies media into Documents (`documents`), Social networks (`social`), Nature (`nature`), Animals (`animals`), Screenshots (`screenshots`), and Non-family (`non_family`) using OCR text density, filename patterns, directory paths, and AI sidecar metadata.
+  - **Custom Folder & Filename Templates**: Template interpolation supporting `{year}`, `{month}`, `{month_name}`, `{event}`, `{contentType}`, and `{original}`.
+  - **Comprehensive Tagging & Toggleable In-File Writing**:
+    - Generates and persists tags (`Год: 2024`, `Месяц: Май`, `Событие: ...`, `Категория: ...`) in SQLite and sidecar `.json`.
+    - Added optional toggle for direct in-file metadata embedding (EXIF/IPTC) for supported formats (`.jpg`, `.jpeg`, `.png`, `.webp`, `.tiff`), alongside full sidecar and database synchronization for Apple HEIC and HEVC video files.
+  - **Interactive Plan Review & Editable Proposed Plan**:
+    - Interactive table displaying all proposed moves, target folders, target filenames, and assigned tags.
+    - In-place editing allowing users to customize folder paths, file names, or tags for any item before or after execution.
+  - **Audit History & Full Rollback**:
+    - SQLite persistence in `organization_jobs` and `organization_items` storing `original_path`, `original_folder`, `original_filename`, and `status`.
+    - One-click Rollback (`"Откатить изменения"`) restoring moved files, sidecars, and database records back to their original locations.
+  - **Background Non-Blocking Execution & Resilience**:
+    - Processes files asynchronously with `setImmediate` event loop yielding, completely preventing server or UI thread blockage.
+    - Session-persistent execution: continues processing in background when switching tabs or closing browser; restores live progress (`percent`, `current_file`, `processed / total`) via `/api/organize/status`.
+    - Concurrency lock protecting against simultaneous runs (`400 Bad Request`).
+    - Cancel on any stage with preserved progress, supporting fresh restart (`resetPrevious`) or incremental runs.
+  - **Bilingual i18n & Test Suite**:
+    - Complete English 🇬🇧 and Russian 🇷🇺 localization for all accordion headers, criteria inputs, status badges, and action buttons.
+    - Automated unit test suite `server/organize/__tests__/organize.service.test.ts` verifying job lifecycle, concurrency prevention, cancellation, and plan edits.
 - **System Backup & Restore Architecture (`server/backup/`, `AdminBackupTab`)**:
   - Full system backup and restore engine capturing SQLite databases (`catalog_history.db` and `family_tree.db`), configuration data (`settings.json`, env snapshots, custom folder directories), feature flags (`feature_flags.json`), kinship relations, and face registry.
   - Zero-downtime atomic hot snapshots using `better-sqlite3`'s native SQLite online backup API (`db.backup()`), guaranteeing database consistency under concurrent reads/writes.

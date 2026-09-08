@@ -252,5 +252,30 @@ describe('DuplicatesService', () => {
       assert.equal(typeof summary.totalGroups, 'number');
       assert.equal(deleteCalled, false); // strictly non-destructive
     });
+
+    it('should rapidly cluster 500 visual items in under 500ms using BigInt popcount', async () => {
+      const largeHashes: any[] = [];
+      for (let i = 0; i < 500; i++) {
+        // Create variations of hashes
+        const hex = (BigInt('0x123456789abcdef0') + BigInt(i % 10)).toString(16).padStart(16, '0');
+        largeHashes.push({
+          file_path: `/photos/bulk_${i}.jpg`,
+          content_hash: `hash_${i}`,
+          phash: hex,
+          file_size: 1000 + i,
+          width: 1920,
+          height: 1080,
+          mtime: 1700000000 + i,
+        });
+      }
+      mockDbService.getAllMediaHashes = () => largeHashes;
+
+      const t0 = Date.now();
+      const groups = await duplicatesService.getDuplicateGroups('visual', 0.90, 3.0, 'highest_resolution');
+      const elapsed = Date.now() - t0;
+
+      assert.ok(groups.length > 0, 'Should find groups among 500 items');
+      assert.ok(elapsed < 500, `Clustering 500 items should take < 500ms, took ${elapsed}ms`);
+    });
   });
 });

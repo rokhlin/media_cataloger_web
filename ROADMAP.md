@@ -56,14 +56,18 @@
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
 - [x] **Media Tagging System**: Support custom and person tagging for media assets with sidecar synchronization.
 - [x] **Metadata Editing**: Add full support for viewing and editing metadata.
-- [ ] **Write Analysis to File Metadata**: Option to embed analysis results directly back into media files (EXIF/XMP/ID3). Disabled by default. This feature should be configurable in the admin panel.
+- [x] **Write Analysis to File Metadata**: Option to embed analysis results directly back into media files (EXIF/XMP/ID3). Toggleable in Organization & Duplicates panel with sidecar and SQLite persistence.
+- [x] **Direct Metadata & Tag Writing for HEIC and HEVC**:
+    - [x] Add dedicated `.heic` and `.hevc` metadata tracking with loss-free sidecar and SQLite persistence across cataloger and web applications.
+    - [x] Add automated test suite validating in-file tag embedding and reading for media formats.
 - [x] **In-Viewer Metadata Editor**: Direct inline metadata editing within the preview modal/window.
 - [ ] **AI Analysis Agent**: Dedicated autonomous AI agent for deep file analysis and insights.
 - [ ] **Face Optimization Service**: Background service for periodic face embedding optimization and clustering.
 - [ ] **Semantic Search**: Vector-based semantic search across media content, transcripts, and metadata.
 - [x] **Worker Queue**: Configure a queue of media files for analysis with parallel processing capabilities.
 
-### Grouping by Similarity
+### Organizing & Grouping Files
+- [x] **Organize Files Workspace & Media Library Organization**: Dedicated workspace with collapsible accordion sections for (1) Media Library Organization (Year, Month, Common Event, Content Type classification, renaming, tagging, rollback, non-blocking background execution) and (2) Duplicates & Cleanup Manager.
 - [x] **Similar files or series Grouping**: Group similar files or series of files based on similarity threshold. Similar files should be grouped together Show only one file from each group and a badge indicating the number of similar files. Allow user to see all files in a group in viewer. Keep analysis logic in `media_cataloger` as much as possible. File management put in `media_cataloger_web`. 
 - [x] **Advanced Duplicate Grouping**: Enhanced UI and pipeline for managing duplicate and burst photos. Duplicate finding should be a dedicated feature that allow used to clean up duplicates. Allow to process duplicates in background. After search is done, show summary of duplicates found. User should be able to review duplicates and decide which ones to keep and which ones to delete. User should be able to delete duplicates. Allow to find duplicates in chuncks of folders. Split duplicate definition (similarity threshold, grouping logic) from ai analysis results. Add configuration for duplicate definition in admin panel. Users can use it to define their own duplicate detection logic. Show duplicates in group view with one selected file and list of other files in the group. Allow user to compare selected file with other files in the group. Allow user to select files to delete. Allow to move files to another folder.Keep analysis logic in `media_cataloger` as much as possible. File management put in `media_cataloger_web`. Search duplicates by similarity threshold (user defined) is one use case. Find exact duplicates is another use case. Find files that are identical in content but with different file names or extention type or file size. 
 

@@ -238,6 +238,41 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       INSERT OR IGNORE INTO cache_strategy (id, daily_automation_enabled, daily_schedule_time, incremental_only)
       VALUES (1, 1, '03:00', 1);
 
+      CREATE TABLE IF NOT EXISTS organization_jobs (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'idle',
+        mode TEXT NOT NULL DEFAULT 'semi_automatic',
+        criteria TEXT NOT NULL DEFAULT '{}',
+        total_files INTEGER NOT NULL DEFAULT 0,
+        processed_files INTEGER NOT NULL DEFAULT 0,
+        percent REAL NOT NULL DEFAULT 0,
+        current_file TEXT,
+        message TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE IF NOT EXISTS organization_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL,
+        media_id TEXT,
+        original_path TEXT NOT NULL,
+        original_folder TEXT,
+        original_filename TEXT NOT NULL,
+        target_folder TEXT,
+        target_filename TEXT,
+        target_path TEXT,
+        detected_year INTEGER,
+        detected_month INTEGER,
+        detected_content_type TEXT,
+        assigned_tags TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'pending',
+        applied_at TEXT,
+        error TEXT,
+        FOREIGN KEY (job_id) REFERENCES organization_jobs(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -385,6 +420,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_face_registry_face_id ON face_registry(face_id);
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+        CREATE INDEX IF NOT EXISTS idx_org_items_job_id ON organization_items(job_id);
+        CREATE INDEX IF NOT EXISTS idx_org_items_status ON organization_items(status);
       `);
     } catch (err) {
       this.logger.warn(`Index creation notice: ${err}`);
@@ -1677,16 +1714,73 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   getMediaHash(filePath: string): any {
     const db = this.getDb();
     const norm = filePath.replace(/\\/g, '/');
-    return db.prepare(`
+    const row = db.prepare(`
       SELECT * FROM media_hashes
       WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
       LIMIT 1
-    `).get(filePath, norm, norm);
+    `).get(filePath, norm, norm) as any;
+    if (row) return row;
+
+    // Fallback to media_items if indexed with phash during cataloging
+    try {
+      const item = db.prepare(`
+        SELECT file_path, file_size, mtime, phash FROM media_items
+        WHERE (file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?))
+          AND phash IS NOT NULL AND phash != ''
+        LIMIT 1
+      `).get(filePath, norm, norm) as any;
+
+      if (item && item.phash) {
+        return {
+          file_path: item.file_path,
+          content_hash: null,
+          phash: item.phash,
+          width: null,
+          height: null,
+          file_size: item.file_size,
+          mtime: item.mtime,
+        };
+      }
+    } catch {
+      // ignore query errors if table schema differs
+    }
+    return null;
   }
 
   getAllMediaHashes(): any[] {
     const db = this.getDb();
-    return db.prepare(`SELECT * FROM media_hashes`).all();
+    try {
+      return db.prepare(`
+        SELECT file_path, content_hash, phash, width, height, file_size, mtime
+        FROM media_hashes
+        UNION ALL
+        SELECT m.file_path, NULL as content_hash, m.phash, NULL as width, NULL as height, m.file_size, m.mtime
+        FROM media_items m
+        WHERE m.phash IS NOT NULL AND m.phash != ''
+          AND NOT EXISTS (
+            SELECT 1 FROM media_hashes h
+            WHERE h.file_path = m.file_path OR LOWER(h.file_path) = LOWER(m.file_path)
+          )
+      `).all();
+    } catch {
+      return db.prepare(`SELECT * FROM media_hashes`).all();
+    }
+  }
+
+  getAllCatalogedMediaFiles(): Array<{ filePath: string; folder: string }> {
+    const db = this.getDb();
+    try {
+      const rows = db.prepare(`
+        SELECT file_path, folder FROM media_items
+        WHERE is_vault = 0 OR is_vault IS NULL
+      `).all() as any[];
+      return rows.map((r) => ({
+        filePath: r.file_path,
+        folder: r.folder || path.dirname(r.file_path),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   saveMediaHash(data: {
@@ -1900,6 +1994,234 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         updated_at = datetime('now', 'localtime')
       WHERE id = 1
     `).run(updated);
+  }
+
+  // --- Organization Jobs & Items ---
+  createOrganizationJob(data: {
+    id: string;
+    mode: string;
+    criteria: string;
+    total_files?: number;
+    status?: string;
+  }): any {
+    const db = this.getDb();
+    db.prepare(`
+      INSERT INTO organization_jobs (id, status, mode, criteria, total_files, processed_files, percent, created_at, updated_at)
+      VALUES (@id, @status, @mode, @criteria, @total_files, 0, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    `).run({
+      id: data.id,
+      status: data.status || 'analyzing',
+      mode: data.mode || 'semi_automatic',
+      criteria: data.criteria || '{}',
+      total_files: data.total_files || 0,
+    });
+    return this.getOrganizationJob(data.id);
+  }
+
+  getOrganizationJob(jobId?: string): any {
+    const db = this.getDb();
+    if (jobId) {
+      return db.prepare(`SELECT * FROM organization_jobs WHERE id = ?`).get(jobId) || null;
+    }
+    return db.prepare(`SELECT * FROM organization_jobs ORDER BY created_at DESC LIMIT 1`).get() || null;
+  }
+
+  updateOrganizationJob(
+    id: string,
+    updates: Partial<{
+      status: string;
+      total_files: number;
+      processed_files: number;
+      percent: number;
+      current_file: string;
+      message: string;
+      error: string;
+    }>,
+  ): void {
+    const db = this.getDb();
+    const fields: string[] = ["updated_at = datetime('now', 'localtime')"];
+    const params: any = { id };
+
+    if (updates.status !== undefined) {
+      fields.push('status = @status');
+      params.status = updates.status;
+    }
+    if (updates.total_files !== undefined) {
+      fields.push('total_files = @total_files');
+      params.total_files = updates.total_files;
+    }
+    if (updates.processed_files !== undefined) {
+      fields.push('processed_files = @processed_files');
+      params.processed_files = updates.processed_files;
+    }
+    if (updates.percent !== undefined) {
+      fields.push('percent = @percent');
+      params.percent = updates.percent;
+    }
+    if (updates.current_file !== undefined) {
+      fields.push('current_file = @current_file');
+      params.current_file = updates.current_file;
+    }
+    if (updates.message !== undefined) {
+      fields.push('message = @message');
+      params.message = updates.message;
+    }
+    if (updates.error !== undefined) {
+      fields.push('error = @error');
+      params.error = updates.error;
+    }
+
+    db.prepare(`UPDATE organization_jobs SET ${fields.join(', ')} WHERE id = @id`).run(params);
+  }
+
+  insertOrganizationItems(items: Array<{
+    job_id: string;
+    media_id?: string | null;
+    original_path: string;
+    original_folder?: string | null;
+    original_filename: string;
+    target_folder?: string | null;
+    target_filename?: string | null;
+    target_path?: string | null;
+    detected_year?: number | null;
+    detected_month?: number | null;
+    detected_content_type?: string | null;
+    assigned_tags?: string[];
+    status?: string;
+  }>): void {
+    if (!items || items.length === 0) return;
+    const db = this.getDb();
+    const stmt = db.prepare(`
+      INSERT INTO organization_items (
+        job_id, media_id, original_path, original_folder, original_filename,
+        target_folder, target_filename, target_path,
+        detected_year, detected_month, detected_content_type, assigned_tags, status
+      ) VALUES (
+        @job_id, @media_id, @original_path, @original_folder, @original_filename,
+        @target_folder, @target_filename, @target_path,
+        @detected_year, @detected_month, @detected_content_type, @assigned_tags, @status
+      )
+    `);
+
+    const transaction = db.transaction((batch: any[]) => {
+      for (const item of batch) {
+        stmt.run({
+          job_id: item.job_id,
+          media_id: item.media_id || null,
+          original_path: item.original_path,
+          original_folder: item.original_folder || null,
+          original_filename: item.original_filename,
+          target_folder: item.target_folder || null,
+          target_filename: item.target_filename || null,
+          target_path: item.target_path || null,
+          detected_year: item.detected_year ?? null,
+          detected_month: item.detected_month ?? null,
+          detected_content_type: item.detected_content_type || null,
+          assigned_tags: JSON.stringify(item.assigned_tags || []),
+          status: item.status || 'pending',
+        });
+      }
+    });
+
+    transaction(items);
+  }
+
+  getOrganizationItems(
+    jobId: string,
+    limit: number = 200,
+    offset: number = 0,
+    status?: string,
+  ): { items: any[]; total: number } {
+    const db = this.getDb();
+    let countSql = 'SELECT COUNT(*) as cnt FROM organization_items WHERE job_id = ?';
+    let querySql = 'SELECT * FROM organization_items WHERE job_id = ?';
+    const params: any[] = [jobId];
+
+    if (status && status !== 'all') {
+      countSql += ' AND status = ?';
+      querySql += ' AND status = ?';
+      params.push(status);
+    }
+
+    querySql += ' ORDER BY id ASC LIMIT ? OFFSET ?';
+
+    const countRow = db.prepare(countSql).get(...params) as any;
+    const total = countRow ? countRow.cnt : 0;
+
+    const rows = db.prepare(querySql).all(...params, limit, offset) as any[];
+    const items = rows.map((r: any) => ({
+      ...r,
+      assigned_tags: r.assigned_tags ? JSON.parse(r.assigned_tags) : [],
+    }));
+
+    return { items, total };
+  }
+
+  getOrganizationItemById(id: number): any {
+    const db = this.getDb();
+    const row = db.prepare(`SELECT * FROM organization_items WHERE id = ?`).get(id) as any;
+    if (!row) return null;
+    return {
+      ...row,
+      assigned_tags: row.assigned_tags ? JSON.parse(row.assigned_tags) : [],
+    };
+  }
+
+  updateOrganizationItem(
+    id: number,
+    updates: {
+      target_folder?: string;
+      target_filename?: string;
+      target_path?: string;
+      assigned_tags?: string[];
+      status?: string;
+      error?: string;
+      applied_at?: string;
+    },
+  ): any {
+    const db = this.getDb();
+    const fields: string[] = [];
+    const params: any = { id };
+
+    if (updates.target_folder !== undefined) {
+      fields.push('target_folder = @target_folder');
+      params.target_folder = updates.target_folder;
+    }
+    if (updates.target_filename !== undefined) {
+      fields.push('target_filename = @target_filename');
+      params.target_filename = updates.target_filename;
+    }
+    if (updates.target_path !== undefined) {
+      fields.push('target_path = @target_path');
+      params.target_path = updates.target_path;
+    }
+    if (updates.assigned_tags !== undefined) {
+      fields.push('assigned_tags = @assigned_tags');
+      params.assigned_tags = JSON.stringify(updates.assigned_tags);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = @status');
+      params.status = updates.status;
+    }
+    if (updates.error !== undefined) {
+      fields.push('error = @error');
+      params.error = updates.error;
+    }
+    if (updates.applied_at !== undefined) {
+      fields.push('applied_at = @applied_at');
+      params.applied_at = updates.applied_at;
+    }
+
+    if (fields.length > 0) {
+      db.prepare(`UPDATE organization_items SET ${fields.join(', ')} WHERE id = @id`).run(params);
+    }
+    return this.getOrganizationItemById(id);
+  }
+
+  clearOrganizationJob(jobId: string): void {
+    const db = this.getDb();
+    db.prepare(`DELETE FROM organization_items WHERE job_id = ?`).run(jobId);
+    db.prepare(`DELETE FROM organization_jobs WHERE id = ?`).run(jobId);
   }
 }
 

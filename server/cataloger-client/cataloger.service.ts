@@ -19,7 +19,11 @@ export class CatalogerClientService {
   ) {}
 
   private get baseUrl(): string {
-    return this.config.catalogerApiUrl.replace(/\/+$/, '');
+    let url = this.config.catalogerApiUrl.replace(/\/+$/, '');
+    if (url && !/^https?:\/\//i.test(url)) {
+      url = `http://${url}`;
+    }
+    return url;
   }
 
   async triggerRun(force: boolean = false, customPayload?: any): Promise<any> {

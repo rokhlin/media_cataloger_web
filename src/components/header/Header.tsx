@@ -114,10 +114,10 @@ export default function Header({
         };
       case 'duplicates':
         return {
-          title: isRu ? 'Поиск и очистка дубликатов' : 'Duplicates Manager',
+          title: isRu ? 'Организация файлов' : 'Organize files',
           subtitle: isRu
-            ? 'Поиск, группировка, сравнение и удаление похожих и серийных снимков'
-            : 'Find, group, compare and clean up duplicate and burst photos',
+            ? 'Организация медиатеки по критериям, тегирование, сортировка и поиск дубликатов'
+            : 'Media library organization by criteria, tagging, folder sorting, and duplicate cleanup',
         };
       case 'media_library':
         return {

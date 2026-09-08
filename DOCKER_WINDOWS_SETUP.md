@@ -52,9 +52,7 @@ docker compose version
 Выберите один из вариантов загрузки проекта на вашу Windows-машину:
 
 ### Вариант А: Клонирование репозиториев через Git (Рекомендуется)
-Этот вариант позволяет легко получать обновления одной командой `git pull`.
-
-Создайте рабочую директорию, например `C:\Projects\media_cataloger`, и выполните:
+Так как репозиторий является приватным, `git clone` — самый быстрый и удобный способ, использующий сохраненные учетные данные Windows (Git Credential Manager):
 
 ```powershell
 # Создание папки проектов
@@ -71,38 +69,43 @@ git clone https://github.com/rokhlin/media_cataloger_web.git
 cd media_cataloger
 ```
 
-#### Как переключиться на конкретный стабильный релиз (Release Tag):
+#### Как переключиться на последнюю версию или конкретный релиз:
 ```powershell
-# Получить все теги релизов
+# Обновить ветку main до актуального состояния:
+git checkout main
+git pull
+
+# Или переключиться на последний релизный тег (например, v0.7.0):
 git fetch --tags
-
-# Посмотреть список релизов
-git tag
-
-# Переключиться на нужный релиз (например, v2.4.0)
-git checkout v2.4.0
+git checkout v0.7.0
 ```
 
 ---
 
-### Вариант Б: Скачивание ZIP-архива релиза из GitHub Releases
-Если на машине не установлен Git, можно скачать готовый архив исходного кода релиза через PowerShell:
+### Вариант Б: Скачивание ZIP-архива из приватного репозитория GitHub
+> [!NOTE]
+> Так как репозиторий приватный, прямая анонимная ссылка возвращает ошибку `404 Not Found`.
 
+#### Способ 1 (через браузер):
+1. Откройте в браузере страницу репозитория: `https://github.com/rokhlin/media_cataloger`
+2. Нажмите зеленую кнопку **Code** -> **Download ZIP**.
+3. Распакуйте архив в нужную папку на Windows.
+
+#### Способ 2 (через PowerShell с GitHub Token):
 ```powershell
-# Создание папки
-New-Item -ItemType Directory -Path "C:\Projects\media_cataloger" -Force
-cd "C:\Projects\media_cataloger"
+# Подставьте ваш Personal Access Token (PAT):
+$Token = "ghp_ваш_токен_здесь"
+$Headers = @{ 
+    "Authorization" = "Bearer $Token"
+    "Accept"        = "application/vnd.github.v3+json" 
+}
 
-# Скачивание релиза (укажите нужную версию, например v2.4.0 или latest)
-$ReleaseUrl = "https://github.com/rokhlin/media_cataloger/archive/refs/tags/v2.4.0.zip"
-Invoke-WebRequest -Uri $ReleaseUrl -OutFile "media_cataloger-release.zip"
+# Скачивание архива ветки main:
+$Url = "https://api.github.com/repos/rokhlin/media_cataloger/zipball/main"
+Invoke-WebRequest -Uri $Url -Headers $Headers -OutFile "media_cataloger.zip"
 
 # Распаковка архива
-Expand-Archive -Path "media_cataloger-release.zip" -DestinationPath "." -Force
-
-# Переименование распакованной папки в удобное имя
-Rename-Item -Path "media_cataloger-2.4.0" -NewName "media_cataloger"
-cd "media_cataloger"
+Expand-Archive -Path "media_cataloger.zip" -DestinationPath "." -Force
 ```
 
 ---

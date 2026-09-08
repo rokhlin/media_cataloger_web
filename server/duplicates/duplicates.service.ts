@@ -160,7 +160,7 @@ export class DuplicatesService {
       isVideo: false,
     }));
     const effectiveMode: 'all' | 'exact' | 'visual' | 'burst' = matchType === 'similar' ? 'visual' : matchType;
-    return this.clusterDuplicates(
+    return await this.clusterDuplicates(
       items,
       {
         engine: 'cpu',
@@ -302,14 +302,31 @@ export class DuplicatesService {
   }
 
   /**
+   * Helper to retrieve media files to scan, preferring cataloged database items
+   * to prevent disk re-traversal and global UI media scanning triggers.
+   */
+  private async getFilesToScan(filterFolders?: string[]): Promise<{ filePath: string; folder: string }[]> {
+    // 1. Try reading indexed files from SQLite media_items first (fast, no disk traversal, avoids triggering global scan)
+    const cataloged = this.db.getAllCatalogedMediaFiles();
+    if (cataloged.length > 0) {
+      return this.filterByFolders(cataloged, filterFolders);
+    }
+
+    // 2. Fallback to scanning disk if database is not yet populated
+    const scanned = await this.mediaService.scanInputFolders();
+    return this.filterByFolders(scanned, filterFolders);
+  }
+
+  /**
    * GPU-accelerated scan delegating to media_cataloger
    */
   private async runGpuScan(opts: Required<DuplicateScanOptions>): Promise<void> {
     const baseUrl = this.config.catalogerApiUrl.replace(/\/+$/, '');
-    this.scanStatus.stage = 'GPU Tensor Duplicate Analysis...';
+    this.scanStatus.stage = 'Gathering media files...';
 
-    const scanned = await this.mediaService.scanInputFolders();
-    const filesToScan = this.filterByFolders(scanned, opts.folders);
+    const filesToScan = await this.getFilesToScan(opts.folders);
+    this.scanStatus.total = filesToScan.length;
+    this.scanStatus.stage = 'GPU Tensor Duplicate Analysis...';
 
     const payload = {
       files: filesToScan.map((s) => s.filePath),
@@ -338,8 +355,7 @@ export class DuplicatesService {
    */
   private async runCpuScan(opts: Required<DuplicateScanOptions>): Promise<void> {
     this.scanStatus.stage = 'Gathering media files...';
-    const scanned = await this.mediaService.scanInputFolders();
-    const targetFiles = this.filterByFolders(scanned, opts.folders);
+    const targetFiles = await this.getFilesToScan(opts.folders);
 
     this.scanStatus.total = targetFiles.length;
     this.scanStatus.current = 0;
@@ -386,58 +402,53 @@ export class DuplicatesService {
 
     // Now group files by similarity rules
     this.scanStatus.stage = 'Clustering duplicates & similarity groups...';
-    this.cachedGroups = this.clusterDuplicates(fileRecords, opts);
+    this.cachedGroups = await this.clusterDuplicates(fileRecords, opts);
     this.finishScan();
   }
 
   /**
-   * Process individual file hash with disk caching
+   * Process individual file hash with disk caching & media_items reuse
    */
   private async processFileHash(filePath: string, forceRehash: boolean): Promise<DuplicateItemInfo | null> {
     try {
       if (!fs.existsSync(filePath)) return null;
 
-      const stat = fs.statSync(filePath);
+      const stat = await fs.promises.stat(filePath);
       const fileSize = stat.size;
       const mtime = stat.mtimeMs / 1000;
       const ext = path.extname(filePath).toLowerCase();
       const isImage = this.config.supportedPhotoExts.has(ext);
       const isVideo = this.config.supportedVideoExts.has(ext);
 
-      // 1. Check if hash is cached in SQLite
-      if (!forceRehash) {
-        const cached = this.db.getMediaHash(filePath);
-        if (cached && cached.file_size === fileSize && Math.abs((cached.mtime || 0) - mtime) < 1.0) {
-          return {
-            filePath,
-            filename: path.basename(filePath),
-            folder: path.dirname(filePath),
-            fileSize,
-            mtime,
-            width: cached.width,
-            height: cached.height,
-            megapixels: cached.width && cached.height ? parseFloat(((cached.width * cached.height) / 1000000).toFixed(2)) : null,
-            phash: cached.phash,
-            contentHash: cached.content_hash,
-            isImage,
-            isVideo,
-            isPrimary: false,
-          };
-        }
+      // 1. Check if hash is cached in SQLite (checks media_hashes and media_items)
+      const cached = !forceRehash ? this.db.getMediaHash(filePath) : null;
+      if (cached && cached.content_hash && cached.phash && (!cached.file_size || cached.file_size === fileSize)) {
+        return {
+          filePath,
+          filename: path.basename(filePath),
+          folder: path.dirname(filePath),
+          fileSize,
+          mtime,
+          width: cached.width || null,
+          height: cached.height || null,
+          megapixels: cached.width && cached.height ? parseFloat(((cached.width * cached.height) / 1000000).toFixed(2)) : null,
+          phash: cached.phash,
+          contentHash: cached.content_hash,
+          isImage,
+          isVideo,
+          isPrimary: false,
+        };
       }
 
-      // 2. Compute cryptographic content hash (MD5 streaming for speed/efficiency)
-      const contentHash = await this.computeContentHash(filePath, fileSize);
+      // 2. Retrieve or compute perceptual hash & dimensions if image
+      let phash: string | null = cached?.phash || null;
+      let width: number | null = cached?.width || null;
+      let height: number | null = cached?.height || null;
 
-      // 3. Compute perceptual hash (dHash 64-bit) & dimensions if image
-      let phash: string | null = null;
-      let width: number | null = null;
-      let height: number | null = null;
-
-      if (isImage) {
+      // Only invoke Sharp if pHash is missing and file is an image
+      if (isImage && !phash) {
         try {
-          const imgMeta = await sharp(filePath, { failOn: 'none' })
-            .metadata();
+          const imgMeta = await sharp(filePath, { failOn: 'none' }).metadata();
           width = imgMeta.width || null;
           height = imgMeta.height || null;
 
@@ -450,12 +461,16 @@ export class DuplicatesService {
 
           phash = this.calculateDHash(dhashBuffer);
         } catch {
-          // If image decoding fails, use fallback hash
           phash = null;
         }
       } else if (isVideo) {
-        // For video files, derive pseudo-hash from content hash and metadata
         phash = null;
+      }
+
+      // 3. Compute cryptographic content hash if missing
+      let contentHash: string | null = cached?.content_hash || null;
+      if (!contentHash) {
+        contentHash = await this.computeContentHash(filePath, fileSize);
       }
 
       // 4. Cache in SQLite
@@ -491,7 +506,7 @@ export class DuplicatesService {
 
   /**
    * Fast MD5 content hash for exact duplicate detection.
-   * For large files (>20MB), hashes beginning, middle, and end chunks + size for instant execution.
+   * For large files (>20MB), hashes beginning, middle, and end chunks + size asynchronously.
    */
   private async computeContentHash(filePath: string, fileSize: number): Promise<string> {
     if (fileSize <= 20 * 1024 * 1024) {
@@ -508,23 +523,23 @@ export class DuplicatesService {
     // Chunked sparse hash for large video/raw files to prevent CPU/IO freezing
     const hash = crypto.createHash('md5');
     hash.update(`size:${fileSize}`);
-    const fd = fs.openSync(filePath, 'r');
+    const fileHandle = await fs.promises.open(filePath, 'r');
     try {
       const buffer = Buffer.alloc(64 * 1024);
       // Head
-      fs.readSync(fd, buffer, 0, 64 * 1024, 0);
+      await fileHandle.read(buffer, 0, 64 * 1024, 0);
       hash.update(buffer);
       // Mid
       const mid = Math.floor(fileSize / 2);
-      fs.readSync(fd, buffer, 0, 64 * 1024, mid);
+      await fileHandle.read(buffer, 0, 64 * 1024, mid);
       hash.update(buffer);
       // Tail
       const tail = Math.max(0, fileSize - 64 * 1024);
-      fs.readSync(fd, buffer, 0, 64 * 1024, tail);
+      await fileHandle.read(buffer, 0, 64 * 1024, tail);
       hash.update(buffer);
       return hash.digest('hex');
     } finally {
-      fs.closeSync(fd);
+      await fileHandle.close();
     }
   }
 
@@ -551,21 +566,29 @@ export class DuplicatesService {
   }
 
   /**
-   * Calculate Hamming distance between two 16-character hex perceptual hashes
+   * Fast popcount (number of set bits) for 64-bit unsigned BigInt in O(1)
+   */
+  popcount64(val: bigint): number {
+    let v = BigInt.asUintN(64, val);
+    v = v - ((v >> 1n) & 0x5555555555555555n);
+    v = (v & 0x3333333333333333n) + ((v >> 2n) & 0x3333333333333333n);
+    v = (v + (v >> 4n)) & 0x0f0f0f0f0f0f0f0fn;
+    v = BigInt.asUintN(64, v * 0x0101010101010101n);
+    return Number(v >> 56n);
+  }
+
+  /**
+   * Calculate Hamming distance between two 16-character hex perceptual hashes using fast 64-bit BigInt popcount
    */
   calculateHammingDistance(hash1: string, hash2: string): number {
     if (!hash1 || !hash2 || hash1.length !== 16 || hash2.length !== 16) return 64;
-    let distance = 0;
-    for (let i = 0; i < hash1.length; i++) {
-      const v1 = parseInt(hash1[i], 16);
-      const v2 = parseInt(hash2[i], 16);
-      let xor = v1 ^ v2;
-      while (xor > 0) {
-        distance += xor & 1;
-        xor >>= 1;
-      }
+    try {
+      const b1 = BigInt(`0x${hash1}`);
+      const b2 = BigInt(`0x${hash2}`);
+      return this.popcount64(b1 ^ b2);
+    } catch {
+      return 64;
     }
-    return distance;
   }
 
   /**
@@ -577,13 +600,13 @@ export class DuplicatesService {
   }
 
   /**
-   * Cluster file records into exact, visual, and burst duplicate groups
+   * Cluster file records into exact, visual, and burst duplicate groups with non-blocking event-loop yielding
    */
-  private clusterDuplicates(
+  private async clusterDuplicates(
     files: DuplicateItemInfo[],
     opts: Required<DuplicateScanOptions>,
     overrideKeepStrategy?: KeepStrategy,
-  ): DuplicateGroup[] {
+  ): Promise<DuplicateGroup[]> {
     const groups: DuplicateGroup[] = [];
     const assignedFiles = new Set<string>();
     const cfg = this.db.getDuplicateConfig();
@@ -632,26 +655,45 @@ export class DuplicatesService {
       }
     }
 
-    // 2. Visual Similarity Clustering (Perceptual Hash distance <= threshold)
+    // 2. Visual Similarity Clustering (Perceptual Hash distance <= threshold) with BigInt & periodic yielding
     if (opts.mode === 'all' || opts.mode === 'visual') {
       const remainingImages = files.filter((f) => f.isImage && f.phash && !assignedFiles.has(f.filePath));
       const maxDistance = Math.floor((1.0 - opts.similarityThreshold) * 64);
 
-      for (let i = 0; i < remainingImages.length; i++) {
-        const fileA = remainingImages[i];
-        if (assignedFiles.has(fileA.filePath) || !fileA.phash) continue;
+      // Pre-parse 16-hex pHash to 64-bit BigInt once to avoid millions of string parsings in inner loop
+      interface PreparedVisualItem {
+        info: DuplicateItemInfo;
+        hashBigInt: bigint;
+      }
+      const prepared: PreparedVisualItem[] = [];
+      for (const f of remainingImages) {
+        try {
+          if (f.phash && f.phash.length === 16) {
+            prepared.push({
+              info: f,
+              hashBigInt: BigInt(`0x${f.phash}`),
+            });
+          }
+        } catch {
+          // ignore malformed hash
+        }
+      }
 
-        const similarGroup: DuplicateItemInfo[] = [fileA];
+      for (let i = 0; i < prepared.length; i++) {
+        const itemA = prepared[i];
+        if (assignedFiles.has(itemA.info.filePath)) continue;
+
+        const similarGroup: DuplicateItemInfo[] = [itemA.info];
         let totalSimilarity = 1.0;
 
-        for (let j = i + 1; j < remainingImages.length; j++) {
-          const fileB = remainingImages[j];
-          if (assignedFiles.has(fileB.filePath) || !fileB.phash) continue;
+        for (let j = i + 1; j < prepared.length; j++) {
+          const itemB = prepared[j];
+          if (assignedFiles.has(itemB.info.filePath)) continue;
 
-          const dist = this.calculateHammingDistance(fileA.phash, fileB.phash);
+          const dist = this.popcount64(itemA.hashBigInt ^ itemB.hashBigInt);
           if (dist <= maxDistance) {
             const sim = 1.0 - dist / 64;
-            similarGroup.push(fileB);
+            similarGroup.push(itemB.info);
             totalSimilarity = Math.min(totalSimilarity, sim);
           }
         }
@@ -674,7 +716,7 @@ export class DuplicatesService {
           const folders = Array.from(new Set(similarGroup.map((m) => m.folder)));
 
           groups.push({
-            id: `visual_${fileA.phash.substring(0, 12)}_${i}`,
+            id: `visual_${itemA.info.phash!.substring(0, 12)}_${i}`,
             matchType: 'visual',
             similarity: parseFloat(totalSimilarity.toFixed(2)),
             primaryFile: primary,
@@ -683,6 +725,12 @@ export class DuplicatesService {
             reclaimableBytes: reclaimable,
             folderBreakdown: folders,
           });
+        }
+
+        // Yield execution to Event Loop every 100 items to keep UI responsive and stream progress
+        if (i % 100 === 0) {
+          this.scanStatus.stage = `Clustering visual duplicates (${Math.round((i / Math.max(1, prepared.length)) * 100)}%)...`;
+          await new Promise((resolve) => setImmediate(resolve));
         }
       }
     }

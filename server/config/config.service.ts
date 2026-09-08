@@ -161,17 +161,22 @@ export class AppConfigService {
   }
 
   get catalogerApiUrl(): string {
-    if (process.env.CATALOGER_API_URL) {
-      return process.env.CATALOGER_API_URL;
-    }
-    if (process.env.AI_ENGINE_URL) {
-      return process.env.AI_ENGINE_URL;
-    }
-    if (process.env.API_PORT && String(process.env.API_PORT) !== String(this.port)) {
+    let url = '';
+    if (process.env.CATALOGER_API_URL && process.env.CATALOGER_API_URL.trim()) {
+      url = process.env.CATALOGER_API_URL.trim();
+    } else if (process.env.AI_ENGINE_URL && process.env.AI_ENGINE_URL.trim()) {
+      url = process.env.AI_ENGINE_URL.trim();
+    } else if (process.env.API_PORT && String(process.env.API_PORT) !== String(this.port)) {
       const host = process.env.API_HOST === '0.0.0.0' ? 'localhost' : (process.env.API_HOST || 'localhost');
-      return `http://${host}:${process.env.API_PORT}`;
+      url = `http://${host}:${process.env.API_PORT}`;
+    } else {
+      url = 'http://localhost:8001';
     }
-    return 'http://localhost:8001';
+
+    if (url && !/^https?:\/\//i.test(url)) {
+      url = `http://${url}`;
+    }
+    return url;
   }
 
   get settingsFilePath(): string {

@@ -9,6 +9,7 @@ import type {
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../services/authContext';
 import { mediaCacheService } from '../../services/mediaCacheService';
+import LibraryOrganizationPanel from './LibraryOrganizationPanel';
 import './DuplicatesManagerTab.css';
 
 export interface DuplicatesManagerTabProps {
@@ -31,6 +32,8 @@ export default function DuplicatesManagerTab({
   const [scanStatus, setScanStatus] = useState<DuplicateScanStatus | null>(null);
   const [, setConfig] = useState<DuplicateConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const GROUPS_PER_PAGE = 25;
 
   // Scan settings state
   const [selectedEngine, setSelectedEngine] = useState<'auto' | 'cpu' | 'gpu'>('auto');
@@ -60,6 +63,10 @@ export default function DuplicatesManagerTab({
   const [targetMoveFolder, setTargetMoveFolder] = useState('');
   const [isActionPending, setIsActionPending] = useState(false);
 
+  // Accordion sections state
+  const [isOrganizeOpen, setIsOrganizeOpen] = useState(true);
+  const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(true);
+
   // Fetch groups & summary
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -73,6 +80,7 @@ export default function DuplicatesManagerTab({
       if (resGroups.ok) {
         const data = await resGroups.json();
         setGroups(data);
+        setCurrentPage(1);
       }
       if (resSum.ok) {
         const data = await resSum.json();
@@ -291,6 +299,12 @@ export default function DuplicatesManagerTab({
     return total;
   }, [groups, selectedFiles]);
 
+  const totalPages = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE));
+  const paginatedGroups = useMemo(() => {
+    const start = (currentPage - 1) * GROUPS_PER_PAGE;
+    return groups.slice(start, start + GROUPS_PER_PAGE);
+  }, [groups, currentPage]);
+
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
@@ -303,7 +317,52 @@ export default function DuplicatesManagerTab({
 
   return (
     <div className="duplicates-manager-container">
-      {/* Metric Summary Cards */}
+      {/* Collapsible Section 1: Media Library Organization */}
+      <div className="organize-accordion-section">
+        <div
+          className="organize-accordion-header"
+          onClick={() => setIsOrganizeOpen((prev) => !prev)}
+        >
+          <div className="organize-accordion-title">
+            <span className={`organize-accordion-toggle-icon ${isOrganizeOpen ? 'expanded' : ''}`}>
+              ▶
+            </span>
+            <span>📚</span>
+            <span>{t('sectionLibraryOrganize' as any) || 'Организация медиатеки'}</span>
+          </div>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
+            {isOrganizeOpen ? 'Свернуть' : 'Развернуть'}
+          </span>
+        </div>
+
+        {isOrganizeOpen && (
+          <div className="organize-accordion-content">
+            <LibraryOrganizationPanel onRefreshMedia={onRefreshMedia} />
+          </div>
+        )}
+      </div>
+
+      {/* Collapsible Section 2: Duplicates & Cleanup */}
+      <div className="organize-accordion-section">
+        <div
+          className="organize-accordion-header"
+          onClick={() => setIsDuplicatesOpen((prev) => !prev)}
+        >
+          <div className="organize-accordion-title">
+            <span className={`organize-accordion-toggle-icon ${isDuplicatesOpen ? 'expanded' : ''}`}>
+              ▶
+            </span>
+            <span>🗂️</span>
+            <span>{t('sectionDuplicatesManager' as any) || 'Поиск и управление дубликатами'}</span>
+          </div>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
+            {isDuplicatesOpen ? 'Свернуть' : 'Развернуть'}
+          </span>
+        </div>
+
+        {isDuplicatesOpen && (
+          <div className="organize-accordion-content">
+            {/* Metric Summary Cards */}
       <div className="dup-metrics-grid">
         <div className="dup-metric-card">
           <span className="dup-metric-icon" aria-hidden="true">🗂️</span>
@@ -570,7 +629,7 @@ export default function DuplicatesManagerTab({
             </p>
           </div>
         ) : (
-          groups.map((group) => {
+          paginatedGroups.map((group) => {
             const badgeClass =
               group.matchType === 'exact'
                 ? 'dup-badge-exact'
@@ -751,6 +810,48 @@ export default function DuplicatesManagerTab({
               </div>
             );
           })
+        )}
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '1rem',
+            margin: '1.5rem 0',
+            padding: '0.75rem',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            style={{ fontSize: '0.85rem' }}
+          >
+            ◀ {t('btnPrevPage' as any) || 'Previous'}
+          </button>
+          <span style={{ fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
+            Page {currentPage} of {totalPages} ({groups.length} {t('duplicateGroups' as any) || 'groups'})
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            style={{ fontSize: '0.85rem' }}
+          >
+            {t('btnNextPage' as any) || 'Next'} ▶
+          </button>
+        </div>
+      )}
+          </div>
         )}
       </div>
 
