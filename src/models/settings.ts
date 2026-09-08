@@ -14,6 +14,8 @@ export interface SettingsData {
   whisper_model?: string;
   preserve_structure?: boolean;
   db_path?: string;
+  target_tags?: string[];
+  tag_format?: 'categorized' | 'flat' | 'prefixed';
   [key: string]: unknown;
 }
 

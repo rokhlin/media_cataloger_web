@@ -169,6 +169,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS media_tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'general',
+        confidence REAL NOT NULL DEFAULT 1.0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(media_id, tag, category),
+        FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
@@ -597,6 +608,56 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     });
 
     transaction();
+  }
+
+  /**
+   * Save extracted or AI-generated semantic tags for a media item.
+   */
+  public saveMediaTags(filePathOrMediaId: string, tags: any[]): void {
+    if (!tags || tags.length === 0) return;
+    const db = this.getDb();
+    const mediaId = filePathOrMediaId.includes('/') || filePathOrMediaId.includes('\\')
+      ? crypto.createHash('sha256').update(filePathOrMediaId).digest('hex').substring(0, 16)
+      : filePathOrMediaId;
+
+    const stmt = db.prepare(`
+      INSERT INTO media_tags (media_id, tag, category, confidence)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(media_id, tag, category) DO UPDATE SET confidence = excluded.confidence
+    `);
+
+    const tx = db.transaction((list: any[]) => {
+      for (const item of list) {
+        if (!item) continue;
+        let tag = '';
+        let category = 'general';
+        let confidence = 1.0;
+
+        if (typeof item === 'string') {
+          const s = item.trim().toLowerCase();
+          if (!s) continue;
+          if (s.includes(':')) {
+            const parts = s.split(':');
+            category = parts[0].trim();
+            tag = parts.slice(1).join(':').trim();
+          } else {
+            tag = s;
+          }
+        } else if (typeof item === 'object') {
+          tag = String(item.tag || item.name || '').trim().toLowerCase();
+          category = String(item.category || 'general').trim().toLowerCase();
+          confidence = typeof item.confidence === 'number' ? item.confidence : 1.0;
+        }
+
+        if (tag) {
+          try {
+            stmt.run(mediaId, tag, category, confidence);
+          } catch {}
+        }
+      }
+    });
+
+    tx(tags);
   }
 
   /**

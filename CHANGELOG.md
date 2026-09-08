@@ -6,9 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.8.0] - Unreleased
+## [0.15.0] - Unreleased
 
 ### Added
+- **AI Tag Recognition & Structured Tagging Pipeline (`server/cataloger-client/`, `server/database/`, `src/models/settings.ts`)**:
+  - Added `analyzeWithTags` method to `CatalogerClientService` to execute single-file media analysis with configurable `target_tags` and `tag_format` (`categorized`, `flat`, `prefixed`).
+  - Added `media_tags` table schema in `DatabaseService` (`better-sqlite3`) and implemented `saveMediaTags(filePathOrMediaId, tags)` with normalization support.
+  - Automatically persist structured tags to `media_tags` SQLite table during remote file analysis sync (`syncRemoteFileAnalysis`).
+  - Added `target_tags?: string[]` and `tag_format?: 'categorized' | 'flat' | 'prefixed'` in frontend `SettingsData` model.
 - **Organize Files Workspace & Media Library Organization (`server/organize/`, `DuplicatesManagerTab`, `LibraryOrganizationPanel`)**:
   - Renamed `Duplicates Manager` tab, header title, and navigation breadcrumbs to **`Organize files`** (рус: **`Организация файлов`**).
   - Reorganized workspace into two independently collapsible accordion sections:

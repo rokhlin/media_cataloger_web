@@ -261,6 +261,46 @@ export class CatalogerClientService {
   }
 
   /**
+   * Directly analyze a media file via Python AI Engine with structured tag formatting and target tag criteria.
+   */
+  async analyzeWithTags(
+    file: string,
+    options?: { target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed'; settings?: any }
+  ): Promise<any> {
+    if (!file || !file.trim()) {
+      throw new BadRequestException('File parameter cannot be empty');
+    }
+
+    const accessCheck = this.mediaService.verifyFileAccess(file.trim());
+    if (!accessCheck.accessible || !accessCheck.resolvedPath) {
+      throw new BadRequestException(`File access error: ${accessCheck.error}`);
+    }
+
+    const resolvedPath = accessCheck.resolvedPath;
+    const execConfig = this.config.getPipelineExecutionConfig();
+    const payload = {
+      file: resolvedPath,
+      target_tags: options?.target_tags,
+      tag_format: options?.tag_format || 'categorized',
+      output_folder: execConfig.output_folder,
+      settings: { ...execConfig, ...(options?.settings || {}) },
+    };
+
+    try {
+      this.logger.log(`Executing AI tag recognition for '${path.basename(resolvedPath)}' with format '${payload.tag_format}'`);
+      const res = await axios.post(`${this.baseUrl}/api/ai/analyze-with-tags`, payload, {
+        timeout: 60000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.data;
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+      this.logger.error(`AI tag recognition failed for '${resolvedPath}': ${detail}`);
+      throw new Error(`AI tag analysis failed: ${detail}`);
+    }
+  }
+
+  /**
    * Sync sidecar JSON, face records, and thumbnails from remote cataloger backend to local disk and SQLite DB.
    */
   async syncRemoteFileAnalysis(filePath: string, fileSize?: number, mtime?: number): Promise<any> {
@@ -367,6 +407,15 @@ export class CatalogerClientService {
 
       if (facesList && facesList.length > 0) {
         this.db.saveMediaFaces(filePath, facesList);
+      }
+
+      const tagsList = Array.isArray(sidecarData.tags)
+        ? sidecarData.tags
+        : Array.isArray(ga.tags)
+        ? ga.tags
+        : [];
+      if (tagsList && tagsList.length > 0) {
+        this.db.saveMediaTags(filePath, tagsList);
       }
 
       // Invalidate media scan cache and update single item in MediaService

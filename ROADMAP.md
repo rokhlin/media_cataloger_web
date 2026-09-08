@@ -55,6 +55,8 @@
 ### Metadata, Processing & AI Pipeline
 - [ ] **Transcription Integration**: Fully embed audio transcription into the main media analysis pipeline.
 - [x] **Media Tagging System**: Support custom and person tagging for media assets with sidecar synchronization.
+    - [x] AI Tag Recognition with configurable format (`categorized`, `flat`, `prefixed`) and custom target criteria / vocabulary.
+    - [x] Ingest and persist structured tags to SQLite `media_tags` table with real-time synchronization.
 - [x] **Metadata Editing**: Add full support for viewing and editing metadata.
 - [x] **Write Analysis to File Metadata**: Option to embed analysis results directly back into media files (EXIF/XMP/ID3). Toggleable in Organization & Duplicates panel with sidecar and SQLite persistence.
 - [x] **Direct Metadata & Tag Writing for HEIC and HEVC**:
