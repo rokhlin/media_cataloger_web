@@ -12,6 +12,7 @@ import { FamilyTreeModule } from './family-tree/family-tree.module.js';
 import { DuplicatesModule } from './duplicates/duplicates.module.js';
 import { BackupModule } from './backup/backup.module.js';
 import { OrganizeModule } from './organize/organize.module.js';
+import { GeminiModule } from './gemini/gemini.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { OrganizeModule } from './organize/organize.module.js';
     DuplicatesModule,
     BackupModule,
     OrganizeModule,
+    GeminiModule,
   ],
 })
 export class AppModule {}

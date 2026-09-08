@@ -1,0 +1,202 @@
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import sharp from 'sharp';
+import { GeminiRateLimiter } from '../gemini.rate-limiter.js';
+import { normalizeTags, PhotoAnalysisSchema } from '../gemini.types.js';
+import { GeminiService } from '../gemini.service.js';
+import { AppConfigService } from '../../config/config.service.js';
+import { DatabaseService } from '../../database/database.service.js';
+
+describe('Gemini Integration on Web Backend', () => {
+  let tempDir: string;
+  let testImagePath: string;
+  let configService: AppConfigService;
+  let dbService: DatabaseService;
+
+  before(async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini_test_'));
+    const testConfigDir = path.join(tempDir, 'config');
+    fs.mkdirSync(testConfigDir, { recursive: true });
+
+    // Create a real test JPEG image using sharp
+    testImagePath = path.join(tempDir, 'test_shot.jpg');
+    await sharp({
+      create: {
+        width: 1800,
+        height: 1200,
+        channels: 3,
+        background: { r: 100, g: 150, b: 200 },
+      },
+    })
+      .jpeg()
+      .toFile(testImagePath);
+
+    // Setup mock Config and Database services
+    configService = new AppConfigService();
+    Object.defineProperty(configService, 'projectRoot', { value: tempDir });
+    Object.defineProperty(configService, 'outputFolder', { value: path.join(tempDir, 'output') });
+    Object.defineProperty(configService, 'geminiApiKey', { value: 'test-api-key-12345' });
+    Object.defineProperty(configService, 'geminiModel', { value: 'gemini-3.6-flash' });
+    Object.defineProperty(configService, 'geminiRpmLimit', { value: 15 });
+    Object.defineProperty(configService, 'imageMaxSize', { value: 1000 });
+
+    dbService = new DatabaseService(configService);
+    dbService.initDb();
+  });
+
+  after(() => {
+    try {
+      dbService.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  describe('GeminiRateLimiter', () => {
+    it('should acquire slots and respect rate limit window', async () => {
+      const limiter = new GeminiRateLimiter(3);
+      assert.strictEqual(limiter.getLimit(), 3);
+      assert.strictEqual(limiter.getActiveSlots(), 0);
+
+      await limiter.acquire();
+      assert.strictEqual(limiter.getActiveSlots(), 1);
+
+      await limiter.acquire();
+      assert.strictEqual(limiter.getActiveSlots(), 2);
+
+      await limiter.acquire();
+      assert.strictEqual(limiter.getActiveSlots(), 3);
+
+      limiter.reset();
+      assert.strictEqual(limiter.getActiveSlots(), 0);
+    });
+  });
+
+  describe('normalizeTags', () => {
+    it('should normalize comma-separated strings', () => {
+      const tags = normalizeTags('nature, sunset, people: Anton');
+      assert.strictEqual(tags.length, 3);
+      assert.strictEqual(tags[0].tag, 'nature');
+      assert.strictEqual(tags[0].category, 'general');
+      assert.strictEqual(tags[2].tag, 'Anton');
+      assert.strictEqual(tags[2].category, 'people');
+    });
+
+    it('should normalize array of objects', () => {
+      const input = [
+        { tag: 'mountains', category: 'scene', confidence: 0.95 },
+        'forest',
+      ];
+      const res = normalizeTags(input);
+      assert.strictEqual(res.length, 2);
+      assert.strictEqual(res[0].tag, 'mountains');
+      assert.strictEqual(res[0].category, 'scene');
+      assert.strictEqual(res[0].confidence, 0.95);
+      assert.strictEqual(res[1].tag, 'forest');
+    });
+
+    it('should handle empty or null values', () => {
+      assert.deepStrictEqual(normalizeTags(null), []);
+      assert.deepStrictEqual(normalizeTags(''), []);
+    });
+  });
+
+  describe('GeminiService Image Preparation', () => {
+    it('should resize large images to imageMaxSize and return valid JPEG buffer', async () => {
+      const service = new GeminiService(configService, dbService);
+      const buffer = await service.prepareImageBytes(testImagePath);
+
+      assert.ok(buffer instanceof Buffer);
+      assert.ok(buffer.length > 0);
+
+      const meta = await sharp(buffer).metadata();
+      assert.strictEqual(meta.format, 'jpeg');
+      assert.ok((meta.width || 0) <= 1000);
+      assert.ok((meta.height || 0) <= 1000);
+    });
+  });
+
+  describe('GeminiService Status & Configuration', () => {
+    it('should report configured status, model name, and rate limiter settings', () => {
+      const service = new GeminiService(configService, dbService);
+      const status = service.getStatus();
+
+      assert.strictEqual(status.configured, true);
+      assert.strictEqual(status.model, 'gemini-3.6-flash');
+      assert.strictEqual(status.rpm_limit, 15);
+      assert.strictEqual(status.provider, 'gemini');
+    });
+
+    it('should throw error when getClient() is invoked without GEMINI_API_KEY', () => {
+      const unconfiguredConfig = new AppConfigService();
+      Object.defineProperty(unconfiguredConfig, 'geminiApiKey', { value: '' });
+
+      const service = new GeminiService(unconfiguredConfig, dbService);
+      assert.throws(() => {
+        service.getClient();
+      }, /GEMINI_API_KEY is not configured/);
+    });
+  });
+
+  describe('Gemini Mock Analysis Execution & Sidecar Persistence', () => {
+    it('should save sidecar file and update SQLite metadata table on single file analysis', async () => {
+      const service = new GeminiService(configService, dbService);
+
+      // Mock client generateContent
+      const mockPhotoAnalysis = {
+        summary: 'A sunny beach scene',
+        summary_ru: 'Солнечный пляж',
+        description: 'Warm sandy beach with blue ocean water.',
+        description_ru: 'Теплый песчаный пляж с синей океанской водой.',
+        environment: 'outdoor' as const,
+        lighting: 'natural sunlight',
+        lighting_ru: 'естественный солнечный свет',
+        weather: 'sunny',
+        weather_ru: 'солнечно',
+        time_of_day: 'day',
+        time_of_day_ru: 'день',
+        content_type: 'nature',
+        tags: [
+          { tag: 'beach', category: 'scene', confidence: 0.98 },
+          { tag: 'ocean', category: 'nature', confidence: 0.95 },
+        ],
+        ocr_text: null,
+        exif_analysis: 'Shot taken on clear daylight.',
+        exif_analysis_ru: 'Снимок сделан при ясном дневном свете.',
+      };
+
+      const mockClient = {
+        models: {
+          generateContent: async () => ({
+            text: JSON.stringify(mockPhotoAnalysis),
+          }),
+        },
+      };
+      (service as any).client = mockClient;
+      (service as any).currentApiKey = 'test-api-key-12345';
+
+      const res = await service.analyzeMediaFile(testImagePath);
+
+      assert.ok(res);
+      assert.strictEqual(res.file_name, 'test_shot.jpg');
+      assert.strictEqual(res.gemini_analysis.summary, 'A sunny beach scene');
+      assert.strictEqual(res.gemini_analysis.summary_ru, 'Солнечный пляж');
+
+      // Verify sidecar JSON was created in output directory
+      const sidecarFile = path.join(configService.outputFolder, 'test_shot.jpg.json');
+      assert.ok(fs.existsSync(sidecarFile), 'Sidecar JSON must exist');
+      const sidecarContent = JSON.parse(fs.readFileSync(sidecarFile, 'utf-8'));
+      assert.strictEqual(sidecarContent.gemini_analysis.summary_ru, 'Солнечный пляж');
+
+      // Verify SQLite record was stored
+      const metaRow = dbService.getMediaMetadata(testImagePath);
+      assert.ok(metaRow, 'Metadata row must be stored in SQLite');
+      assert.strictEqual(metaRow.summary, 'A sunny beach scene');
+      assert.strictEqual(metaRow.summary_ru, 'Солнечный пляж');
+    });
+  });
+});

@@ -297,6 +297,8 @@ export default function SystemSettings({
         output_folder: settings.output_folder || '',
         model_provider: settings.model_provider || 'gemini',
         gemini_model: settings.gemini_model || 'gemini-3.6-flash',
+        gemini_api_key: settings.gemini_api_key || '',
+        is_gemini_api_key_set: settings.is_gemini_api_key_set,
         local_model_name: settings.local_model_name || '',
         gemini_max_workers: settings.gemini_max_workers || 3,
         local_max_workers: settings.local_max_workers || 2,
@@ -1152,20 +1154,43 @@ export default function SystemSettings({
                 </select>
               </div>
 
-              {/* Gemini Model */}
+              {/* Gemini Model & Backend API Key */}
               {(formData.model_provider === 'gemini' || formData.model_provider === 'hybrid') && (
-                <div className="form-group">
-                  <label>{t('geminiModel')}</label>
-                  <select
-                    className="input-control"
-                    value={formData.gemini_model}
-                    onChange={(e) => handleInputChange('gemini_model', e.target.value)}
-                  >
-                    <option value="gemini-1.5-flash">gemini-1.5-flash (Fast & Recommended)</option>
-                    <option value="gemini-1.5-pro">gemini-1.5-pro (High Precision)</option>
-                    <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp (Experimental)</option>
-                  </select>
-                </div>
+                <>
+                  <div className="form-group">
+                    <label>{t('geminiModel')}</label>
+                    <select
+                      className="input-control"
+                      value={formData.gemini_model}
+                      onChange={(e) => handleInputChange('gemini_model', e.target.value)}
+                    >
+                      <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & Recommended)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Balanced)</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro (High Reasoning)</option>
+                      <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
+                      <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy Precision)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Google Gemini API Key</span>
+                      {formData.is_gemini_api_key_set && (
+                        <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+                          ✓ Backend Configured
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      className="input-control"
+                      value={formData.gemini_api_key || ''}
+                      onChange={(e) => handleInputChange('gemini_api_key', e.target.value)}
+                      placeholder={formData.is_gemini_api_key_set ? '•••••••••••••••••••• (Configured on backend)' : 'Enter Gemini API key (AQ...)'}
+                      autoComplete="off"
+                    />
+                  </div>
+                </>
               )}
 
               {/* Local Model Name */}

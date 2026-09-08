@@ -17,6 +17,7 @@
     "start": "node dist-server/main.js"
   },
   "dependencies": {
+    "@google/genai": "^2.21.0",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^11.0.10",
     "@nestjs/config": "^4.0.0",

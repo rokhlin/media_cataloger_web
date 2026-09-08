@@ -22,6 +22,11 @@ export class SettingsUpdateRequestDto {
   @IsString()
   gemini_model?: string;
 
+  @ApiPropertyOptional({ description: 'Google Gemini API Key for backend model operations' })
+  @IsOptional()
+  @IsString()
+  gemini_api_key?: string;
+
   @ApiPropertyOptional({ description: 'Local Model Name', example: 'qwen2.5-vl-7b-instruct' })
   @IsOptional()
   @IsString()

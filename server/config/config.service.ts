@@ -374,6 +374,52 @@ export class AppConfigService {
     return new Set(['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.m4v', '.webm', '.flv', '.3gp']);
   }
 
+  get geminiApiKey(): string {
+    const saved = this.getSavedSettings();
+    if (saved.GEMINI_API_KEY && String(saved.GEMINI_API_KEY).trim()) {
+      return String(saved.GEMINI_API_KEY).trim();
+    }
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
+      return process.env.GEMINI_API_KEY.trim();
+    }
+    // Check if configured in media_cataloger .env as a seamless fallback
+    const candidatePaths = [
+      path.resolve(this.projectRoot, '..', 'media_cataloger', 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, '.env'),
+    ];
+    for (const cp of candidatePaths) {
+      if (fs.existsSync(cp)) {
+        try {
+          const content = fs.readFileSync(cp, 'utf-8');
+          const match = content.match(/^GEMINI_API_KEY=(.+)$/m);
+          if (match && match[1]) {
+            const val = match[1].trim();
+            if (val && !val.includes('your_gemini_api_key')) {
+              return val;
+            }
+          }
+        } catch {}
+      }
+    }
+    return '';
+  }
+
+  get geminiModel(): string {
+    const saved = this.getSavedSettings();
+    return saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  }
+
+  get geminiRpmLimit(): number {
+    const saved = this.getSavedSettings();
+    return saved.RPM_LIMIT ? Number(saved.RPM_LIMIT) : Number(process.env.RPM_LIMIT || 15);
+  }
+
+  get imageMaxSize(): number {
+    const saved = this.getSavedSettings();
+    return saved.IMAGE_MAX_SIZE ? Number(saved.IMAGE_MAX_SIZE) : Number(process.env.IMAGE_MAX_SIZE || 1500);
+  }
+
   /**
    * Export the active execution configuration to pass to the BE pipeline worker.
    * UI is the single source of truth for all runtime settings and output paths.
@@ -383,7 +429,8 @@ export class AppConfigService {
     return {
       output_folder: this.outputFolder,
       model_provider: saved.MODEL_PROVIDER || process.env.MODEL_PROVIDER || 'gemini',
-      gemini_model: saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+      gemini_model: this.geminiModel,
+      gemini_api_key: this.geminiApiKey,
       local_model_name: saved.LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || '',
       gemini_max_workers: saved.GEMINI_MAX_WORKERS ? Number(saved.GEMINI_MAX_WORKERS) : Number(process.env.GEMINI_MAX_WORKERS || 3),
       local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),

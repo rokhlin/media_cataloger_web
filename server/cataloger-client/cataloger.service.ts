@@ -6,6 +6,7 @@ import { AppConfigService } from '../config/config.service.js';
 import { MediaService } from '../media/media.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { LogBufferService, LogLevel } from '../logging/log-buffer.service.js';
+import { GeminiService } from '../gemini/gemini.service.js';
 
 @Injectable()
 export class CatalogerClientService {
@@ -16,6 +17,7 @@ export class CatalogerClientService {
     @Inject(MediaService) private readonly mediaService: MediaService,
     @Inject(DatabaseService) private readonly db: DatabaseService,
     @Inject(LogBufferService) @Optional() private readonly logBuffer?: LogBufferService,
+    @Inject(GeminiService) @Optional() private readonly geminiService?: GeminiService,
   ) {}
 
   private get baseUrl(): string {
@@ -143,6 +145,26 @@ export class CatalogerClientService {
     }
 
     const execConfig = this.config.getPipelineExecutionConfig();
+    const isGeminiProvider = execConfig.model_provider === 'gemini' || (!execConfig.model_provider && Boolean(this.config.geminiApiKey));
+
+    // When Gemini provider is selected, use the Gemini configuration and functionality on the web backend!
+    if (isGeminiProvider && this.geminiService && this.config.geminiApiKey) {
+      try {
+        this.logger.log(`Executing single file analysis via Backend Gemini service: ${resolvedPath}`);
+        this.logBuffer?.info('Pipeline', `Executing analysis using Backend Gemini configuration for '${path.basename(resolvedPath)}'`);
+        const result = await this.geminiService.analyzeMediaFile(resolvedPath, customPayload);
+        return {
+          status: 'completed',
+          message: `Analysis completed for ${path.basename(resolvedPath)} via backend Gemini service`,
+          file: resolvedPath,
+          data: result,
+        };
+      } catch (geminiErr: any) {
+        this.logger.warn(`Backend Gemini analysis failed, falling back to AI engine daemon: ${geminiErr.message}`);
+        this.logBuffer?.warn('Pipeline', `Backend Gemini analysis failed (${geminiErr.message}), falling back to AI engine daemon...`);
+      }
+    }
+
     const payload = {
       file: resolvedPath,
       filename: path.basename(resolvedPath),
@@ -278,6 +300,28 @@ export class CatalogerClientService {
 
     const resolvedPath = accessCheck.resolvedPath;
     const execConfig = this.config.getPipelineExecutionConfig();
+    const isGeminiProvider = execConfig.model_provider === 'gemini' || (!execConfig.model_provider && Boolean(this.config.geminiApiKey));
+
+    if (isGeminiProvider && this.geminiService && this.config.geminiApiKey) {
+      try {
+        this.logger.log(`Executing AI tag recognition via Backend Gemini service for '${path.basename(resolvedPath)}'`);
+        const photoAnalysis = await this.geminiService.analyzePhoto(
+          resolvedPath,
+          null,
+          options?.target_tags,
+          options?.tag_format || 'categorized'
+        );
+        return {
+          status: 'success',
+          file: resolvedPath,
+          tags: photoAnalysis.tags,
+          analysis: photoAnalysis,
+        };
+      } catch (err: any) {
+        this.logger.warn(`Backend Gemini tag analysis failed, falling back to AI engine daemon: ${err.message}`);
+      }
+    }
+
     const payload = {
       file: resolvedPath,
       target_tags: options?.target_tags,

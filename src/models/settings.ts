@@ -7,6 +7,8 @@ export interface SettingsData {
   is_dev?: boolean;
   model_provider?: string;
   gemini_model?: string;
+  gemini_api_key?: string;
+  is_gemini_api_key_set?: boolean;
   local_model_name?: string;
   gemini_max_workers?: number;
   local_max_workers?: number;
