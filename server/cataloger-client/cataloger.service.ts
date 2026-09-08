@@ -199,23 +199,44 @@ export class CatalogerClientService {
       ...(customPayload || {}),
     };
 
+    let requestData: any = payload;
+    let requestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    // Provide mediafile directly via API upload so AI engine does not require local filesystem mounts or reverse streaming
+    if (fs.existsSync(resolvedPath)) {
+      try {
+        const fileBuffer = await fs.promises.readFile(resolvedPath);
+        const formData = new FormData();
+        formData.append('file_upload', new Blob([fileBuffer]), path.basename(resolvedPath));
+        formData.append('file', resolvedPath);
+        formData.append('payload', JSON.stringify(payload));
+        requestData = formData;
+        requestHeaders = {};
+      } catch (readErr: any) {
+        this.logger.warn(`Could not load file buffer for direct upload, falling back to JSON payload: ${readErr.message}`);
+      }
+    }
+
     try {
       this.logger.log(`Triggering single file analysis on BE: ${resolvedPath}`);
       this.logBuffer?.debug('Pipeline', `Sending single-file analysis request to ${this.baseUrl}/api/analyze-file`, {
         file: resolvedPath,
         size,
+        directUpload: requestData instanceof FormData,
       });
 
       let res;
       try {
         res = await axios.post(
           `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
-          payload,
+          requestData,
           {
-            timeout: 20000,
-            headers: { 'Content-Type': 'application/json' },
+            timeout: 60000,
+            headers: requestHeaders,
             httpAgent: noKeepAliveHttpAgent,
             httpsAgent: noKeepAliveHttpsAgent,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
           }
         );
       } catch (postErr: any) {
@@ -223,12 +244,14 @@ export class CatalogerClientService {
           this.logger.warn(`Initial analyze-file request had socket hang up, retrying on fresh socket: ${postErr.message}`);
           res = await axios.post(
             `${this.baseUrl}/api/analyze-file?file=${encodeURIComponent(resolvedPath)}`,
-            payload,
+            requestData,
             {
-              timeout: 20000,
-              headers: { 'Content-Type': 'application/json' },
+              timeout: 60000,
+              headers: requestHeaders,
               httpAgent: new http.Agent({ keepAlive: false }),
               httpsAgent: new https.Agent({ keepAlive: false }),
+              maxContentLength: Infinity,
+              maxBodyLength: Infinity,
             }
           );
         } else {
