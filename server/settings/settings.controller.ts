@@ -82,12 +82,12 @@ export class SettingsController {
     return this.settingsService.getLocalModels();
   }
 
-  @RequirePermissions('admin_panel')
+  @Public()
   @Post('models/local/load')
   @ApiOperation({ summary: 'Load selected local model into LM Studio memory' })
   @ApiResponse({ status: 200, description: 'Model loading response' })
-  loadLocalModel(@Body() body: { modelId?: string; model?: string }) {
-    const targetModel = body.modelId || body.model || '';
+  loadLocalModel(@Body() body: { modelId?: string; model?: string; model_id?: string }) {
+    const targetModel = body.modelId || body.model || body.model_id || '';
     return this.settingsService.loadLocalModel(targetModel);
   }
 }

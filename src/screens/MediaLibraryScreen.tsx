@@ -8,6 +8,7 @@ import ExecutionControls from '../components/settings/ExecutionControls';
 import DuplicateDetectionRules from '../components/duplicates/DuplicateDetectionRules';
 import type { UISettings, SettingsData } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useAuth } from '../services/authContext';
 
 export interface LocalModelOption {
   id: string;
@@ -93,6 +94,7 @@ export default function MediaLibraryScreen({
   scanProgress,
 }: MediaLibraryScreenProps) {
   const { t } = useLanguage();
+  const { authFetch } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<MediaLibrarySubTab>('execution');
 
   // Metadata operations states
@@ -131,7 +133,8 @@ export default function MediaLibraryScreen({
     setLoadingLocalModels(true);
     setLocalModelsError(null);
     try {
-      const res = await fetch('/api/models/local');
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/models/local');
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.models)) {
@@ -153,7 +156,7 @@ export default function MediaLibraryScreen({
     } finally {
       setLoadingLocalModels(false);
     }
-  }, [modelSettings.local_model_name]);
+  }, [authFetch, modelSettings.local_model_name]);
 
   // Trigger fetch when Models tab is active and local/hybrid provider is selected
   useEffect(() => {
@@ -174,17 +177,18 @@ export default function MediaLibraryScreen({
     setLoadingModelIntoRam(true);
     setPreloadStatus(null);
     try {
-      const res = await fetch('/api/models/local/load', {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/models/local/load', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_id: targetId }),
+        body: JSON.stringify({ model_id: targetId, modelId: targetId, model: targetId }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setPreloadStatus(`Model "${targetId}" loaded into LM Studio!`);
         fetchLocalModels();
       } else {
-        setPreloadStatus(`Load failed: ${data.message || 'Unknown error'}`);
+        setPreloadStatus(`Load failed: ${data.message || data.detail || 'Unknown error'}`);
       }
     } catch (err: any) {
       setPreloadStatus(`Load request error: ${err.message}`);
