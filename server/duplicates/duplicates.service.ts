@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import axios from 'axios';
 import { AppConfigService } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -145,20 +146,25 @@ export class DuplicatesService {
     folderScope?: string,
   ): Promise<DuplicateGroup[]> {
     const rawHashes = this.db.getAllMediaHashes();
-    const items: DuplicateItemInfo[] = rawHashes.map((h: any) => ({
-      filePath: h.file_path,
-      filename: path.basename(h.file_path),
-      folder: path.dirname(h.file_path),
-      fileSize: h.file_size,
-      mtime: h.mtime,
-      width: h.width,
-      height: h.height,
-      megapixels: h.width && h.height ? parseFloat(((h.width * h.height) / 1000000).toFixed(2)) : null,
-      phash: h.phash,
-      contentHash: h.content_hash,
-      isImage: Boolean(h.width && h.height),
-      isVideo: false,
-    }));
+    const items: DuplicateItemInfo[] = rawHashes.map((h: any) => {
+      const ext = path.extname(h.file_path).toLowerCase();
+      const isImg = Boolean((h.width && h.height) || this.config.supportedPhotoExts.has(ext));
+      return {
+        filePath: h.file_path,
+        filename: path.basename(h.file_path),
+        folder: path.dirname(h.file_path),
+        fileSize: h.file_size,
+        mtime: h.mtime,
+        width: h.width,
+        height: h.height,
+        megapixels: h.width && h.height ? parseFloat(((h.width * h.height) / 1000000).toFixed(2)) : null,
+        phash: h.phash,
+        contentHash: h.content_hash,
+        isImage: isImg,
+        isVideo: this.config.supportedVideoExts.has(ext),
+        captureDate: h.media_date || null,
+      };
+    });
     const effectiveMode: 'all' | 'exact' | 'visual' | 'burst' = matchType === 'similar' ? 'visual' : matchType;
     return await this.clusterDuplicates(
       items,
@@ -224,9 +230,14 @@ export class DuplicatesService {
 
     const cfg = this.db.getDuplicateConfig();
     const effectiveEngine = options?.engine || (cfg.default_engine as DuplicateEngine) || 'auto';
-    const effectiveThreshold = options?.similarityThreshold ?? cfg.similarity_threshold ?? 0.90;
+    const effectiveThreshold = options?.similarityThreshold ?? cfg.similarity_threshold ?? 0.85;
     const effectiveBurstWindow = options?.burstWindowSeconds ?? cfg.burst_window_seconds ?? 3.0;
     const effectiveMode = options?.mode || 'all';
+
+    if (options?.forceRehash) {
+      this.cachedGroups = [];
+      this.lastSummary = null;
+    }
 
     this.cancelScanRequested = false;
     this.scanStatus = {
@@ -437,6 +448,7 @@ export class DuplicatesService {
           isImage,
           isVideo,
           isPrimary: false,
+          captureDate: cached.media_date || null,
         };
       }
 
@@ -448,12 +460,27 @@ export class DuplicatesService {
       // Only invoke Sharp if pHash is missing and file is an image
       if (isImage && !phash) {
         try {
-          const imgMeta = await sharp(filePath, { failOn: 'none' }).metadata();
+          let sharpInput: string | Buffer = filePath;
+          if (ext === '.heic' || ext === '.heif') {
+            try {
+              const fileBuf = await fs.promises.readFile(filePath);
+              sharpInput = await (heicConvert as any)({
+                buffer: fileBuf,
+                format: 'JPEG',
+                quality: 0.85,
+              });
+            } catch (heicErr: any) {
+              this.logger.warn(`HEIC decoding failed for ${filePath}: ${heicErr.message}`);
+              sharpInput = filePath;
+            }
+          }
+
+          const imgMeta = await sharp(sharpInput, { failOn: 'none' }).metadata();
           width = imgMeta.width || null;
           height = imgMeta.height || null;
 
           // dHash computation: resize to 9x8 grayscale, compare adjacent pixels
-          const dhashBuffer = await sharp(filePath, { failOn: 'none' })
+          const dhashBuffer = await sharp(sharpInput, { failOn: 'none' })
             .resize(9, 8, { fit: 'fill' })
             .grayscale()
             .raw()
@@ -498,6 +525,7 @@ export class DuplicatesService {
         isImage,
         isVideo,
         isPrimary: false,
+        captureDate: cached?.media_date || null,
       };
     } catch {
       return null;
@@ -597,6 +625,16 @@ export class DuplicatesService {
   calculateSimilarity(hash1: string, hash2: string): number {
     const dist = this.calculateHammingDistance(hash1, hash2);
     return Math.max(0, parseFloat((1.0 - dist / 64).toFixed(3)));
+  }
+
+  getItemTimestamp(item: DuplicateItemInfo): number {
+    if (item.captureDate) {
+      const dt = Date.parse(item.captureDate);
+      if (!isNaN(dt) && dt > 0) {
+        return dt / 1000;
+      }
+    }
+    return item.mtime || 0;
   }
 
   /**
@@ -735,12 +773,14 @@ export class DuplicatesService {
       }
     }
 
-    // 3. Burst Photo Series Clustering (within time delta + high similarity or sequential naming)
+    // 3. Burst Photo Series Clustering (within time delta + high visual similarity to anchor photo)
     if (opts.mode === 'all' || opts.mode === 'burst') {
-      const remaining = files.filter((f) => !assignedFiles.has(f.filePath) && f.mtime > 0);
-      remaining.sort((a, b) => a.mtime - b.mtime);
+      // Must be an image and must have a valid perceptual hash; without phash, visual burst match is forbidden
+      const remaining = files.filter((f) => !assignedFiles.has(f.filePath) && f.isImage && f.phash);
+      remaining.sort((a, b) => this.getItemTimestamp(a) - this.getItemTimestamp(b));
 
       let currentBurst: DuplicateItemInfo[] = [];
+      const requiredSimilarity = opts.similarityThreshold ?? 0.85;
 
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
@@ -751,16 +791,24 @@ export class DuplicatesService {
           continue;
         }
 
+        const anchor = currentBurst[0];
         const prev = currentBurst[currentBurst.length - 1];
-        const timeDiff = Math.abs(item.mtime - prev.mtime);
+        const itemTime = this.getItemTimestamp(item);
+        const anchorTime = this.getItemTimestamp(anchor);
+        const prevTime = this.getItemTimestamp(prev);
 
-        const isTimeMatch = timeDiff <= opts.burstWindowSeconds;
-        const isFolderMatch = item.folder === prev.folder;
-        let isVisualMatch = true;
+        const timeDiffFromAnchor = Math.abs(itemTime - anchorTime);
+        const timeDiffFromPrev = Math.abs(itemTime - prevTime);
 
-        if (item.phash && prev.phash) {
-          const dist = this.calculateHammingDistance(item.phash, prev.phash);
-          isVisualMatch = dist <= 16; // At least ~75% visual similarity for burst series
+        // Strict condition: within burst window relative to anchor AND within step window from prev
+        const isTimeMatch = timeDiffFromAnchor <= opts.burstWindowSeconds && timeDiffFromPrev <= opts.burstWindowSeconds;
+        const isFolderMatch = item.folder === anchor.folder;
+
+        // Strict condition: candidate MUST have phash AND match anchor with high similarity
+        let isVisualMatch = false;
+        if (item.phash && anchor.phash) {
+          const sim = this.calculateSimilarity(anchor.phash, item.phash);
+          isVisualMatch = sim >= requiredSimilarity;
         }
 
         if (isTimeMatch && isFolderMatch && isVisualMatch) {
@@ -792,18 +840,27 @@ export class DuplicatesService {
     const sorted = this.rankGroupMembers(burst, keepStrategy);
     const primary = sorted[0];
     primary.isPrimary = true;
-    const duplicates = sorted.slice(1).map((d) => ({
-      ...d,
-      isPrimary: false,
-      similarityToPrimary: 0.95,
-    }));
+
+    let minSim = 1.0;
+    const duplicates = sorted.slice(1).map((d) => {
+      const sim = (primary.phash && d.phash)
+        ? this.calculateSimilarity(primary.phash, d.phash)
+        : 0.85;
+      minSim = Math.min(minSim, sim);
+      return {
+        ...d,
+        isPrimary: false,
+        similarityToPrimary: parseFloat(sim.toFixed(2)),
+      };
+    });
+
     const reclaimable = duplicates.reduce((acc, cur) => acc + cur.fileSize, 0);
     const folders = Array.from(new Set(burst.map((m) => m.folder)));
 
     groups.push({
       id: `burst_${path.basename(primary.filePath, path.extname(primary.filePath))}`,
       matchType: 'burst',
-      similarity: 0.95,
+      similarity: parseFloat(minSim.toFixed(2)),
       primaryFile: primary,
       duplicates,
       totalFiles: burst.length,

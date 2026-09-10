@@ -214,6 +214,147 @@ describe('DuplicatesService', () => {
       // Primary should be IMG_0002.jpg (largest file size: 4100000)
       assert.equal(groups[0].primaryFile.filePath, '/photos/burst/IMG_0002.jpg');
     });
+
+    it('should NEVER cluster photos with null phash into bursts even if timestamps are identical (Issue 22 fix)', async () => {
+      // 3 iPhone HEIC photos copied to Windows with identical mtimes, but unhashable/null phash
+      const testHashes = [
+        {
+          file_path: '/photos/burst/IMG_1001.heic',
+          content_hash: 'md5_1',
+          phash: null,
+          file_size: 2000000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000000,
+        },
+        {
+          file_path: '/photos/burst/IMG_1002.heic',
+          content_hash: 'md5_2',
+          phash: null,
+          file_size: 2100000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000000.5,
+        },
+        {
+          file_path: '/photos/burst/IMG_1003.heic',
+          content_hash: 'md5_3',
+          phash: null,
+          file_size: 2200000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000001,
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      // Must NOT form a burst group when perceptual hash cannot be verified!
+      assert.equal(groups.length, 0);
+    });
+
+    it('should NEVER cluster visually distinct photos into bursts even if timestamps are 0.5s apart (Issue 22 fix)', async () => {
+      // Different photos (e.g. kid photo, toy photo, car photo) with completely different phashes
+      const testHashes = [
+        {
+          file_path: '/photos/burst/child.heic',
+          content_hash: 'md5_child',
+          phash: '0000000000000000',
+          file_size: 2000000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000000,
+        },
+        {
+          file_path: '/photos/burst/toy.heic',
+          content_hash: 'md5_toy',
+          phash: 'ffffffffffffffff', // 64 bits diff (0% similarity)
+          file_size: 2100000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000000.8,
+        },
+        {
+          file_path: '/photos/burst/street.heic',
+          content_hash: 'md5_street',
+          phash: 'aaaa5555aaaa5555', // ~50% similarity
+          file_size: 2200000,
+          width: 4032,
+          height: 3024,
+          mtime: 1600000001.2,
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      assert.equal(groups.length, 0);
+    });
+
+    it('should dynamically calculate real similarity percentage for burst groups without hardcoding 0.95', async () => {
+      // 4 bits diff out of 64 bits -> (64-4)/64 = 0.9375 (~93.8%)
+      const testHashes = [
+        {
+          file_path: '/photos/burst/shot1.jpg',
+          content_hash: 'md5_s1',
+          phash: '0000000000000000',
+          file_size: 2000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000000,
+        },
+        {
+          file_path: '/photos/burst/shot2.jpg',
+          content_hash: 'md5_s2',
+          phash: '000000000000000f', // 4 bits diff = 0.9375
+          file_size: 2050000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001,
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      assert.equal(groups.length, 1);
+      assert.notEqual(groups[0].similarity, 0.95, 'Similarity must not be hardcoded to 0.95');
+      assert.equal(groups[0].similarity, 0.94);
+      assert.equal(groups[0].duplicates[0].similarityToPrimary, 0.94);
+    });
+
+    it('should prioritize EXIF media_date over filesystem mtime for burst grouping', async () => {
+      // mtime is identical (e.g. copied from iPhone at same second), but EXIF dates are hours apart
+      const testHashes = [
+        {
+          file_path: '/photos/burst/morning.jpg',
+          content_hash: 'md5_m',
+          phash: '1111222233334444',
+          file_size: 2000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1700000000, // Same copy mtime
+          media_date: '2026-06-01T08:00:00Z',
+        },
+        {
+          file_path: '/photos/burst/evening.jpg',
+          content_hash: 'md5_e',
+          phash: '1111222233334445', // 1 bit diff
+          file_size: 2000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1700000000.5, // Same copy mtime
+          media_date: '2026-06-01T20:00:00Z', // 12 hours later!
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      // Should NOT cluster because real capture dates differ by 12 hours
+      assert.equal(groups.length, 0);
+    });
   });
 
   describe('Non-Destructive Principle Verification', () => {

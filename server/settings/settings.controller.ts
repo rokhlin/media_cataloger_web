@@ -73,5 +73,22 @@ export class SettingsController {
     const flags = Array.isArray(body) ? body : body?.flags;
     return this.settingsService.saveFeatureFlags(flags);
   }
+
+  @Public()
+  @Get('models/local')
+  @ApiOperation({ summary: 'Get list of installed and available models in LM Studio' })
+  @ApiResponse({ status: 200, description: 'List of LM Studio local models' })
+  getLocalModels() {
+    return this.settingsService.getLocalModels();
+  }
+
+  @RequirePermissions('admin_panel')
+  @Post('models/local/load')
+  @ApiOperation({ summary: 'Load selected local model into LM Studio memory' })
+  @ApiResponse({ status: 200, description: 'Model loading response' })
+  loadLocalModel(@Body() body: { modelId?: string; model?: string }) {
+    const targetModel = body.modelId || body.model || '';
+    return this.settingsService.loadLocalModel(targetModel);
+  }
 }
 

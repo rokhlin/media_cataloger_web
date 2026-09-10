@@ -316,4 +316,214 @@ export class SettingsService {
     this.logger.log(`Saved ${flags.length} feature flags to ${filePath}`);
     return { status: 'success', count: flags.length, file_path: filePath };
   }
+
+  /**
+   * Query installed and available models from LM Studio CLI/REST API.
+   */
+  async getLocalModels(): Promise<{
+    connected: boolean;
+    models: Array<{
+      id: string;
+      name: string;
+      isVision: boolean;
+      isLoaded: boolean;
+      arch?: string;
+      size?: string;
+      params?: string;
+    }>;
+    activeModel: string;
+    error?: string;
+  }> {
+    const activeModel = this.config.getSavedSettings().LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || '';
+    const models: Array<{
+      id: string;
+      name: string;
+      isVision: boolean;
+      isLoaded: boolean;
+      arch?: string;
+      size?: string;
+      params?: string;
+    }> = [];
+
+    // 1. Try lms CLI first (returns rich metadata including vision support & loaded state)
+    try {
+      const [{ stdout: lsOut }, { stdout: psOut }] = await Promise.all([
+        execAsync('lms ls --json', { timeout: 4000 }),
+        execAsync('lms ps --json', { timeout: 4000 }).catch(() => ({ stdout: '[]' })),
+      ]);
+
+      let loadedKeys = new Set<string>();
+      try {
+        const psParsed = JSON.parse(psOut);
+        if (Array.isArray(psParsed)) {
+          loadedKeys = new Set(psParsed.map((p: any) => p.modelKey || p.identifier || p.id).filter(Boolean));
+        }
+      } catch {}
+
+      const lsParsed = JSON.parse(lsOut);
+      if (Array.isArray(lsParsed)) {
+        for (const item of lsParsed) {
+          if (item.type === 'embedding') continue; // exclude embedding models from vision/LLM selector
+          const key = item.modelKey || item.path || item.indexedModelIdentifier;
+          if (!key) continue;
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes('embed') || lowerKey.includes('whisper')) continue;
+
+          const isVis = Boolean(
+            item.vision ||
+            lowerKey.includes('vl') ||
+            lowerKey.includes('vision') ||
+            lowerKey.includes('caption') ||
+            lowerKey.includes('llava') ||
+            lowerKey.includes('gemma-4') ||
+            lowerKey.includes('olmocr')
+          );
+
+          models.push({
+            id: key,
+            name: item.displayName || key,
+            isVision: isVis,
+            isLoaded: loadedKeys.has(key),
+            arch: item.architecture,
+            size: item.sizeBytes ? `${(item.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB` : undefined,
+            params: item.paramsString,
+          });
+        }
+      }
+
+      if (models.length > 0) {
+        // Sort vision models first, then alphabetical
+        models.sort((a, b) => {
+          if (a.isVision && !b.isVision) return -1;
+          if (!a.isVision && b.isVision) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        return {
+          connected: true,
+          models,
+          activeModel,
+        };
+      }
+    } catch (cliErr: any) {
+      this.logger.debug(`lms CLI check failed (${cliErr.message}), trying HTTP API`);
+    }
+
+    // 2. Fallback: Query LM Studio REST API via HTTP /v1/models
+    const candidateUrls = [
+      this.config.localApiBase,
+      'http://localhost:1234/v1',
+      'http://127.0.0.1:1234/v1',
+    ];
+
+    let lastError = '';
+    for (const rawBase of candidateUrls) {
+      if (!rawBase) continue;
+      const baseUrl = rawBase.replace(/\/+$/, '');
+      const url = `${baseUrl}/models`;
+      try {
+        const headers: Record<string, string> = {};
+        if (this.config.lmApiToken) {
+          headers['Authorization'] = `Bearer ${this.config.lmApiToken}`;
+        }
+        const resp = await fetch(url, { headers, signal: AbortSignal.timeout(3000) });
+        if (resp.ok) {
+          const data: any = await resp.json();
+          if (data && Array.isArray(data.data)) {
+            for (const m of data.data) {
+              const id = m.id || m.modelKey;
+              if (!id) continue;
+              const lowerId = id.toLowerCase();
+              if (lowerId.includes('embed') || lowerId.includes('whisper')) continue;
+
+              const isVis = Boolean(
+                lowerId.includes('vl') ||
+                lowerId.includes('vision') ||
+                lowerId.includes('caption') ||
+                lowerId.includes('llava') ||
+                lowerId.includes('gemma-4') ||
+                lowerId.includes('olmocr')
+              );
+
+              models.push({
+                id,
+                name: id,
+                isVision: isVis,
+                isLoaded: m.state === 'loaded',
+              });
+            }
+
+            models.sort((a, b) => {
+              if (a.isVision && !b.isVision) return -1;
+              if (!a.isVision && b.isVision) return 1;
+              return a.name.localeCompare(b.name);
+            });
+
+            return {
+              connected: true,
+              models,
+              activeModel,
+            };
+          }
+        } else if (resp.status === 401 || resp.status === 403) {
+          lastError = 'LM Studio authentication required. Please set LM_API_TOKEN.';
+        }
+      } catch (httpErr: any) {
+        lastError = httpErr.message;
+      }
+    }
+
+    return {
+      connected: false,
+      models: [],
+      activeModel,
+      error: lastError || 'Could not connect to LM Studio service. Make sure LM Studio local server is running.',
+    };
+  }
+
+  /**
+   * Load the selected model into LM Studio memory automatically.
+   */
+  async loadLocalModel(modelId: string): Promise<{ success: boolean; message: string }> {
+    if (!modelId || !modelId.trim()) {
+      return { success: false, message: 'Model ID cannot be empty.' };
+    }
+    const cleanId = modelId.trim();
+    this.logger.log(`Attempting to load model into LM Studio: ${cleanId}`);
+
+    // 1. Try lms load CLI
+    try {
+      const { stdout } = await execAsync(`lms load "${cleanId}" -y`, { timeout: 30000 });
+      this.logger.log(`lms load output for ${cleanId}: ${stdout.trim()}`);
+      return {
+        success: true,
+        message: `Successfully loaded model ${cleanId} into LM Studio.`,
+      };
+    } catch (cliErr: any) {
+      this.logger.warn(`lms load CLI failed: ${cliErr.message}, attempting API fallback`);
+    }
+
+    // 2. Try LM Studio HTTP API
+    try {
+      const baseUrl = this.config.localApiBase.replace(/\/+$/, '');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.config.lmApiToken) {
+        headers['Authorization'] = `Bearer ${this.config.lmApiToken}`;
+      }
+      const res = await fetch(`${baseUrl}/models/load`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: cleanId }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        return { success: true, message: `Loaded model ${cleanId} via LM Studio API.` };
+      }
+    } catch {}
+
+    return {
+      success: true,
+      message: `Model ${cleanId} configured. Just-in-time loading will activate on first inference request.`,
+    };
+  }
 }

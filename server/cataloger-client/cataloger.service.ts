@@ -33,8 +33,26 @@ export class CatalogerClientService {
     return url;
   }
 
+  private async ensureLocalModelLoaded(modelName?: string): Promise<void> {
+    if (!modelName || !modelName.trim()) return;
+    try {
+      const cleanName = modelName.trim();
+      this.logger.log(`Auto-loading local model in LM Studio on work start: ${cleanName}`);
+      this.logBuffer?.info('Pipeline', `Ensuring local model '${cleanName}' is loaded in LM Studio`);
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      execAsync(`lms load "${cleanName}" -y`, { timeout: 30000 }).catch((e) => {
+        this.logger.debug(`Auto-load via lms CLI note: ${e.message}`);
+      });
+    } catch {}
+  }
+
   async triggerRun(force: boolean = false, customPayload?: any): Promise<any> {
     const execConfig = this.config.getPipelineExecutionConfig();
+    if (execConfig.model_provider === 'local' || execConfig.model_provider === 'hybrid') {
+      this.ensureLocalModelLoaded(execConfig.local_model_name);
+    }
     this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)})`);
 
     const scanned = await this.mediaService.scanInputFolders();
@@ -171,6 +189,9 @@ export class CatalogerClientService {
     }
 
     const execConfig = this.config.getPipelineExecutionConfig();
+    if (execConfig.model_provider === 'local' || execConfig.model_provider === 'hybrid') {
+      this.ensureLocalModelLoaded(execConfig.local_model_name);
+    }
     const isGeminiProvider = execConfig.model_provider === 'gemini' || (!execConfig.model_provider && Boolean(this.config.geminiApiKey));
 
     // When Gemini provider is selected, use the Gemini configuration and functionality on the web backend!

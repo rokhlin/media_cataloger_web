@@ -446,6 +446,66 @@ export class AppConfigService {
     return saved.IMAGE_MAX_SIZE ? Number(saved.IMAGE_MAX_SIZE) : Number(process.env.IMAGE_MAX_SIZE || 1500);
   }
 
+  get localApiBase(): string {
+    const saved = this.getSavedSettings();
+    const candidate = saved.LOCAL_API_BASE || process.env.LOCAL_API_BASE;
+    if (candidate && candidate.trim()) {
+      return candidate.trim();
+    }
+    const candidatePaths = [
+      path.resolve(this.projectRoot, '..', 'media_cataloger', 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, '.env'),
+    ];
+    for (const cp of candidatePaths) {
+      if (fs.existsSync(cp)) {
+        try {
+          const content = fs.readFileSync(cp, 'utf-8');
+          const match = content.match(/^LOCAL_API_BASE=(.+)$/m);
+          if (match && match[1]) {
+            const val = match[1].trim();
+            if (val) return val;
+          }
+        } catch {}
+      }
+    }
+    return 'http://localhost:1234/v1';
+  }
+
+  get lmApiToken(): string {
+    const saved = this.getSavedSettings();
+    if (saved.LM_API_TOKEN && String(saved.LM_API_TOKEN).trim()) {
+      return String(saved.LM_API_TOKEN).trim();
+    }
+    if (saved.LOCAL_API_TOKEN && String(saved.LOCAL_API_TOKEN).trim()) {
+      return String(saved.LOCAL_API_TOKEN).trim();
+    }
+    if (process.env.LM_API_TOKEN && process.env.LM_API_TOKEN.trim()) {
+      return process.env.LM_API_TOKEN.trim();
+    }
+    if (process.env.LOCAL_API_TOKEN && process.env.LOCAL_API_TOKEN.trim()) {
+      return process.env.LOCAL_API_TOKEN.trim();
+    }
+    const candidatePaths = [
+      path.resolve(this.projectRoot, '..', 'media_cataloger', 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, 'data', 'config', '.env'),
+      path.resolve(this.projectRoot, '.env'),
+    ];
+    for (const cp of candidatePaths) {
+      if (fs.existsSync(cp)) {
+        try {
+          const content = fs.readFileSync(cp, 'utf-8');
+          const match = content.match(/^(?:LM_API_TOKEN|LOCAL_API_TOKEN)=(.+)$/m);
+          if (match && match[1]) {
+            const val = match[1].trim();
+            if (val) return val;
+          }
+        } catch {}
+      }
+    }
+    return '';
+  }
+
   /**
    * Export the active execution configuration to pass to the BE pipeline worker.
    * UI is the single source of truth for all runtime settings and output paths.

@@ -56,7 +56,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
   // Local state if uncontrolled
   const [localEngine, setLocalEngine] = useState<'auto' | 'cpu' | 'gpu'>('auto');
   const [localMode, setLocalMode] = useState<'all' | 'exact' | 'visual' | 'burst'>('all');
-  const [localThreshold, setLocalThreshold] = useState<number>(0.90);
+  const [localThreshold, setLocalThreshold] = useState<number>(0.85);
   const [localBurstWindow, setLocalBurstWindow] = useState<number>(3.0);
   const [localFolderScope, setLocalFolderScope] = useState<string>('all');
   const [localForceRehash, setLocalForceRehash] = useState<boolean>(false);
@@ -274,7 +274,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
         <div className="dup-form-group">
           <label>
             <span>{t('similarityThreshold' as any) || 'Visual Similarity Threshold'}</span>
-            <span className="dup-range-badge">{Math.round(threshold * 100)}%</span>
+            <span className="dup-range-badge">{Math.round((threshold ?? 0.85) * 100)}%</span>
           </label>
           <div className="dup-range-wrap">
             <input

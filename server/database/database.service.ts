@@ -1790,8 +1790,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const db = this.getDb();
     const norm = filePath.replace(/\\/g, '/');
     const row = db.prepare(`
-      SELECT * FROM media_hashes
-      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      SELECT h.*, m.media_date FROM media_hashes h
+      LEFT JOIN media_items m ON (m.file_path = h.file_path OR LOWER(m.file_path) = LOWER(h.file_path))
+      WHERE h.file_path = ? OR h.file_path = ? OR LOWER(h.file_path) = LOWER(?)
       LIMIT 1
     `).get(filePath, norm, norm) as any;
     if (row) return row;
@@ -1799,7 +1800,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     // Fallback to media_items if indexed with phash during cataloging
     try {
       const item = db.prepare(`
-        SELECT file_path, file_size, mtime, phash FROM media_items
+        SELECT file_path, file_size, mtime, media_date, phash FROM media_items
         WHERE (file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?))
           AND phash IS NOT NULL AND phash != ''
         LIMIT 1
@@ -1814,6 +1815,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           height: null,
           file_size: item.file_size,
           mtime: item.mtime,
+          media_date: item.media_date,
         };
       }
     } catch {
@@ -1826,15 +1828,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const db = this.getDb();
     try {
       return db.prepare(`
-        SELECT file_path, content_hash, phash, width, height, file_size, mtime
-        FROM media_hashes
+        SELECT h.file_path, h.content_hash, h.phash, h.width, h.height, h.file_size, h.mtime, m.media_date
+        FROM media_hashes h
+        LEFT JOIN media_items m ON (m.file_path = h.file_path OR LOWER(m.file_path) = LOWER(h.file_path))
         UNION ALL
-        SELECT m.file_path, NULL as content_hash, m.phash, NULL as width, NULL as height, m.file_size, m.mtime
+        SELECT m.file_path, NULL as content_hash, m.phash, NULL as width, NULL as height, m.file_size, m.mtime, m.media_date
         FROM media_items m
         WHERE m.phash IS NOT NULL AND m.phash != ''
           AND NOT EXISTS (
-            SELECT 1 FROM media_hashes h
-            WHERE h.file_path = m.file_path OR LOWER(h.file_path) = LOWER(m.file_path)
+            SELECT 1 FROM media_hashes h2
+            WHERE h2.file_path = m.file_path OR LOWER(h2.file_path) = LOWER(m.file_path)
           )
       `).all();
     } catch {

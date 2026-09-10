@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import FaceRegistry, {
   type FaceRegistryFace,
   type FaceRegistryPerson,
@@ -8,6 +8,16 @@ import ExecutionControls from '../components/settings/ExecutionControls';
 import DuplicateDetectionRules from '../components/duplicates/DuplicateDetectionRules';
 import type { UISettings, SettingsData } from '../models';
 import { useLanguage } from '../i18n/LanguageContext';
+
+export interface LocalModelOption {
+  id: string;
+  name: string;
+  isVision: boolean;
+  isLoaded: boolean;
+  arch?: string;
+  size?: string;
+  params?: string;
+}
 
 export type MediaLibrarySubTab = 'execution' | 'faces' | 'metadata' | 'models';
 
@@ -96,6 +106,92 @@ export default function MediaLibraryScreen({
   const [modelSaveMsg, setModelSaveMsg] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<{ connected: boolean; message: string } | null>(null);
+
+  // LM Studio Local Models state
+  const [localModels, setLocalModels] = useState<LocalModelOption[]>([]);
+  const [loadingLocalModels, setLoadingLocalModels] = useState(false);
+  const [localModelsError, setLocalModelsError] = useState<string | null>(null);
+  const [isCustomLocalModel, setIsCustomLocalModel] = useState(false);
+  const [isCustomGeminiModel, setIsCustomGeminiModel] = useState(false);
+  const [loadingModelIntoRam, setLoadingModelIntoRam] = useState(false);
+  const [preloadStatus, setPreloadStatus] = useState<string | null>(null);
+
+  // Keep modelSettings synced with prop updates
+  useEffect(() => {
+    if (settings) {
+      setModelSettings((prev) => ({
+        ...prev,
+        ...settings,
+      }));
+    }
+  }, [settings]);
+
+  // Fetch installed models from LM Studio
+  const fetchLocalModels = useCallback(async () => {
+    setLoadingLocalModels(true);
+    setLocalModelsError(null);
+    try {
+      const res = await fetch('/api/models/local');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.models)) {
+          setLocalModels(data.models);
+          // Default selection if none set and models exist
+          if (data.activeModel && !modelSettings.local_model_name) {
+            setModelSettings((prev) => ({ ...prev, local_model_name: data.activeModel }));
+          } else if (!modelSettings.local_model_name && data.models.length > 0) {
+            setModelSettings((prev) => ({ ...prev, local_model_name: data.models[0].id }));
+          }
+        } else {
+          setLocalModels([]);
+        }
+      } else {
+        setLocalModelsError(`Failed to fetch models from LM Studio (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setLocalModelsError(`Could not reach LM Studio: ${err.message}`);
+    } finally {
+      setLoadingLocalModels(false);
+    }
+  }, [modelSettings.local_model_name]);
+
+  // Trigger fetch when Models tab is active and local/hybrid provider is selected
+  useEffect(() => {
+    if (
+      activeSubTab === 'models' &&
+      (modelSettings.model_provider === 'local' || modelSettings.model_provider === 'hybrid') &&
+      localModels.length === 0 &&
+      !loadingLocalModels
+    ) {
+      fetchLocalModels();
+    }
+  }, [activeSubTab, modelSettings.model_provider, localModels.length, loadingLocalModels, fetchLocalModels]);
+
+  // Preload selected local model into LM Studio memory
+  const handlePreloadLocalModel = async (modelIdToLoad?: string) => {
+    const targetId = modelIdToLoad || modelSettings.local_model_name;
+    if (!targetId) return;
+    setLoadingModelIntoRam(true);
+    setPreloadStatus(null);
+    try {
+      const res = await fetch('/api/models/local/load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_id: targetId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPreloadStatus(`Model "${targetId}" loaded into LM Studio!`);
+        fetchLocalModels();
+      } else {
+        setPreloadStatus(`Load failed: ${data.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      setPreloadStatus(`Load request error: ${err.message}`);
+    } finally {
+      setLoadingModelIntoRam(false);
+    }
+  };
 
   const handleReindex = async () => {
     setIsReindexing(true);
@@ -428,7 +524,13 @@ export default function MediaLibraryScreen({
                 <select
                   className="input-control"
                   value={modelSettings.model_provider || 'gemini'}
-                  onChange={(e) => setModelSettings({ ...modelSettings, model_provider: e.target.value })}
+                  onChange={(e) => {
+                    const newProvider = e.target.value;
+                    setModelSettings({ ...modelSettings, model_provider: newProvider });
+                    if ((newProvider === 'local' || newProvider === 'hybrid') && localModels.length === 0) {
+                      fetchLocalModels();
+                    }
+                  }}
                 >
                   <option value="gemini">Gemini API (Cloud AI)</option>
                   <option value="local">LM Studio / Local LLM (Local AI)</option>
@@ -436,20 +538,180 @@ export default function MediaLibraryScreen({
                 </select>
               </div>
 
-              {/* Gemini Model */}
-              <div className="form-group">
-                <label>{t('geminiModel')}</label>
-                <select
-                  className="input-control"
-                  value={modelSettings.gemini_model || 'gemini-3.6-flash'}
-                  onChange={(e) => setModelSettings({ ...modelSettings, gemini_model: e.target.value })}
-                >
-                  <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & Recommended)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Balanced)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (High Reasoning)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
-                </select>
-              </div>
+              {/* Gemini Model (Shown if provider is gemini or hybrid) */}
+              {(modelSettings.model_provider === 'gemini' || modelSettings.model_provider === 'hybrid' || !modelSettings.model_provider) && (
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label style={{ margin: 0 }}>{t('geminiModel')}</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomGeminiModel(!isCustomGeminiModel)}
+                      style={{ background: 'none', border: 'none', color: '#60a5fa', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      {isCustomGeminiModel ? 'Choose from list' : 'Custom model ID'}
+                    </button>
+                  </div>
+                  {isCustomGeminiModel ? (
+                    <input
+                      type="text"
+                      className="input-control"
+                      value={modelSettings.gemini_model || ''}
+                      onChange={(e) => setModelSettings({ ...modelSettings, gemini_model: e.target.value })}
+                      placeholder="e.g. gemini-3.6-flash"
+                    />
+                  ) : (
+                    <select
+                      className="input-control"
+                      value={modelSettings.gemini_model || 'gemini-3.6-flash'}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setIsCustomGeminiModel(true);
+                        } else {
+                          setModelSettings({ ...modelSettings, gemini_model: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & Recommended)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Balanced)</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro (High Reasoning)</option>
+                      <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
+                      {modelSettings.gemini_model && !['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash'].includes(modelSettings.gemini_model) && (
+                        <option value={modelSettings.gemini_model}>{modelSettings.gemini_model}</option>
+                      )}
+                      <option value="__custom__">✏️ Custom Model ID...</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* LM Studio Local Model (Shown if provider is local or hybrid) */}
+              {(modelSettings.model_provider === 'local' || modelSettings.model_provider === 'hybrid') && (
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      💻 {modelSettings.model_provider === 'hybrid' ? 'Local Fallback Model' : 'LM Studio Model'}
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={fetchLocalModels}
+                        disabled={loadingLocalModels}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#60a5fa',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          padding: 0,
+                        }}
+                        title="Query installed models in LM Studio"
+                      >
+                        {loadingLocalModels ? '⏳ Refreshing...' : '🔄 Refresh'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomLocalModel(!isCustomLocalModel)}
+                        style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                      >
+                        {isCustomLocalModel ? 'Select list' : 'Custom'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isCustomLocalModel ? (
+                    <input
+                      type="text"
+                      className="input-control"
+                      value={modelSettings.local_model_name || ''}
+                      onChange={(e) => setModelSettings({ ...modelSettings, local_model_name: e.target.value })}
+                      placeholder="e.g. qwen2.5-vl-7b-instruct"
+                    />
+                  ) : (
+                    <select
+                      className="input-control"
+                      value={modelSettings.local_model_name || ''}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setIsCustomLocalModel(true);
+                        } else {
+                          setModelSettings({ ...modelSettings, local_model_name: e.target.value });
+                        }
+                      }}
+                    >
+                      {loadingLocalModels ? (
+                        <option disabled>Loading models from LM Studio...</option>
+                      ) : localModels.length === 0 ? (
+                        <option value="">No models found in LM Studio (Click 🔄 Refresh)</option>
+                      ) : (
+                        <option value="">-- Select installed LM Studio model --</option>
+                      )}
+                      {localModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.isVision ? '👁️ ' : '💬 '}
+                          {m.name}
+                          {m.isLoaded ? ' (● Loaded in RAM)' : ''}
+                          {m.size ? ` [${m.size}]` : ''}
+                        </option>
+                      ))}
+                      {modelSettings.local_model_name && !localModels.some((m) => m.id === modelSettings.local_model_name) && (
+                        <option value={modelSettings.local_model_name}>⚙️ {modelSettings.local_model_name}</option>
+                      )}
+                      <option value="__custom__">✏️ Custom Model ID...</option>
+                    </select>
+                  )}
+
+                  {/* Model status indicators & quick preload */}
+                  <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem' }}>
+                    {(() => {
+                      const sel = localModels.find((m) => m.id === modelSettings.local_model_name);
+                      if (sel?.isLoaded) {
+                        return <span style={{ color: '#10b981', fontWeight: 600 }}>● Active in LM Studio memory</span>;
+                      }
+                      if (modelSettings.local_model_name) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handlePreloadLocalModel()}
+                            disabled={loadingModelIntoRam}
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.15)',
+                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                              borderRadius: '4px',
+                              color: '#60a5fa',
+                              fontSize: '0.75rem',
+                              padding: '0.15rem 0.45rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {loadingModelIntoRam ? '⏳ Preloading...' : '⚡ Preload into RAM'}
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {localModels.length > 0 && (
+                      <span style={{ color: '#94a3b8' }}>
+                        👁️ = Vision capable
+                      </span>
+                    )}
+                  </div>
+
+                  {localModelsError && (
+                    <span style={{ fontSize: '0.75rem', color: '#f87171', display: 'block', marginTop: '0.25rem' }}>
+                      ⚠️ {localModelsError}
+                    </span>
+                  )}
+                  {preloadStatus && (
+                    <span style={{ fontSize: '0.75rem', color: preloadStatus.includes('failed') || preloadStatus.includes('error') ? '#f87171' : '#34d399', display: 'block', marginTop: '0.25rem' }}>
+                      {preloadStatus}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Whisper Model */}
               <div className="form-group">

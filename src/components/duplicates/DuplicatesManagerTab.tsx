@@ -39,7 +39,7 @@ export default function DuplicatesManagerTab({
   // Scan settings state
   const [selectedEngine, setSelectedEngine] = useState<'auto' | 'cpu' | 'gpu'>('auto');
   const [selectedMode, setSelectedMode] = useState<'all' | 'exact' | 'visual' | 'burst'>('all');
-  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.90);
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.85);
   const [burstWindowSec, setBurstWindowSec] = useState<number>(3.0);
   const [selectedFolderScope, setSelectedFolderScope] = useState<string>('all');
   const [forceRehash, setForceRehash] = useState(false);

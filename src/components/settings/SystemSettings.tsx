@@ -34,6 +34,14 @@ export interface SystemSettingsProps {
   onNavigateToTreeSettings?: () => void;
 }
 
+const formatBytes = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+};
+
 export default function SystemSettings({
   settings,
   onSaveSettings,
@@ -161,12 +169,25 @@ export default function SystemSettings({
         if (data) {
           setDupConfig({
             default_engine: data.default_engine || 'auto',
-            similarity_threshold: data.similarity_threshold || 0.90,
+            similarity_threshold: data.similarity_threshold || 0.85,
             burst_window_seconds: data.burst_window_seconds || 3.0,
             default_keep_strategy: data.default_keep_strategy || 'highest_resolution',
             target_move_folder: data.target_move_folder || '',
             auto_scan_on_sync: Boolean(data.auto_scan_on_sync),
           });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // LM Studio Local models state for input autocomplete
+  const [localModels, setLocalModels] = useState<Array<{ id: string; name: string; isVision: boolean; isLoaded: boolean }>>([]);
+  useEffect(() => {
+    fetch('/api/models/local')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.models)) {
+          setLocalModels(data.models);
         }
       })
       .catch(() => {});
@@ -952,11 +973,19 @@ export default function SystemSettings({
                   <label>{t('localModelName')}</label>
                   <input
                     type="text"
+                    list="lm-studio-models-list"
                     className="input-control"
                     value={formData.local_model_name || ''}
                     onChange={(e) => handleInputChange('local_model_name', e.target.value)}
                     placeholder="e.g. qwen2.5-vl-7b-instruct"
                   />
+                  <datalist id="lm-studio-models-list">
+                    {localModels.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.isVision ? '👁️ ' : ''}{m.name} {m.isLoaded ? '(Loaded)' : ''}
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
               )}
 
@@ -1511,22 +1540,22 @@ export default function SystemSettings({
               <div className="cache-metrics-grid">
                 <div className="cache-metric-card">
                   <span className="metric-label">{t('cacheMetricEntries' as any) || 'Cached Entries'}</span>
-                  <span className="metric-value">{cacheStats ? cacheStats.total_entries : '—'}</span>
+                  <span className="metric-value">{cacheStatus ? cacheStatus.total_entries : '—'}</span>
                 </div>
                 <div className="cache-metric-card">
                   <span className="metric-label">{t('cacheMetricSize' as any) || 'Cache File Size'}</span>
-                  <span className="metric-value">{cacheStats ? formatBytes(cacheStats.cache_file_size_bytes) : '—'}</span>
+                  <span className="metric-value">{cacheStatus ? formatBytes(cacheStatus.cache_file_size_bytes) : '—'}</span>
                 </div>
                 <div className="cache-metric-card">
                   <span className="metric-label">{t('cacheMetricStatus' as any) || 'Cache Status'}</span>
-                  <span className="metric-value" style={{ color: cacheStats?.is_valid ? '#4ade80' : '#f87171' }}>
-                    {cacheStats ? (cacheStats.is_valid ? 'Valid / Active' : 'Stale / Rebuilt') : '—'}
+                  <span className="metric-value" style={{ color: cacheStatus?.is_valid ? '#4ade80' : '#f87171' }}>
+                    {cacheStatus ? (cacheStatus.is_valid ? 'Valid / Active' : 'Stale / Rebuilt') : '—'}
                   </span>
                 </div>
                 <div className="cache-metric-card">
                   <span className="metric-label">{t('cacheMetricUpdated' as any) || 'Last Generated'}</span>
                   <span className="metric-value" style={{ fontSize: '0.85rem' }}>
-                    {cacheStats?.last_generated ? new Date(cacheStats.last_generated).toLocaleString() : 'Never'}
+                    {cacheStatus?.last_generated ? new Date(cacheStatus.last_generated).toLocaleString() : 'Never'}
                   </span>
                 </div>
               </div>
@@ -1536,22 +1565,18 @@ export default function SystemSettings({
                 <label className="checkbox-group">
                   <input
                     type="checkbox"
-                    checked={cacheStrategy.static_cache_enabled}
-                    onChange={(e) =>
-                      setCacheStrategy((prev) => ({ ...prev, static_cache_enabled: e.target.checked }))
-                    }
+                    checked={incrementalOnly}
+                    onChange={(e) => setIncrementalOnly(e.target.checked)}
                     disabled={isSavingCacheStrategy || disabled}
                   />
-                  <span>{t('enableStaticCache' as any) || 'Enable High-Performance Static Disk Cache (media_cache.json)'}</span>
+                  <span>{t('enableStaticCache' as any) || 'Incremental update only (scan modified files)'}</span>
                 </label>
 
                 <label className="checkbox-group">
                   <input
                     type="checkbox"
-                    checked={cacheStrategy.daily_recache_enabled}
-                    onChange={(e) =>
-                      setCacheStrategy((prev) => ({ ...prev, daily_recache_enabled: e.target.checked }))
-                    }
+                    checked={dailyAutomationEnabled}
+                    onChange={(e) => setDailyAutomationEnabled(e.target.checked)}
                     disabled={isSavingCacheStrategy || disabled}
                   />
                   <span>{t('enableDailyAutomation' as any) || 'Enable Daily Automated Background Recaching'}</span>
@@ -1559,26 +1584,16 @@ export default function SystemSettings({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
                   <label style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    {t('dailyAutomationHour' as any) || 'Execution Time (UTC):'}
+                    {t('dailyAutomationHour' as any) || 'Execution Time:'}
                   </label>
-                  <select
+                  <input
+                    type="time"
                     className="input-control"
-                    value={cacheStrategy.daily_recache_hour_utc}
-                    onChange={(e) =>
-                      setCacheStrategy((prev) => ({
-                        ...prev,
-                        daily_recache_hour_utc: parseInt(e.target.value, 10),
-                      }))
-                    }
-                    disabled={!cacheStrategy.daily_recache_enabled || isSavingCacheStrategy || disabled}
-                    style={{ width: '120px' }}
-                  >
-                    {Array.from({ length: 24 }).map((_, h) => (
-                      <option key={h} value={h}>
-                        {String(h).padStart(2, '0')}:00 UTC
-                      </option>
-                    ))}
-                  </select>
+                    value={dailyScheduleTime}
+                    onChange={(e) => setDailyScheduleTime(e.target.value)}
+                    disabled={!dailyAutomationEnabled || isSavingCacheStrategy || disabled}
+                    style={{ width: '130px' }}
+                  />
                 </div>
 
                 <div style={{ marginTop: '0.5rem' }}>
