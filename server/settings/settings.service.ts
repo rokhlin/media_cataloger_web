@@ -491,9 +491,49 @@ export class SettingsService {
     const cleanId = modelId.trim();
     this.logger.log(`Attempting to load model into LM Studio: ${cleanId}`);
 
-    // 1. Try lms load CLI
+    // 1. Delegate to Python AI engine if reachable (so it coordinates active tasks and idle drain)
     try {
-      const { stdout } = await execAsync(`lms load "${cleanId}" -y`, { timeout: 30000 });
+      const pythonApiUrl = this.config.catalogerApiUrl.replace(/\/+$/, '');
+      const res = await fetch(`${pythonApiUrl}/api/models/local/load`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_id: cleanId }),
+        signal: AbortSignal.timeout(65000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, message: data.message || `Successfully loaded model ${cleanId}` };
+      }
+    } catch (delegationErr: any) {
+      this.logger.debug(`Direct Python AI engine model switch skipped/failed: ${delegationErr.message}, falling back to local CLI/API`);
+    }
+
+    // 2. Direct LM Studio CLI check and load
+    try {
+      // Check if already loaded
+      const { stdout: psOut } = await execAsync('lms ps --json', { timeout: 5000 });
+      if (psOut.trim()) {
+        const psParsed = JSON.parse(psOut);
+        const isAlreadyLoaded = psParsed.some((p: any) => {
+          const key = (p.modelKey || p.identifier || p.id || '').toLowerCase();
+          return key === cleanId.toLowerCase() || key.includes(cleanId.toLowerCase()) || cleanId.toLowerCase().includes(key);
+        });
+        if (isAlreadyLoaded) {
+          const msg = `Model "${cleanId}" is already loaded in LM Studio memory. Reusing active instance.`;
+          this.logger.log(msg);
+          return { success: true, message: msg };
+        }
+      }
+
+      // Unload all previous models first to avoid OOM
+      this.logger.log(`Unloading previous models from LM Studio before loading ${cleanId}...`);
+      try {
+        await execAsync('lms unload -a', { timeout: 30000 });
+      } catch (unloadErr: any) {
+        this.logger.warn(`lms unload -a warning: ${unloadErr.message}`);
+      }
+
+      const { stdout } = await execAsync(`lms load "${cleanId}" -y`, { timeout: 60000 });
       this.logger.log(`lms load output for ${cleanId}: ${stdout.trim()}`);
       return {
         success: true,
@@ -503,7 +543,7 @@ export class SettingsService {
       this.logger.warn(`lms load CLI failed: ${cliErr.message}, attempting API fallback`);
     }
 
-    // 2. Try LM Studio HTTP API
+    // 3. Try LM Studio HTTP API fallback
     try {
       const baseUrl = this.config.localApiBase.replace(/\/+$/, '');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -514,7 +554,7 @@ export class SettingsService {
         method: 'POST',
         headers,
         body: JSON.stringify({ model: cleanId }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
       if (res.ok) {
         return { success: true, message: `Loaded model ${cleanId} via LM Studio API.` };
