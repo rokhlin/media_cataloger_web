@@ -9,6 +9,17 @@ export interface NormalizePathOptions {
   fallbackType?: 'input' | 'output';
 }
 
+export const DEFAULT_VISION_PROMPT_TEMPLATE =
+  'Perform a detailed semantic analysis of the {media_type}.\n' +
+  'Determine the environment type (indoor/outdoor/unknown), lighting characteristics, weather (if outdoor), and time of day.\n' +
+  'Perform OCR text recognition on any signs or visible text if present.\n' +
+  'Classify high-level content_type (documents, social, nature, animals, screenshots, family, other) and generate rich semantic tags matching the requested tag format.\n' +
+  'Fill all main schema fields in English, and provide full Russian translations in the corresponding *_ru fields ' +
+  'so that the output JSON supports searching in both English and Russian.\n\n' +
+  '{context}\n\n' +
+  '{people}\n\n' +
+  '{tag_instructions}';
+
 export function toContainerPath(p: string, fallbackType: 'input' | 'output' = 'input'): string {
   const base = fallbackType === 'output' ? '/app/media_output' : '/app/media_input';
   if (!p) return base;
@@ -506,6 +517,16 @@ export class AppConfigService {
     return '';
   }
 
+  get visionPromptTemplate(): string {
+    const saved = this.getSavedSettings();
+    return (
+      saved.VISION_PROMPT_TEMPLATE ||
+      saved.vision_prompt_template ||
+      process.env.VISION_PROMPT_TEMPLATE ||
+      DEFAULT_VISION_PROMPT_TEMPLATE
+    );
+  }
+
   /**
    * Export the active execution configuration to pass to the BE pipeline worker.
    * UI is the single source of truth for all runtime settings and output paths.
@@ -522,6 +543,7 @@ export class AppConfigService {
       local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),
       whisper_model: saved.WHISPER_MODEL || process.env.WHISPER_MODEL || 'large-v3-turbo',
       preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
+      vision_prompt_template: this.visionPromptTemplate,
       ui_base_url: process.env.UI_PUBLIC_URL || `http://localhost:${this.port}`,
     };
   }

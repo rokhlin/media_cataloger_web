@@ -40,7 +40,7 @@ export class GeminiController {
   @ApiOperation({ summary: 'Perform direct Gemini semantic analysis on a single photo' })
   async analyzePhoto(
     @Query('file') file?: string,
-    @Body() body?: { file?: string; exif_data?: any; target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed' }
+    @Body() body?: { file?: string; exif_data?: any; target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed'; custom_prompt?: string; vision_prompt_template?: string; faces_data?: any[] }
   ) {
     const targetFile = file || body?.file;
     if (!targetFile || !String(targetFile).trim()) {
@@ -52,7 +52,9 @@ export class GeminiController {
         String(targetFile).trim(),
         body?.exif_data,
         body?.target_tags,
-        body?.tag_format || 'categorized'
+        body?.tag_format || 'categorized',
+        body?.custom_prompt || body?.vision_prompt_template,
+        body?.faces_data
       );
     } catch (err: any) {
       throw new HttpException(`Gemini photo analysis failed: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -64,7 +66,7 @@ export class GeminiController {
   @ApiOperation({ summary: 'Perform direct Gemini semantic analysis on a video file' })
   async analyzeVideo(
     @Query('file') file?: string,
-    @Body() body?: { file?: string; transcription?: string; transcription_ru?: string; target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed' }
+    @Body() body?: { file?: string; transcription?: string; transcription_ru?: string; target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed'; custom_prompt?: string; vision_prompt_template?: string; faces_data?: any }
   ) {
     const targetFile = file || body?.file;
     if (!targetFile || !String(targetFile).trim()) {
@@ -77,7 +79,9 @@ export class GeminiController {
         body?.transcription,
         body?.transcription_ru,
         body?.target_tags,
-        body?.tag_format || 'categorized'
+        body?.tag_format || 'categorized',
+        body?.custom_prompt || body?.vision_prompt_template,
+        body?.faces_data
       );
     } catch (err: any) {
       throw new HttpException(`Gemini video analysis failed: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);

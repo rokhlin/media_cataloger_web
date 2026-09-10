@@ -6,7 +6,7 @@ import * as os from 'os';
 import sharp from 'sharp';
 import { GeminiRateLimiter } from '../gemini.rate-limiter.js';
 import { normalizeTags } from '../gemini.types.js';
-import { GeminiService } from '../gemini.service.js';
+import { GeminiService, buildVisionPrompt, formatPeoplePromptSection } from '../gemini.service.js';
 import { AppConfigService } from '../../config/config.service.js';
 import { DatabaseService } from '../../database/database.service.js';
 
@@ -240,6 +240,80 @@ describe('Gemini Integration on Web Backend', () => {
       assert.ok(metaRow, 'Metadata row must be stored in SQLite');
       assert.strictEqual(metaRow.summary, 'A sunny beach scene');
       assert.strictEqual(metaRow.summary_ru, 'Солнечный пляж');
+    });
+
+    it('should correctly interpolate placeholders in buildVisionPrompt', () => {
+      const template = 'Examine {media_type}.\n\nContext:\n{context}\n\nPeople:\n{people}\n\nTags:\n{tag_instructions}';
+      const compiled = buildVisionPrompt(
+        'photo',
+        'ISO 100, F2.8',
+        'Alice and Bob',
+        'Assign confidence 0.0-1.0',
+        template
+      );
+
+      assert.ok(compiled.includes('Examine photo.'));
+      assert.ok(compiled.includes('Context:\nISO 100, F2.8'));
+      assert.ok(compiled.includes('People:\nAlice and Bob'));
+      assert.ok(compiled.includes('Tags:\nAssign confidence 0.0-1.0'));
+
+      // Test graceful fallback when placeholders are omitted
+      const fallbackTemplate = 'Custom user prompt without placeholders.';
+      const fallbackCompiled = buildVisionPrompt(
+        'photo',
+        'ISO 100, F2.8',
+        'Alice',
+        'Tag format: flat',
+        fallbackTemplate
+      );
+      assert.ok(fallbackCompiled.startsWith('Custom user prompt without placeholders.'));
+      assert.ok(fallbackCompiled.includes('ISO 100, F2.8'));
+      assert.ok(fallbackCompiled.includes('Alice'));
+      assert.ok(fallbackCompiled.includes('Tag format: flat'));
+    });
+
+    it('should use configured visionPromptTemplate during analyzePhoto', async () => {
+      const customTemplate = 'Custom template analyzing {media_type}: {context}\n{people}\n{tag_instructions}';
+      Object.defineProperty(configService, 'visionPromptTemplate', {
+        value: customTemplate,
+        configurable: true,
+      });
+
+      let capturedPrompt = '';
+      const mockClient = {
+        models: {
+          generateContent: async (req: any) => {
+            capturedPrompt = req.contents.find((c: any) => typeof c === 'string');
+            return {
+              text: JSON.stringify({
+                summary: 'Custom analyzed',
+                summary_ru: 'Кастомный анализ',
+                description: 'Desc',
+                description_ru: 'Описание',
+                environment: 'indoor',
+                lighting: 'natural',
+                weather: 'unknown',
+                time_of_day: 'day',
+                content_type: 'other',
+                tags: [],
+              }),
+            };
+          },
+        },
+      };
+
+      const customService = new GeminiService(configService, dbService);
+      (customService as any).client = mockClient;
+      (customService as any).currentApiKey = 'test-api-key-12345';
+
+      await customService.analyzePhoto(testImagePath, { camera: 'Nikon' });
+
+      assert.ok(capturedPrompt.includes('Custom template analyzing photo: EXIF metadata for this shot:'));
+      assert.ok(capturedPrompt.includes('Nikon'));
+
+      // Verify getPipelineExecutionConfig includes vision_prompt_template
+      const execConfig = configService.getPipelineExecutionConfig();
+      assert.strictEqual(execConfig.vision_prompt_template, customTemplate);
     });
   });
 });

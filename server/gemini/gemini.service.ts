@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
-import { AppConfigService } from '../config/config.service.js';
+import { AppConfigService, DEFAULT_VISION_PROMPT_TEMPLATE } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { LogBufferService } from '../logging/log-buffer.service.js';
 import { GeminiRateLimiter } from './gemini.rate-limiter.js';
@@ -18,6 +18,135 @@ import {
   normalizeTags,
 } from './gemini.types.js';
 import { sanitizeErrorString } from '../config/encryption.util.js';
+
+export function formatPeoplePromptSection(
+  facesData: any,
+  isVideo: boolean = false
+): string {
+  if (!facesData) return '';
+  if (!isVideo) {
+    if (!Array.isArray(facesData)) return '';
+    const namedFaces: Array<{ name: string; bbox?: any }> = [];
+    for (const f of facesData) {
+      if (!f || typeof f !== 'object') continue;
+      const name = (f.name || '').trim();
+      const faceId = (f.face_id || '').trim();
+      if (
+        name &&
+        !['unknown', 'unnamed'].includes(name.toLowerCase()) &&
+        !name.toLowerCase().startsWith('face_') &&
+        !name.toLowerCase().startsWith('face-') &&
+        !name.toLowerCase().startsWith('person_')
+      ) {
+        namedFaces.push({ name, bbox: f.bbox });
+      } else if (name && name !== faceId && !faceId.startsWith('manual_') && !faceId.startsWith('face_manual_')) {
+        namedFaces.push({ name, bbox: f.bbox });
+      }
+    }
+    if (namedFaces.length === 0) return '';
+    const peopleLines = namedFaces.map(
+      (item, idx) => `- Person ${idx + 1}: "${item.name}"${item.bbox ? ` (bounding box: ${JSON.stringify(item.bbox)})` : ''}`
+    );
+    return (
+      `Recognized individuals present in this photo:\n${peopleLines.join('\n')}\n\n` +
+      'MANDATORY INSTRUCTIONS FOR RECOGNIZED PEOPLE:\n' +
+      "1. You MUST explicitly mention each identified person by name in your scene summary ('summary', 'summary_ru') and detailed description ('description', 'description_ru').\n" +
+      '2. Use the bounding boxes provided above only to visually match which individual in the photo is which named person. Do NOT mention raw coordinates or bounding boxes in text.\n' +
+      '3. Describe people naturally by their appearance and activities.\n' +
+      "4. Include each recognized person as a tag with category 'people' and confidence 1.0."
+    );
+  } else {
+    // Video
+    const namedIntervals: Array<{ name: string; intervals?: any[] }> = [];
+    if (typeof facesData === 'object' && !Array.isArray(facesData)) {
+      for (const [fid, info] of Object.entries(facesData as Record<string, any>)) {
+        if (!info || typeof info !== 'object') continue;
+        const name = (info.name || '').trim();
+        if (
+          name &&
+          !['unknown', 'unnamed'].includes(name.toLowerCase()) &&
+          !name.toLowerCase().startsWith('face_') &&
+          !name.toLowerCase().startsWith('person_')
+        ) {
+          namedIntervals.push({ name, intervals: info.intervals || [] });
+        }
+      }
+    } else if (Array.isArray(facesData)) {
+      for (const item of facesData) {
+        if (!item || typeof item !== 'object') continue;
+        const name = (item.name || '').trim();
+        if (
+          name &&
+          !['unknown', 'unnamed'].includes(name.toLowerCase()) &&
+          !name.toLowerCase().startsWith('face_') &&
+          !name.toLowerCase().startsWith('person_')
+        ) {
+          namedIntervals.push({ name, intervals: item.intervals || item.time_intervals || [] });
+        }
+      }
+    }
+    if (namedIntervals.length === 0) return '';
+    const peopleLines = namedIntervals.map(
+      (item, idx) => `- Person ${idx + 1}: "${item.name}"${item.intervals && item.intervals.length > 0 ? ` (visible during timecodes: ${item.intervals.join(', ')})` : ''}`
+    );
+    return (
+      `Recognized individuals appearing in this video:\n${peopleLines.join('\n')}\n\n` +
+      'MANDATORY INSTRUCTIONS FOR RECOGNIZED PEOPLE:\n' +
+      "1. You MUST explicitly mention each identified person by name in your summary ('summary', 'summary_ru'), description ('description', 'description_ru'), and in timeline_events activity descriptions.\n" +
+      '2. Do NOT output raw tracking IDs or numbers. Describe what each individual is doing naturally.\n' +
+      "3. Include each recognized person as a tag with category 'people' and confidence 1.0."
+    );
+  }
+}
+
+export function buildVisionPrompt(
+  mediaType: 'photo' | 'video',
+  contextStr: string = '',
+  peopleStr: string = '',
+  tagInstructions: string = '',
+  customTemplate?: string | null
+): string {
+  const template =
+    (customTemplate && customTemplate.trim()) || DEFAULT_VISION_PROMPT_TEMPLATE;
+
+  const hasMediaType = template.includes('{media_type}');
+  const hasContext = template.includes('{context}');
+  const hasPeople = template.includes('{people}');
+  const hasTags = template.includes('{tag_instructions}');
+
+  const mediaTypeDesc = mediaType === 'photo' ? 'photo' : 'video file plot';
+
+  let prompt = template;
+  if (hasMediaType) {
+    prompt = prompt.replace(/{media_type}/g, mediaTypeDesc);
+  }
+  if (hasContext) {
+    prompt = prompt.replace(/{context}/g, contextStr.trim());
+  }
+  if (hasPeople) {
+    prompt = prompt.replace(/{people}/g, peopleStr.trim());
+  }
+  if (hasTags) {
+    prompt = prompt.replace(/{tag_instructions}/g, tagInstructions.trim());
+  }
+
+  const extraParts: string[] = [];
+  if (!hasContext && contextStr.trim()) {
+    extraParts.push(contextStr.trim());
+  }
+  if (!hasPeople && peopleStr.trim()) {
+    extraParts.push(peopleStr.trim());
+  }
+  if (!hasTags && tagInstructions.trim()) {
+    extraParts.push(tagInstructions.trim());
+  }
+
+  if (extraParts.length > 0) {
+    prompt = prompt.trim() + '\n\n' + extraParts.join('\n\n');
+  }
+
+  return prompt.replace(/\n{3,}/g, '\n\n').trim();
+}
 
 export interface GeminiValidationResult {
   ok: boolean;
@@ -93,19 +222,21 @@ export class GeminiService {
     exifData?: Record<string, any> | null,
     targetTags?: string[] | null,
     tagFormat: 'categorized' | 'flat' | 'prefixed' = 'categorized',
+    customPrompt?: string | null,
+    facesData?: any[] | null,
   ): Promise<PhotoAnalysis> {
     const client = this.getClient();
     const imageBytes = await this.prepareImageBytes(imagePath);
 
     let exifPromptPart = '';
     if (exifData && Object.keys(exifData).length > 0) {
-      exifPromptPart = `\n\nEXIF metadata for this shot:\n${JSON.stringify(exifData, null, 2)}\n`;
+      exifPromptPart = `EXIF metadata for this shot:\n${JSON.stringify(exifData, null, 2)}`;
     }
 
     let tagInstructions = '';
     if (targetTags && targetTags.length > 0) {
       const targetTagsStr = targetTags.map((t) => `'${t}'`).join(', ');
-      tagInstructions += `\n\nTarget tags criteria to evaluate against: [${targetTagsStr}]. If the photo matches any of these target tags/categories, assign them with appropriate confidence scores (0.0 - 1.0). `;
+      tagInstructions += `Target tags criteria to evaluate against: [${targetTagsStr}]. If the photo matches any of these target tags/categories, assign them with appropriate confidence scores (0.0 - 1.0). `;
     }
 
     if (tagFormat === 'flat') {
@@ -118,17 +249,15 @@ export class GeminiService {
         "Also classify high-level 'content_type' (documents, social, nature, animals, screenshots, family, other).";
     }
 
-    const prompt =
-      'Perform a detailed semantic analysis of the photo. ' +
-      'Determine the environment type (indoor/outdoor/unknown), lighting characteristics, weather (if outdoor), and time of day. ' +
-      'Perform OCR text recognition on any signs or text if present. ' +
-      'Analyze the provided EXIF metadata (camera model, ISO, shutter speed, aperture, capture time, GPS position) ' +
-      'and provide an expert conclusion in exif_analysis. ' +
-      'Classify the image content_type and generate rich semantic tags matching the requested tag format. ' +
-      'Fill all main schema fields in English, and provide full Russian translations in the corresponding *_ru fields ' +
-      'so that the output JSON supports searching in both English and Russian.' +
-      exifPromptPart +
-      tagInstructions;
+    const peopleStr = formatPeoplePromptSection(facesData, false);
+    const templateToUse = customPrompt || this.config.visionPromptTemplate;
+    const prompt = buildVisionPrompt(
+      'photo',
+      exifPromptPart,
+      peopleStr,
+      tagInstructions,
+      templateToUse
+    );
 
     await this.rateLimiter.acquire();
 
@@ -169,6 +298,8 @@ export class GeminiService {
     transcriptionRu?: string | null,
     targetTags?: string[] | null,
     tagFormat: 'categorized' | 'flat' | 'prefixed' = 'categorized',
+    customPrompt?: string | null,
+    facesData?: any | null,
   ): Promise<VideoAnalysis> {
     const client = this.getClient();
     const filename = path.basename(videoPath);
@@ -204,7 +335,7 @@ export class GeminiService {
 
       let transcriptionPrompt = '';
       if (transcription) {
-        transcriptionPrompt = `\n\nWe have already transcribed the speech/audio of this video for you. Transcription (English): ${transcription}\n`;
+        transcriptionPrompt = `We have already transcribed the speech/audio of this video for you. Transcription (English): ${transcription}\n`;
         if (transcriptionRu) {
           transcriptionPrompt += `Transcription (Russian): ${transcriptionRu}\n`;
         }
@@ -216,7 +347,7 @@ export class GeminiService {
       let videoTagInstructions = '';
       if (targetTags && targetTags.length > 0) {
         const targetTagsStr = targetTags.map((t) => `'${t}'`).join(', ');
-        videoTagInstructions += `\n\nTarget tags criteria to evaluate against: [${targetTagsStr}]. If the video matches any of these target tags/categories, assign them with appropriate confidence scores (0.0 - 1.0). `;
+        videoTagInstructions += `Target tags criteria to evaluate against: [${targetTagsStr}]. If the video matches any of these target tags/categories, assign them with appropriate confidence scores (0.0 - 1.0). `;
       }
       if (tagFormat === 'flat') {
         videoTagInstructions += "\nTag format: output concise keywords in 'tag' field, category 'general'.";
@@ -228,16 +359,15 @@ export class GeminiService {
           "Also classify high-level 'content_type' (documents, social, nature, animals, screenshots, family, other).";
       }
 
-      const prompt =
-        'Perform a detailed analysis of the video file plot. ' +
-        'Provide a detailed transcription of speech and key background sounds. ' +
-        'Break the video into logical segments (timeline_events) with exact timecodes (MM:SS format) ' +
-        'and concise activity descriptions. ' +
-        'Classify the video content_type and generate rich semantic tags matching the requested tag format. ' +
-        'Fill all main schema fields in English, and provide full Russian translations in the corresponding *_ru fields ' +
-        'so that the output JSON supports searching in both English and Russian.' +
-        transcriptionPrompt +
-        videoTagInstructions;
+      const peopleStr = formatPeoplePromptSection(facesData, true);
+      const templateToUse = customPrompt || this.config.visionPromptTemplate;
+      const prompt = buildVisionPrompt(
+        'video',
+        transcriptionPrompt,
+        peopleStr,
+        videoTagInstructions,
+        templateToUse
+      );
 
       await this.rateLimiter.acquire();
       const modelName = this.config.geminiModel || 'gemini-3.6-flash';
@@ -323,7 +453,13 @@ export class GeminiService {
    */
   public async analyzeMediaFile(
     resolvedFilePath: string,
-    options?: { target_tags?: string[]; tag_format?: 'categorized' | 'flat' | 'prefixed' }
+    options?: {
+      target_tags?: string[];
+      tag_format?: 'categorized' | 'flat' | 'prefixed';
+      custom_prompt?: string | null;
+      vision_prompt_template?: string | null;
+      faces_data?: any;
+    }
   ): Promise<any> {
     const filename = path.basename(resolvedFilePath);
     const ext = path.extname(resolvedFilePath).toLowerCase();
@@ -360,7 +496,9 @@ export class GeminiService {
         resolvedFilePath,
         exifData,
         options?.target_tags,
-        options?.tag_format || 'categorized'
+        options?.tag_format || 'categorized',
+        options?.custom_prompt || options?.vision_prompt_template,
+        options?.faces_data
       );
     } else {
       analysisResult = await this.analyzeVideo(
@@ -368,7 +506,9 @@ export class GeminiService {
         null,
         null,
         options?.target_tags,
-        options?.tag_format || 'categorized'
+        options?.tag_format || 'categorized',
+        options?.custom_prompt || options?.vision_prompt_template,
+        options?.faces_data
       );
     }
 

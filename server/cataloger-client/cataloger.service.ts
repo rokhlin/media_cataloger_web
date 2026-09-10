@@ -178,7 +178,10 @@ export class CatalogerClientService {
       try {
         this.logger.log(`Executing single file analysis via Backend Gemini service: ${resolvedPath}`);
         this.logBuffer?.info('Pipeline', `Executing analysis using Backend Gemini configuration for '${path.basename(resolvedPath)}'`);
-        const result = await this.geminiService.analyzeMediaFile(resolvedPath, customPayload);
+        const result = await this.geminiService.analyzeMediaFile(resolvedPath, {
+          ...customPayload,
+          vision_prompt_template: customPayload?.vision_prompt_template || execConfig.vision_prompt_template,
+        });
         return {
           status: 'completed',
           message: `Analysis completed for ${path.basename(resolvedPath)} via backend Gemini service`,
@@ -199,6 +202,7 @@ export class CatalogerClientService {
       mtime: mtime,
       output_folder: execConfig.output_folder,
       settings: execConfig,
+      vision_prompt_template: execConfig.vision_prompt_template,
       stream_url: `${execConfig.ui_base_url}/api/media/file?path=${encodeURIComponent(resolvedPath)}`,
       ...(customPayload || {}),
     };
@@ -397,6 +401,7 @@ export class CatalogerClientService {
       target_tags: options?.target_tags,
       tag_format: options?.tag_format || 'categorized',
       output_folder: execConfig.output_folder,
+      vision_prompt_template: execConfig.vision_prompt_template,
       settings: { ...execConfig, ...(options?.settings || {}) },
     };
 

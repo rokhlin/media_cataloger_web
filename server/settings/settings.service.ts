@@ -10,11 +10,8 @@ import { MediaService } from '../media/media.service.js';
 
 const execAsync = promisify(exec);
 
-export const DEFAULT_VISION_PROMPT_TEMPLATE =
-  'Analyze this {media_type} and produce a structured JSON object with tags, description, summary, and categories.\n' +
-  '{context}\n' +
-  '{people}\n' +
-  '{tag_instructions}';
+export { DEFAULT_VISION_PROMPT_TEMPLATE } from '../config/config.service.js';
+import { DEFAULT_VISION_PROMPT_TEMPLATE } from '../config/config.service.js';
 
 export interface DirectoryBrowseResult {
   current_path: string;
@@ -67,7 +64,7 @@ export class SettingsService {
       local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),
       whisper_model: saved.WHISPER_MODEL || process.env.WHISPER_MODEL || 'large-v3-turbo',
       preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
-      vision_prompt_template: saved.VISION_PROMPT_TEMPLATE || process.env.VISION_PROMPT_TEMPLATE || DEFAULT_VISION_PROMPT_TEMPLATE,
+      vision_prompt_template: this.config.visionPromptTemplate,
       default_vision_prompt_template: DEFAULT_VISION_PROMPT_TEMPLATE,
     };
   }
