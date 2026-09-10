@@ -6,7 +6,7 @@ import * as os from 'os';
 import sharp from 'sharp';
 import { GeminiRateLimiter } from '../gemini.rate-limiter.js';
 import { normalizeTags } from '../gemini.types.js';
-import { GeminiService, buildVisionPrompt, formatPeoplePromptSection } from '../gemini.service.js';
+import { GeminiService, buildVisionPrompt } from '../gemini.service.js';
 import { AppConfigService } from '../../config/config.service.js';
 import { DatabaseService } from '../../database/database.service.js';
 

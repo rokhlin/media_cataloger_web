@@ -564,8 +564,6 @@ export default function InputSourcesGallery({
   // Render single media card item with thumbnail miniature and async decoding
   const renderCardItem = (file: GalleryMediaFile) => {
     const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(file.file_path || file.filename)}&size=360`;
-    const isProcessed = file.status === 'PROCESSED';
-    const isPending = file.status === 'PENDING';
 
     const localizedDescription =
       language === 'ru'

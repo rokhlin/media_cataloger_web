@@ -790,8 +790,8 @@ function AppMain() {
           'Pipeline',
           `HTTP ${res.status} on POST /api/analyze-file?file=${encodeURIComponent(file)}\nDiagnosis: Single-file AI cataloging worker failed.\nSuggestion: Check if media_cataloger Python service is active and responsive.`
         );
-        if (onError) {
-          onError(errMsg);
+        if (resolvedOnError) {
+          resolvedOnError(errMsg);
         } else {
           alert(`Analysis Error:\n${errMsg}`);
         }
@@ -800,8 +800,8 @@ function AppMain() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown network error';
       appendConsoleMessage(`Network error during single file analysis: ${message}`, 'ERROR', 'Pipeline');
-      if (onError) {
-        onError(`Network error connecting to backend: ${message}`);
+      if (resolvedOnError) {
+        resolvedOnError(`Network error connecting to backend: ${message}`);
       } else {
         alert(`Network error connecting to server: ${message}`);
       }

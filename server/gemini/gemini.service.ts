@@ -59,7 +59,7 @@ export function formatPeoplePromptSection(
     // Video
     const namedIntervals: Array<{ name: string; intervals?: any[] }> = [];
     if (typeof facesData === 'object' && !Array.isArray(facesData)) {
-      for (const [fid, info] of Object.entries(facesData as Record<string, any>)) {
+      for (const info of Object.values(facesData as Record<string, any>)) {
         if (!info || typeof info !== 'object') continue;
         const name = (info.name || '').trim();
         if (

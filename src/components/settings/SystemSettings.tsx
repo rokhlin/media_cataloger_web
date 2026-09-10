@@ -47,12 +47,6 @@ export default function SystemSettings({
   onSaveSettings,
   isRunning = false,
   isPaused = false,
-  currentTask = null,
-  onStartSync,
-  onPauseSync,
-  onResumeSync,
-  onStopSync,
-  onStartSingleAnalysis,
   pickerPending = false,
   uiSettings = { maxImagesPerRow: 10, maxRows: 1, maxWidth: 1600, galleryMaxRows: 10 },
   onSaveUiSettings,
@@ -95,10 +89,6 @@ export default function SystemSettings({
     mode: 'folder',
     targetType: 'input',
   });
-
-  // Execution tab states
-  const [forceReprocess, setForceReprocess] = useState(false);
-  const [singleFilePath, setSingleFilePath] = useState('');
 
   // Folders reindex & series rescan states
   const [isReindexing, setIsReindexing] = useState(false);
@@ -384,24 +374,12 @@ export default function SystemSettings({
     });
   };
 
-  const handlePickFileClick = () => {
-    setBrowserModal({
-      isOpen: true,
-      title: t('browserTitleFile'),
-      initialPath: singleFilePath || '',
-      mode: 'file',
-      targetType: 'singleFile',
-    });
-  };
-
   const handleBrowserSelect = (selectedPath: string) => {
     if (!selectedPath) return;
     if (browserModal.targetType === 'input' && browserModal.inputIndex !== undefined) {
       handleFolderChange(browserModal.inputIndex, selectedPath);
     } else if (browserModal.targetType === 'output') {
       handleInputChange('output_folder', selectedPath);
-    } else if (browserModal.targetType === 'singleFile') {
-      setSingleFilePath(selectedPath);
     }
   };
 
@@ -499,21 +477,7 @@ export default function SystemSettings({
     }
   };
 
-  const isSyncActive = (isRunning || isPaused) && (!currentTask || currentTask === 'sync');
   const disabled = isRunning || isPaused || pickerPending;
-
-  const handleSyncClick = () => {
-    onStartSync(forceReprocess);
-  };
-
-  const handleAnalyzeClick = () => {
-    const trimmed = singleFilePath.trim();
-    if (!trimmed) {
-      alert(t('alertEnterPath'));
-      return;
-    }
-    onStartSingleAnalysis(trimmed);
-  };
 
   const handleValidateConnection = async () => {
     setValidatingConnection(true);

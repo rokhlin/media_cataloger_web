@@ -28,18 +28,18 @@ describe('Modular Pipeline & Central Hub Integration', () => {
 
     for (const key of requiredKeys) {
       assert.ok(
-        (translations.en as Record<string, string>)[key],
+        (translations.en as unknown as Record<string, string>)[key],
         `Missing English translation for: ${key}`
       );
       assert.ok(
-        (translations.ru as Record<string, string>)[key],
+        (translations.ru as unknown as Record<string, string>)[key],
         `Missing Russian translation for: ${key}`
       );
     }
   });
 
   it('should have distinct descriptions for each modular pipeline capability', () => {
-    const en = translations.en as Record<string, string>;
+    const en = translations.en as unknown as Record<string, string>;
     assert.match(en.moduleAudioDesc, /Speech|transcription/i);
     assert.match(en.moduleFacesDesc, /facial recognition|detection/i);
     assert.match(en.moduleDuplicatesDesc, /phash|clustering|duplicate/i);
@@ -47,7 +47,7 @@ describe('Modular Pipeline & Central Hub Integration', () => {
   });
 
   it('should have Russian translations for all 4 sub-tabs of the Central AI Hub', () => {
-    const ru = translations.ru as Record<string, string>;
+    const ru = translations.ru as unknown as Record<string, string>;
     assert.ok(ru.subTabExecution.includes('Запуск'));
     assert.ok(ru.subTabFaces.includes('Реестр лиц'));
     assert.ok(ru.subTabMetadata.includes('Метаданные файлов'));
@@ -55,8 +55,8 @@ describe('Modular Pipeline & Central Hub Integration', () => {
   });
 
   it('should have duplicate detection rules translations available in English and Russian', () => {
-    const en = translations.en as Record<string, string>;
-    const ru = translations.ru as Record<string, string>;
+    const en = translations.en as unknown as Record<string, string>;
+    const ru = translations.ru as unknown as Record<string, string>;
     assert.ok(en.duplicateDetectionRules, 'EN duplicateDetectionRules exists');
     assert.ok(ru.duplicateDetectionRules, 'RU duplicateDetectionRules exists');
     assert.ok(en.duplicateEngine, 'EN duplicateEngine exists');
