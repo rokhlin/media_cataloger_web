@@ -10,6 +10,12 @@ import { MediaService } from '../media/media.service.js';
 
 const execAsync = promisify(exec);
 
+export const DEFAULT_VISION_PROMPT_TEMPLATE =
+  'Analyze this {media_type} and produce a structured JSON object with tags, description, summary, and categories.\n' +
+  '{context}\n' +
+  '{people}\n' +
+  '{tag_instructions}';
+
 export interface DirectoryBrowseResult {
   current_path: string;
   parent_path: string | null;
@@ -61,6 +67,8 @@ export class SettingsService {
       local_max_workers: saved.LOCAL_MAX_WORKERS ? Number(saved.LOCAL_MAX_WORKERS) : Number(process.env.LOCAL_MAX_WORKERS || 2),
       whisper_model: saved.WHISPER_MODEL || process.env.WHISPER_MODEL || 'large-v3-turbo',
       preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
+      vision_prompt_template: saved.VISION_PROMPT_TEMPLATE || process.env.VISION_PROMPT_TEMPLATE || DEFAULT_VISION_PROMPT_TEMPLATE,
+      default_vision_prompt_template: DEFAULT_VISION_PROMPT_TEMPLATE,
     };
   }
 
@@ -95,6 +103,7 @@ export class SettingsService {
     if (dto.local_max_workers !== undefined) additional.LOCAL_MAX_WORKERS = Number(dto.local_max_workers);
     if (dto.whisper_model !== undefined) additional.WHISPER_MODEL = dto.whisper_model;
     if (dto.preserve_structure !== undefined) additional.PRESERVE_STRUCTURE = Boolean(dto.preserve_structure);
+    if (dto.vision_prompt_template !== undefined) additional.VISION_PROMPT_TEMPLATE = dto.vision_prompt_template;
 
     // Identify removed or renamed folders for recalculating cache
     if (dto.input_folders && this.mediaService) {

@@ -84,6 +84,8 @@ export interface DetectedFaceRecord {
   confidence?: number;
   is_reference?: boolean | number;
   source_file?: string;
+  bbox?: [number, number, number, number] | number[] | null;
+  bounding_box?: [number, number, number, number] | number[] | null;
 }
 
 export interface AssignmentConfig {

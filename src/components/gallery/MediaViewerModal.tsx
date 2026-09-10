@@ -107,6 +107,8 @@ export default function MediaViewerModal({
     };
   });
   const [facesForSelected, setFacesForSelected] = useState<DetectedFaceRecord[]>([]);
+  const [selectedFaceId, setSelectedFaceId] = useState<string | null>(null);
+  const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number } | null>(null);
   const [loadingFaces, setLoadingFaces] = useState(false);
   const [engineOnline, setEngineOnline] = useState<boolean>(isEngineConnected);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -133,6 +135,8 @@ export default function MediaViewerModal({
   const [videoPlaybackError, setVideoPlaybackError] = useState(false);
   useEffect(() => {
     setVideoPlaybackError(false);
+    setSelectedFaceId(null);
+    setImageNaturalDimensions(null);
   }, [selectedMedia?.file_path, selectedMedia?.filename]);
 
   // Derived effective group files for the carousel
@@ -764,21 +768,117 @@ export default function MediaViewerModal({
                   </div>
                 ) : (
                   <>
-                    <img
-                      src={
-                        /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
-                          ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
-                          : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
-                      }
-                      alt={selectedMedia.filename}
-                      className="media-lightbox-image"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const fallback = target.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = 'flex';
+                    <div
+                      className="media-lightbox-image-wrapper"
+                      style={{
+                        position: 'relative',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        maxWidth: '100%',
+                        maxHeight: '100%',
                       }}
-                    />
+                    >
+                      <img
+                        src={
+                          /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
+                            ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
+                            : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
+                        }
+                        alt={selectedMedia.filename}
+                        className="media-lightbox-image"
+                        onLoad={(e) => {
+                          const target = e.currentTarget;
+                          setImageNaturalDimensions({
+                            width: target.naturalWidth,
+                            height: target.naturalHeight,
+                          });
+                        }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.closest('.media-preview-content')?.querySelector('.media-lightbox-fallback') as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+
+                      {/* Green semi-transparent highlight rectangle for selected face/person */}
+                      {(() => {
+                        if (!selectedFaceId || !imageNaturalDimensions || !imageNaturalDimensions.width || !imageNaturalDimensions.height) {
+                          return null;
+                        }
+                        const face = facesForSelected.find((f) => f.face_id === selectedFaceId);
+                        if (!face) return null;
+                        const rawBbox = face.bbox || (face as any).bounding_box;
+                        let bbox: number[] | null = null;
+                        if (Array.isArray(rawBbox)) {
+                          bbox = rawBbox;
+                        } else if (typeof rawBbox === 'string') {
+                          try {
+                            bbox = JSON.parse(rawBbox);
+                          } catch {
+                            bbox = null;
+                          }
+                        }
+                        if (!bbox || bbox.length < 4) return null;
+
+                        const [x1, y1, x2, y2] = bbox;
+                        const nw = imageNaturalDimensions.width;
+                        const nh = imageNaturalDimensions.height;
+                        const leftPct = Math.max(0, Math.min(100, (x1 / nw) * 100));
+                        const topPct = Math.max(0, Math.min(100, (y1 / nh) * 100));
+                        const widthPct = Math.max(0, Math.min(100 - leftPct, ((x2 - x1) / nw) * 100));
+                        const heightPct = Math.max(0, Math.min(100 - topPct, ((y2 - y1) / nh) * 100));
+
+                        return (
+                          <div
+                            className="face-highlight-rect"
+                            style={{
+                              position: 'absolute',
+                              left: `${leftPct}%`,
+                              top: `${topPct}%`,
+                              width: `${widthPct}%`,
+                              height: `${heightPct}%`,
+                              backgroundColor: 'rgba(34, 197, 94, 0.25)',
+                              border: '2px solid #22c55e',
+                              borderRadius: '4px',
+                              boxShadow: '0 0 14px rgba(34, 197, 94, 0.6), inset 0 0 8px rgba(34, 197, 94, 0.2)',
+                              pointerEvents: 'none',
+                              zIndex: 10,
+                              transition: 'all 0.15s ease-out',
+                            }}
+                          >
+                            <div
+                              className="face-highlight-label"
+                              style={{
+                                position: 'absolute',
+                                bottom: '100%',
+                                left: '0',
+                                marginBottom: '4px',
+                                background: 'rgba(20, 83, 45, 0.95)',
+                                border: '1px solid #22c55e',
+                                color: '#f0fdf4',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                              }}
+                            >
+                              <span>{face.name || face.face_id}</span>
+                              <span style={{ opacity: 0.85, fontSize: '0.68rem', fontFamily: 'monospace' }}>
+                                [{x1}, {y1}, {x2}, {y2}]
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
                     <div className="media-lightbox-fallback">
                       <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
                       <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -1431,9 +1531,30 @@ export default function MediaViewerModal({
                             : null)
                         : null;
                       const isEditing = reassigningFaceId === f.face_id;
+                      const isSelected = selectedFaceId === f.face_id;
+                      const rawBbox = f.bbox || (f as any).bounding_box;
+                      let bbox: number[] | null = null;
+                      if (Array.isArray(rawBbox)) {
+                        bbox = rawBbox;
+                      } else if (typeof rawBbox === 'string') {
+                        try {
+                          bbox = JSON.parse(rawBbox);
+                        } catch {
+                          bbox = null;
+                        }
+                      }
 
                       return (
-                        <div className="lightbox-face-item" key={f.face_id}>
+                        <div
+                          className={`lightbox-face-item ${isSelected ? 'selected-face' : ''}`}
+                          key={f.face_id}
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('button, input, select, a')) return;
+                            setSelectedFaceId((prev) => (prev === f.face_id ? null : f.face_id));
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title={bbox ? `Click to highlight face [${bbox.join(', ')}] on photo` : 'Click to select face'}
+                        >
                           {cropUrl ? (
                             <img
                               src={cropUrl}
@@ -1518,6 +1639,39 @@ export default function MediaViewerModal({
                                     </span>
                                   )}
                                 </div>
+                                {bbox && bbox.length >= 4 && (
+                                  <div
+                                    className="lightbox-face-coords"
+                                    style={{
+                                      fontSize: '0.72rem',
+                                      color: isSelected ? '#4ade80' : 'var(--text-muted)',
+                                      marginTop: '0.2rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem',
+                                      fontFamily: 'monospace',
+                                      flexWrap: 'wrap',
+                                    }}
+                                  >
+                                    <span>📐 {t('faceCoordinates' as any) || 'Coordinates'}: [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]</span>
+                                    {isSelected && (
+                                      <span
+                                        style={{
+                                          background: 'rgba(34, 197, 94, 0.2)',
+                                          border: '1px solid #22c55e',
+                                          color: '#22c55e',
+                                          fontSize: '0.65rem',
+                                          padding: '1px 5px',
+                                          borderRadius: '4px',
+                                          fontFamily: 'sans-serif',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        ● {t('highlightFace' as any) || 'Highlighted'}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                                 {!isEditing && (() => {
                                   const matchedPerson = f.name ? persons.find((p) => p.name.toLowerCase() === f.name?.toLowerCase()) : null;
                                   return (

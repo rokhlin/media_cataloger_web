@@ -21,6 +21,8 @@ export interface SettingsData {
   db_path?: string;
   target_tags?: string[];
   tag_format?: 'categorized' | 'flat' | 'prefixed';
+  vision_prompt_template?: string;
+  default_vision_prompt_template?: string;
   [key: string]: unknown;
 }
 

@@ -43,6 +43,8 @@ export default function AdminGeminiTab() {
   const [customModelName, setCustomModelName] = useState('');
   const [rpmLimit, setRpmLimit] = useState(15);
   const [maxWorkers, setMaxWorkers] = useState(3);
+  const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
+  const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
 
   // Status & Validation state
   const [status, setStatus] = useState<GeminiStatusResponse | null>(null);
@@ -91,6 +93,8 @@ export default function AdminGeminiTab() {
 
         setRpmLimit(data.rpm_limit ? Number(data.rpm_limit) : 15);
         setMaxWorkers(data.gemini_max_workers ? Number(data.gemini_max_workers) : 3);
+        setVisionPromptTemplate(data.vision_prompt_template || '');
+        setDefaultVisionPromptTemplate(data.default_vision_prompt_template || '');
       }
 
       // 2. Fetch Gemini integration status
@@ -180,6 +184,7 @@ export default function AdminGeminiTab() {
         gemini_model: effectiveModelName,
         rpm_limit: Number(rpmLimit),
         gemini_max_workers: Number(maxWorkers),
+        vision_prompt_template: visionPromptTemplate,
       };
 
       if (apiKeyInput.trim() && !apiKeyInput.includes('••••')) {
@@ -577,6 +582,120 @@ export default function AdminGeminiTab() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Vision Prompt Template Section */}
+      <div
+        className="admin-card"
+        style={{
+          background: 'rgba(30, 41, 59, 0.45)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '12px',
+          padding: '1.25rem',
+          marginTop: '1rem',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h4 style={{ margin: '0 0 0.2rem 0', fontSize: '1rem', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📝</span> {t('visionPromptTemplateLabel' as any) || 'Vision Prompt Template'}
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
+              {t('visionPromptTemplateDesc' as any) || 'Customize prompt template used for Gemini / Vision model analysis.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+            onClick={() => setVisionPromptTemplate(defaultVisionPromptTemplate)}
+            title="Reset to system default template"
+          >
+            {t('btnResetPromptTemplate' as any) || '↺ Reset to Default'}
+          </button>
+        </div>
+
+        {/* Placeholders Cheat Sheet */}
+        <div
+          style={{
+            background: 'rgba(0, 0, 0, 0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '8px',
+            padding: '0.65rem 0.85rem',
+            marginBottom: '0.75rem',
+            fontSize: '0.82rem',
+          }}
+        >
+          <span style={{ fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: '0.4rem' }}>
+            💡 {t('placeholdersCheatSheet' as any) || 'Available Dynamic Placeholders'}:
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span
+              className="badge-pill"
+              style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#818cf8' }}
+              onClick={() => {
+                if (!visionPromptTemplate.includes('{media_type}')) {
+                  setVisionPromptTemplate((prev) => prev + '\n{media_type}');
+                }
+              }}
+              title={t('placeholderMediaTypeDesc' as any) || 'Type of media: "photo" or "video"'}
+            >
+              {'{media_type}'} — {t('placeholderMediaTypeDesc' as any) || '"photo" / "video"'}
+            </span>
+            <span
+              className="badge-pill"
+              style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.4)', color: '#4ade80' }}
+              onClick={() => {
+                if (!visionPromptTemplate.includes('{people}')) {
+                  setVisionPromptTemplate((prev) => prev + '\n{people}');
+                }
+              }}
+              title={t('placeholderPeopleDesc' as any) || 'Names and bounding boxes of recognized people [x1, y1, x2, y2]'}
+            >
+              {'{people}'} — {t('placeholderPeopleDesc' as any) || 'Recognized people list'}
+            </span>
+            <span
+              className="badge-pill"
+              style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)', color: '#facc15' }}
+              onClick={() => {
+                if (!visionPromptTemplate.includes('{context}')) {
+                  setVisionPromptTemplate((prev) => prev + '\n{context}');
+                }
+              }}
+              title={t('placeholderContextDesc' as any) || 'Metadata, EXIF, audio transcription context'}
+            >
+              {'{context}'} — {t('placeholderContextDesc' as any) || 'Metadata & EXIF context'}
+            </span>
+            <span
+              className="badge-pill"
+              style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc' }}
+              onClick={() => {
+                if (!visionPromptTemplate.includes('{tag_instructions}')) {
+                  setVisionPromptTemplate((prev) => prev + '\n{tag_instructions}');
+                }
+              }}
+              title={t('placeholderTagInstructionsDesc' as any) || 'Tag formatting rules and category taxonomy instructions'}
+            >
+              {'{tag_instructions}'} — {t('placeholderTagInstructionsDesc' as any) || 'Tag instructions'}
+            </span>
+          </div>
+        </div>
+
+        <textarea
+          className="input-control"
+          rows={6}
+          style={{
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            fontSize: '0.85rem',
+            lineHeight: '1.45',
+            width: '100%',
+            boxSizing: 'border-box',
+            resize: 'vertical',
+          }}
+          value={visionPromptTemplate}
+          onChange={(e) => setVisionPromptTemplate(e.target.value)}
+          placeholder="Enter vision prompt template..."
+        />
       </div>
 
       {/* Save Actions Bar */}

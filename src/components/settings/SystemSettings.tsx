@@ -304,6 +304,8 @@ export default function SystemSettings({
         local_max_workers: settings.local_max_workers || 2,
         whisper_model: settings.whisper_model || 'large-v3-turbo',
         preserve_structure: settings.preserve_structure !== undefined ? settings.preserve_structure : true,
+        vision_prompt_template: settings.vision_prompt_template || '',
+        default_vision_prompt_template: settings.default_vision_prompt_template || '',
       });
     }
   }, [settings]);
@@ -1025,6 +1027,117 @@ export default function SystemSettings({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Vision Prompt Template Section */}
+            <div className="form-group" style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '1.05rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>
+                    📝 {t('visionPromptTemplateLabel' as any) || 'Vision Prompt Template'}
+                  </label>
+                  <p className="description" style={{ margin: 0, fontSize: '0.85rem' }}>
+                    {t('visionPromptTemplateDesc' as any) || 'Customize prompt template used for AI photo/video analysis.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+                  onClick={() => {
+                    handleInputChange('vision_prompt_template', formData.default_vision_prompt_template || '');
+                  }}
+                  title="Reset prompt template to system default"
+                >
+                  {t('btnResetPromptTemplate' as any) || '↺ Reset to Default'}
+                </button>
+              </div>
+
+              {/* Placeholders Cheat Sheet */}
+              <div
+                style={{
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '0.65rem 0.85rem',
+                  marginBottom: '0.75rem',
+                  fontSize: '0.82rem',
+                }}
+              >
+                <span style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                  💡 {t('placeholdersCheatSheet' as any) || 'Available Dynamic Placeholders'}:
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <span
+                    className="badge-pill"
+                    style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#818cf8' }}
+                    onClick={() => {
+                      const current = formData.vision_prompt_template || '';
+                      if (!current.includes('{media_type}')) {
+                        handleInputChange('vision_prompt_template', current + '\n{media_type}');
+                      }
+                    }}
+                    title={t('placeholderMediaTypeDesc' as any) || 'Type of media: "photo" or "video"'}
+                  >
+                    {'{media_type}'} — {t('placeholderMediaTypeDesc' as any) || '"photo" / "video"'}
+                  </span>
+                  <span
+                    className="badge-pill"
+                    style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.4)', color: '#4ade80' }}
+                    onClick={() => {
+                      const current = formData.vision_prompt_template || '';
+                      if (!current.includes('{people}')) {
+                        handleInputChange('vision_prompt_template', current + '\n{people}');
+                      }
+                    }}
+                    title={t('placeholderPeopleDesc' as any) || 'Names and bounding boxes of recognized people [x1, y1, x2, y2]'}
+                  >
+                    {'{people}'} — {t('placeholderPeopleDesc' as any) || 'Recognized people list'}
+                  </span>
+                  <span
+                    className="badge-pill"
+                    style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)', color: '#facc15' }}
+                    onClick={() => {
+                      const current = formData.vision_prompt_template || '';
+                      if (!current.includes('{context}')) {
+                        handleInputChange('vision_prompt_template', current + '\n{context}');
+                      }
+                    }}
+                    title={t('placeholderContextDesc' as any) || 'Metadata, EXIF, audio transcription context'}
+                  >
+                    {'{context}'} — {t('placeholderContextDesc' as any) || 'Metadata & EXIF context'}
+                  </span>
+                  <span
+                    className="badge-pill"
+                    style={{ cursor: 'pointer', fontFamily: 'monospace', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc' }}
+                    onClick={() => {
+                      const current = formData.vision_prompt_template || '';
+                      if (!current.includes('{tag_instructions}')) {
+                        handleInputChange('vision_prompt_template', current + '\n{tag_instructions}');
+                      }
+                    }}
+                    title={t('placeholderTagInstructionsDesc' as any) || 'Tag formatting rules and category taxonomy instructions'}
+                  >
+                    {'{tag_instructions}'} — {t('placeholderTagInstructionsDesc' as any) || 'Tag instructions'}
+                  </span>
+                </div>
+              </div>
+
+              <textarea
+                className="input-control"
+                rows={6}
+                style={{
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: '0.85rem',
+                  lineHeight: '1.45',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  resize: 'vertical',
+                }}
+                value={formData.vision_prompt_template || ''}
+                onChange={(e) => handleInputChange('vision_prompt_template', e.target.value)}
+                placeholder="Enter vision prompt template..."
+              />
             </div>
           </div>
         )}

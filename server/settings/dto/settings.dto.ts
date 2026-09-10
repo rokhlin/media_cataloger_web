@@ -61,4 +61,9 @@ export class SettingsUpdateRequestDto {
   @IsOptional()
   @IsBoolean()
   preserve_structure?: boolean;
+
+  @ApiPropertyOptional({ description: 'Vision prompt template with placeholders' })
+  @IsOptional()
+  @IsString()
+  vision_prompt_template?: string;
 }

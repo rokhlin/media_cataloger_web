@@ -157,6 +157,8 @@ export interface LightboxTranslations {
   detectedFaces: string;
   loadingFaces: string;
   noFacesIndexed: string;
+  faceCoordinates?: string;
+  highlightFace?: string;
   btnAnalyzeFile: string;
   aiEngineOfflineTooltip: string;
   aiEngineErrorTitle: string;
@@ -322,6 +324,14 @@ export interface SettingsTranslations {
   localModelName: string;
   whisperModel: string;
   preserveStructure: string;
+  visionPromptTemplateLabel?: string;
+  visionPromptTemplateDesc?: string;
+  btnResetPromptTemplate?: string;
+  placeholdersCheatSheet?: string;
+  placeholderMediaTypeDesc?: string;
+  placeholderPeopleDesc?: string;
+  placeholderContextDesc?: string;
+  placeholderTagInstructionsDesc?: string;
   languageSetting: string;
   languageSettingDesc: string;
   themeSetting: string;

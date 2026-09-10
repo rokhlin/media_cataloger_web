@@ -1014,6 +1014,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
             result[src] = [];
           }
           if (!result[src].some((x: any) => x.face_id === r.face_id)) {
+            if (typeof r.bbox === 'string') {
+              try {
+                r.bbox = JSON.parse(r.bbox);
+              } catch {
+                // ignore
+              }
+            }
             result[src].push(r);
           }
         }
@@ -1075,6 +1082,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         const unique = new Map<string, any>();
         for (const r of rows) {
           if (r.face_id && !unique.has(r.face_id)) {
+            if (typeof r.bbox === 'string') {
+              try {
+                r.bbox = JSON.parse(r.bbox);
+              } catch {
+                // ignore
+              }
+            }
             unique.set(r.face_id, r);
           }
         }

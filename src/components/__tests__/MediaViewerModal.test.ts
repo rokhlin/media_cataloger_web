@@ -112,5 +112,46 @@ describe('MediaViewerModal & Theme Adaptability', () => {
     assert.ok(content.includes('ms.description'), 'MediaViewerModal must render fact descriptions if present');
     assert.ok(content.includes('ms.location'), 'MediaViewerModal must render fact locations if present');
   });
+
+  it('should verify interactive face selection and green bounding box highlight on photo', () => {
+    const modalPath = path.resolve('src/components/gallery/MediaViewerModal.tsx');
+    const cssPath = path.resolve('src/components/gallery/MediaViewerModal.css');
+    const content = fs.readFileSync(modalPath, 'utf8');
+    const css = fs.readFileSync(cssPath, 'utf8');
+
+    assert.ok(content.includes('selectedFaceId'), 'MediaViewerModal must track selectedFaceId state');
+    assert.ok(content.includes('imageNaturalDimensions'), 'MediaViewerModal must track imageNaturalDimensions');
+    assert.ok(content.includes('face-highlight-rect'), 'MediaViewerModal must render face-highlight-rect element');
+    assert.ok(content.includes('rgba(34, 197, 94, 0.25)'), 'MediaViewerModal must highlight with green semi-transparent rectangle');
+    assert.ok(content.includes('#22c55e'), 'MediaViewerModal must have #22c55e green border');
+    assert.ok(content.includes('lightbox-face-coords'), 'MediaViewerModal must display coordinates in face item');
+    assert.ok(content.includes('faceCoordinates'), 'MediaViewerModal must use faceCoordinates translation');
+
+    assert.ok(css.includes('.face-highlight-rect'), 'MediaViewerModal.css must define .face-highlight-rect');
+    assert.ok(css.includes('.selected-face'), 'MediaViewerModal.css must define .selected-face');
+  });
+
+  it('should verify vision prompt template settings support in server and client', () => {
+    const dtoPath = path.resolve('server/settings/dto/settings.dto.ts');
+    const servicePath = path.resolve('server/settings/settings.service.ts');
+    const settingsUiPath = path.resolve('src/components/settings/SystemSettings.tsx');
+    const adminTabPath = path.resolve('src/components/admin/AdminGeminiTab.tsx');
+
+    const dto = fs.readFileSync(dtoPath, 'utf8');
+    const srv = fs.readFileSync(servicePath, 'utf8');
+    const ui = fs.readFileSync(settingsUiPath, 'utf8');
+    const admin = fs.readFileSync(adminTabPath, 'utf8');
+
+    assert.ok(dto.includes('vision_prompt_template?: string;'), 'settings.dto.ts must declare vision_prompt_template');
+    assert.ok(srv.includes('DEFAULT_VISION_PROMPT_TEMPLATE'), 'settings.service.ts must define DEFAULT_VISION_PROMPT_TEMPLATE');
+    assert.ok(srv.includes('VISION_PROMPT_TEMPLATE'), 'settings.service.ts must persist VISION_PROMPT_TEMPLATE');
+
+    assert.ok(ui.includes('vision_prompt_template'), 'SystemSettings.tsx must bind vision_prompt_template');
+    assert.ok(ui.includes('{media_type}'), 'SystemSettings.tsx must include {media_type} badge');
+    assert.ok(ui.includes('{people}'), 'SystemSettings.tsx must include {people} badge');
+
+    assert.ok(admin.includes('visionPromptTemplate'), 'AdminGeminiTab.tsx must bind visionPromptTemplate');
+    assert.ok(admin.includes('defaultVisionPromptTemplate'), 'AdminGeminiTab.tsx must support reset to default');
+  });
 });
 
