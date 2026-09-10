@@ -22,6 +22,7 @@ import FilterSortSearchBar from './FilterSortSearchBar';
 import { SearchBar } from './FilterSortSearchBar';
 import FaceRegistryUI from '../faces/FaceRegistryUI';
 import TimelineCalendarView from './TimelineCalendarView';
+import ModuleStatusBadges from './ModuleStatusBadges';
 
 export type { GalleryMediaFile, DetectedFaceRecord };
 
@@ -683,16 +684,7 @@ export default function InputSourcesGallery({
                 {/* 🌳 */}
               </span>
             )}
-            <span
-              className={`gallery-tag ${isProcessed
-                  ? 'gallery-tag-processed'
-                  : isPending
-                    ? 'gallery-tag-pending'
-                    : 'gallery-tag-unprocessed'
-                }`}
-            >
-              {/* {isProcessed ? '✓' : isPending ? '⏳' : '○'} */}
-            </span>
+            <ModuleStatusBadges media={file} variant="dots" />
           </div>
         </div>
 
@@ -934,17 +926,20 @@ export default function InputSourcesGallery({
                 <td style={{ color: 'var(--text-secondary)' }}>{formatBytes(file.file_size)}</td>
                 <td style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{formatDate(file.mtime)}</td>
                 <td>
-                  <span
-                    className={`badge-pill ${isProcessed
-                        ? 'badge-pill-success'
-                        : isPending
-                          ? 'badge-pill-accent'
-                          : 'badge-pill-secondary'
-                      }`}
-                    style={{ fontSize: '0.72rem', padding: '2px 6px' }}
-                  >
-                    {isProcessed ? '✓ Processed' : isPending ? '⏳ Pending' : '○ Unprocessed'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span
+                      className={`badge-pill ${isProcessed
+                          ? 'badge-pill-success'
+                          : isPending
+                            ? 'badge-pill-accent'
+                            : 'badge-pill-secondary'
+                        }`}
+                      style={{ fontSize: '0.72rem', padding: '2px 6px' }}
+                    >
+                      {isProcessed ? '✓ Processed' : isPending ? '⏳ Pending' : '○ Unprocessed'}
+                    </span>
+                    <ModuleStatusBadges media={file} variant="dots" />
+                  </div>
                 </td>
                 <td>
                   {file.face_names && file.face_names.length > 0 ? (

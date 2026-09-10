@@ -51,6 +51,25 @@ export interface ExecutionControlsTranslations {
   chooseFileTooltip: string;
   analyzeButtonText: string;
   alertEnterPath: string;
+  moduleAudio: string;
+  moduleAudioDesc: string;
+  moduleFaces: string;
+  moduleFacesDesc: string;
+  moduleDuplicates: string;
+  moduleDuplicatesDesc: string;
+  moduleVision: string;
+  moduleVisionDesc: string;
+  btnRunSelected: string;
+  btnSelectAll: string;
+  btnDeselectAll: string;
+  modularExecutionTitle: string;
+  modularExecutionDesc: string;
+  toggleDetails: string;
+  hideDetails: string;
+  subTabExecution: string;
+  subTabFaces: string;
+  subTabMetadata: string;
+  subTabModels: string;
 }
 
 export interface GalleryTranslations {

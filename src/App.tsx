@@ -632,10 +632,17 @@ function AppMain() {
   };
 
   // Start Sync
-  const handleStartSync = async (force: boolean) => {
-    appendConsoleMessage(`Triggering catalog sync pipeline (force=${Boolean(force)})...`, 'INFO', 'Pipeline');
+  const handleStartSync = async (force: boolean, modes?: string[]) => {
+    const modeDesc = modes && modes.length ? ` (modes=${modes.join(', ')})` : '';
+    appendConsoleMessage(`Triggering catalog sync pipeline (force=${Boolean(force)}${modeDesc})...`, 'INFO', 'Pipeline');
     try {
-      const res = await authFetch(`/api/run?force=${Boolean(force)}`, { method: 'POST' });
+      const modesQuery = modes && modes.length ? `&modes=${encodeURIComponent(modes.join(','))}` : '';
+      const payload = modes && modes.length ? { force: Boolean(force), modes } : undefined;
+      const res = await authFetch(`/api/run?force=${Boolean(force)}${modesQuery}`, {
+        method: 'POST',
+        headers: payload ? { 'Content-Type': 'application/json' } : undefined,
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
       const result = await res.json();
       if (res.ok) {
         const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
@@ -727,8 +734,15 @@ function AppMain() {
   const handleStartSingleAnalysis = async (
     file: string,
     onSuccess?: () => void,
-    onError?: (errMsg: string) => void
+    onError?: ((errMsg: string) => void) | string[],
+    modes?: string[]
   ): Promise<boolean> => {
+    let resolvedModes = modes;
+    let resolvedOnError = typeof onError === 'function' ? onError : undefined;
+    if (Array.isArray(onError)) {
+      resolvedModes = onError;
+    }
+
     if (statusInfo.connected === false) {
       const offlineMsg = 'media_cataloger AI Engine is offline or disconnected. Please ensure the Python service is running.';
       appendConsoleMessage(
@@ -736,18 +750,23 @@ function AppMain() {
         'WARN',
         'Pipeline'
       );
-      if (onError) {
-        onError(offlineMsg);
+      if (resolvedOnError) {
+        resolvedOnError(offlineMsg);
       } else {
         alert(offlineMsg);
       }
       return false;
     }
 
-    appendConsoleMessage(`Triggering single file AI analysis for '${file}'...`, 'INFO', 'Pipeline');
+    const modeDesc = resolvedModes && resolvedModes.length ? ` [${resolvedModes.join(', ')}]` : '';
+    appendConsoleMessage(`Triggering single file AI analysis for '${file}'${modeDesc}...`, 'INFO', 'Pipeline');
     try {
-      const res = await authFetch(`/api/analyze-file?file=${encodeURIComponent(file)}`, {
+      const modesQuery = resolvedModes && resolvedModes.length ? `&modes=${encodeURIComponent(resolvedModes.join(','))}` : '';
+      const payload = resolvedModes && resolvedModes.length ? { file, modes: resolvedModes } : undefined;
+      const res = await authFetch(`/api/analyze-file?file=${encodeURIComponent(file)}${modesQuery}`, {
         method: 'POST',
+        headers: payload ? { 'Content-Type': 'application/json' } : undefined,
+        body: payload ? JSON.stringify(payload) : undefined,
       });
       const result = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -965,6 +984,15 @@ function AppMain() {
               onStartSingleAnalysis={handleStartSingleAnalysis}
               onPickSingleFile={handlePickFile}
               pickerPending={pickerPending}
+              statusInfo={statusInfo}
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              onRefreshMedia={() => loadMediaFiles(true)}
+              onRescanSeries={async () => {
+                await mediaCacheService.clear();
+                await loadMediaFiles(true);
+              }}
+              scanProgress={scanProgress}
             />
           )}
 

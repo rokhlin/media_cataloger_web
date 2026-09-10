@@ -82,8 +82,12 @@ export class CatalogerClientService {
       });
 
       let res;
+      const modesQuery = payload.modes && Array.isArray(payload.modes) && payload.modes.length
+        ? `&modes=${encodeURIComponent(payload.modes.join(','))}`
+        : '';
+      const runUrl = `${this.baseUrl}/api/run?force=${Boolean(force)}${modesQuery}`;
       try {
-        res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
+        res = await axios.post(runUrl, payload, {
           timeout: 20000,
           headers: { 'Content-Type': 'application/json' },
           httpAgent: noKeepAliveHttpAgent,
@@ -92,7 +96,7 @@ export class CatalogerClientService {
       } catch (postErr: any) {
         if (postErr.message?.includes('socket hang up') || postErr.code === 'ECONNRESET') {
           this.logger.warn(`Initial triggerRun request had socket hang up, retrying on fresh socket: ${postErr.message}`);
-          res = await axios.post(`${this.baseUrl}/api/run?force=${Boolean(force)}`, payload, {
+          res = await axios.post(runUrl, payload, {
             timeout: 20000,
             headers: { 'Content-Type': 'application/json' },
             httpAgent: new http.Agent({ keepAlive: false }),

@@ -16,10 +16,33 @@ export class CatalogerController {
   @RequirePermissions('admin_panel')
   @ApiOperation({ summary: 'Trigger full cataloging sync' })
   @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-processing of already synced items' })
-  async triggerRun(@Query('force') force?: string, @Body() customPayload?: any) {
+  @ApiQuery({ name: 'mode', required: false, type: String, description: 'Single pipeline mode' })
+  @ApiQuery({ name: 'modes', required: false, type: String, description: 'Comma-separated pipeline modes' })
+  async triggerRun(
+    @Query('force') force?: string,
+    @Query('mode') mode?: string,
+    @Query('modes') modes?: string,
+    @Body() customPayload?: any
+  ) {
     try {
       const forceBool = force === 'true' || force === '1';
-      return await this.catalogerService.triggerRun(forceBool, customPayload);
+      let resolvedModes: string[] | undefined = undefined;
+      if (customPayload?.modes && Array.isArray(customPayload.modes)) {
+        resolvedModes = customPayload.modes;
+      } else if (modes) {
+        resolvedModes = modes.split(',').map(m => m.trim()).filter(Boolean);
+      } else if (mode) {
+        resolvedModes = [mode.trim()];
+      } else if (customPayload?.mode) {
+        resolvedModes = [customPayload.mode];
+      }
+
+      const mergedPayload = {
+        ...(customPayload || {}),
+        ...(resolvedModes ? { modes: resolvedModes } : {}),
+      };
+
+      return await this.catalogerService.triggerRun(forceBool, mergedPayload);
     } catch (err: any) {
       if (err instanceof HttpException) {
         throw err;

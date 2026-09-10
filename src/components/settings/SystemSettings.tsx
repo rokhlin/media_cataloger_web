@@ -48,7 +48,7 @@ export default function SystemSettings({
   pickerPending = false,
   uiSettings = { maxImagesPerRow: 10, maxRows: 1, maxWidth: 1600, galleryMaxRows: 10 },
   onSaveUiSettings,
-  initialTab = 'execution',
+  initialTab = 'paths',
   onTabChange,
   onRefreshMedia,
   onRescanSeries,
@@ -579,15 +579,6 @@ export default function SystemSettings({
       <nav className="system-settings-tabs-nav" aria-label="System Settings Tabs">
         <button
           type="button"
-          className={`settings-nav-btn ${activeTab === 'execution' ? 'active' : ''}`}
-          onClick={() => handleSelectTab('execution')}
-          id="tab-settings-execution"
-        >
-          <span>⚡</span>
-          <span>{t('tabFileMetadataOperations' as any) || t('tabExecution')}</span>
-        </button>
-        <button
-          type="button"
           className={`settings-nav-btn ${activeTab === 'paths' ? 'active' : ''}`}
           onClick={() => handleSelectTab('paths')}
           id="tab-settings-paths"
@@ -652,263 +643,23 @@ export default function SystemSettings({
 
       {/* Form Content */}
       <form onSubmit={handleSave}>
-        {/* Tab 1: File Metadata Operations */}
+        {/* Tab 1: File Metadata Operations / Execution Redirect */}
         {activeTab === 'execution' && (
           <div className="settings-section-card" id="settings-pane-execution">
             <div className="settings-card-header">
               <h3>⚡ {t('tabFileMetadataOperations' as any) || t('tabExecution')}</h3>
             </div>
-
-            {/* Full Archive Sync Section */}
-            <div className="form-group">
-              <label>{t('syncSectionTitle')}</label>
-              <p className="description">{t('syncSectionDesc')}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.75rem 0' }}>
-                <label className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={forceReprocess}
-                    onChange={(e) => setForceReprocess(e.target.checked)}
-                    disabled={isSyncActive || disabled}
-                  />
-                  {t('forceReprocessLabel')}
-                </label>
-              </div>
-
-              {isSyncActive ? (
-                <div style={{ display: 'flex', gap: '0.75rem', maxWidth: '480px' }}>
-                  {isPaused ? (
-                    <button type="button" className="btn btn-primary" onClick={onResumeSync} style={{ flex: 1 }}>
-                      ▶️ {t('btnResume')}
-                    </button>
-                  ) : (
-                    <button type="button" className="btn btn-warning" onClick={onPauseSync} style={{ flex: 1 }}>
-                      ⏸️ {t('btnPause')}
-                    </button>
-                  )}
-                  <button type="button" className="btn btn-danger" onClick={onStopSync} style={{ flex: 1 }}>
-                    ⏹️ {t('btnStop')}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ maxWidth: '380px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleSyncClick}
-                    disabled={disabled}
-                    style={{ width: '100%', padding: '0.75rem 1.5rem', fontSize: '0.95rem' }}
-                  >
-                    🚀 {t('btnRunSync')}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Single File Analysis Section */}
-            <div className="form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-              <label>{t('singleFileSectionTitle')}</label>
-              <p className="description">{t('singleFileSectionDesc')}</p>
-              <div style={{ display: 'flex', gap: '0.5rem', margin: '0.75rem 0', maxWidth: '650px' }}>
-                <input
-                  type="text"
-                  className="input-control"
-                  value={singleFilePath}
-                  onChange={(e) => setSingleFilePath(e.target.value)}
-                  placeholder={t('placeholderSingleFile')}
-                  disabled={disabled}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handlePickFileClick}
-                  disabled={disabled}
-                  title={t('chooseFileTooltip')}
-                >
-                  📂
-                </button>
-              </div>
-              <div style={{ maxWidth: '280px' }}>
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  onClick={handleAnalyzeClick}
-                  disabled={disabled || !singleFilePath.trim()}
-                  style={{ width: '100%', padding: '0.65rem 1.25rem' }}
-                >
-                  ⚡ {t('analyzeButtonText')}
-                </button>
-              </div>
-            </div>
-
-            {/* Caching Strategy Section */}
-            <div className="form-group cache-strategy-section" id="section-caching-strategy">
-              <div>
-                <label style={{ fontSize: '1.05rem', fontWeight: 600 }}>💾 {t('cachingStrategyTitle' as any) || 'Caching Strategy'}</label>
-                <p className="description">
-                  {t('cachingStrategyDesc' as any) || 'Configure high-performance static cache, daily automation, and manual recaching controls.'}
-                </p>
-              </div>
-
-              {cacheFeedback && (
-                <div className={`settings-alert-banner ${cacheFeedback.type}`}>
-                  <span>{cacheFeedback.type === 'success' ? '✅' : '❌'}</span>
-                  <span>{cacheFeedback.message}</span>
-                </div>
-              )}
-
-              {/* Cache Metrics Overview */}
-              <div className="cache-metrics-grid">
-                <div className="cache-metric-card">
-                  <span className="cache-metric-label">{t('status' as any) || 'Status'}</span>
-                  <div className="cache-metric-value">
-                    <span className={`cache-status-dot ${cacheStatus?.status === 'indexing' || isRecaching ? 'indexing' : cacheStatus?.status === 'warm' ? 'warm' : 'idle'}`} />
-                    <span>
-                      {cacheStatus?.status === 'indexing' || isRecaching
-                        ? (t('cacheStatusIndexing' as any) || 'Indexing...')
-                        : cacheStatus?.status === 'warm'
-                        ? (t('cacheStatusWarm' as any) || 'Warm & Active')
-                        : (t('cacheStatusIdle' as any) || 'Idle')}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="cache-metric-card">
-                  <span className="cache-metric-label">{t('cacheTotalFiles' as any) || 'Total Cached Files'}</span>
-                  <div className="cache-metric-value">
-                    <span>{cacheStatus?.total_cached_files?.toLocaleString() ?? 0}</span>
-                  </div>
-                </div>
-
-                <div className="cache-metric-card">
-                  <span className="cache-metric-label">{t('cacheLastRun' as any) || 'Last Cached'}</span>
-                  <div className="cache-metric-value" style={{ fontSize: '0.95rem' }}>
-                    <span>{cacheStatus?.last_cached_at ? new Date(cacheStatus.last_cached_at).toLocaleString() : 'Never'}</span>
-                  </div>
-                </div>
-
-                <div className="cache-metric-card">
-                  <span className="cache-metric-label">{t('cacheNextRun' as any) || 'Next Scheduled Recache'}</span>
-                  <div className="cache-metric-value" style={{ fontSize: '0.95rem' }}>
-                    <span>
-                      {cacheStatus?.daily_automation_enabled && cacheStatus?.next_scheduled_recache
-                        ? new Date(cacheStatus.next_scheduled_recache).toLocaleString()
-                        : 'Disabled'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Daily Automation Panel */}
-              <div className="cache-automation-panel">
-                <label style={{ margin: 0, fontWeight: 600 }}>⏰ {t('cacheDailyAutomation' as any) || 'Daily Caching Automation'}</label>
-                <p className="description" style={{ margin: 0 }}>
-                  {t('cacheDailyAutomationDesc' as any) || 'Automatically scans and recaches newly added and modified media files at scheduled time.'}
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
-                  <label className="checkbox-group">
-                    <input
-                      type="checkbox"
-                      checked={dailyAutomationEnabled}
-                      onChange={(e) => setDailyAutomationEnabled(e.target.checked)}
-                      disabled={disabled}
-                      id="checkbox-daily-automation"
-                    />
-                    <span>{t('cacheDailyAutomation' as any) || 'Enable Daily Caching Automation'}</span>
-                  </label>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <label style={{ margin: 0, fontSize: '0.85rem' }}>{t('cacheScheduleTime' as any) || 'Daily Recache Time'}:</label>
-                    <input
-                      type="time"
-                      className="input-control"
-                      value={dailyScheduleTime}
-                      onChange={(e) => setDailyScheduleTime(e.target.value)}
-                      disabled={!dailyAutomationEnabled || disabled}
-                      style={{ maxWidth: '140px', padding: '0.35rem 0.65rem' }}
-                      id="input-cache-schedule-time"
-                    />
-                  </div>
-
-                  <label className="checkbox-group">
-                    <input
-                      type="checkbox"
-                      checked={incrementalOnly}
-                      onChange={(e) => setIncrementalOnly(e.target.checked)}
-                      disabled={disabled}
-                      id="checkbox-cache-incremental"
-                    />
-                    <span>{t('cacheIncrementalOnly' as any) || 'Incremental Mode (new and modified files only)'}</span>
-                  </label>
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleSaveCacheStrategy}
-                    disabled={isSavingCacheStrategy || disabled}
-                    id="btn-save-cache-strategy"
-                    style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
-                  >
-                    {isSavingCacheStrategy ? '💾 Saving...' : '💾 Save Strategy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Manual Recaching Controls */}
-              <div>
-                <label style={{ fontWeight: 600 }}>🚀 Manual Caching Actions</label>
-                <p className="description">
-                  {t('cachingStrategyDesc' as any) || 'Run an on-demand recache for all configured media folders or a specific folder.'}
-                </p>
-
-                <div className="cache-actions-row">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, minWidth: '280px' }}>
-                    <label style={{ margin: 0, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                      {t('cacheFolderSelectLabel' as any) || 'Target Folder:'}
-                    </label>
-                    <select
-                      className="input-control"
-                      value={cacheSelectedFolder}
-                      onChange={(e) => setCacheSelectedFolder(e.target.value)}
-                      disabled={isRecaching || disabled}
-                      style={{ flex: 1, minWidth: '180px' }}
-                      id="select-cache-target-folder"
-                    >
-                      <option value="">📂 {t('cacheFolderSelectAll' as any) || 'All Configured Folders'}</option>
-                      {(formData.input_folders || []).filter(Boolean).map((f, i) => (
-                        <option key={i} value={f}>
-                          📁 {f}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => handleRecache()}
-                    disabled={isRecaching || disabled}
-                    id="btn-recache-action"
-                    style={{ padding: '0.65rem 1.25rem' }}
-                  >
-                    {isRecaching ? '⏳ Recaching...' : cacheSelectedFolder ? `📁 ${t('btnRecacheFolder' as any) || 'Recache Folder'}` : `🚀 ${t('btnRecacheAll' as any) || 'Recache All Files'}`}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={handleClearCache}
-                    disabled={isClearingCache || isRecaching || disabled}
-                    id="btn-clear-cache-action"
-                    style={{ padding: '0.65rem 1.15rem' }}
-                  >
-                    {isClearingCache ? '⏳ Clearing...' : `🗑️ ${t('btnClearCache' as any) || 'Clear Cache'}`}
-                  </button>
-                </div>
-              </div>
+            <div className="form-group" style={{ padding: '1.5rem', textAlign: 'center' }}>
+              <p style={{ fontSize: '1rem', marginBottom: '1.25rem', color: 'var(--text-primary)' }}>
+                Pipeline execution, modular AI controls, and single file analysis have been unified into the central <strong>Media Recognition</strong> hub.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleSelectTab('paths')}
+              >
+                📁 Open Storage Paths
+              </button>
             </div>
           </div>
         )}
@@ -1624,6 +1375,164 @@ export default function SystemSettings({
                     }))
                   }
                 />
+              </div>
+            </div>
+
+            {/* Caching Strategy Section inside Preferences */}
+            <div className="form-group cache-strategy-section" id="section-caching-strategy" style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+              <div>
+                <label style={{ fontSize: '1.05rem', fontWeight: 600 }}>💾 {t('cachingStrategyTitle' as any) || 'Caching Strategy'}</label>
+                <p className="description">
+                  {t('cachingStrategyDesc' as any) || 'Configure high-performance static cache, daily automation, and manual recaching controls.'}
+                </p>
+              </div>
+
+              {cacheFeedback && (
+                <div className={`settings-alert-banner ${cacheFeedback.type}`}>
+                  <span>{cacheFeedback.type === 'success' ? '✅' : '❌'}</span>
+                  <span>{cacheFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Cache Metrics Overview */}
+              <div className="cache-metrics-grid">
+                <div className="cache-metric-card">
+                  <span className="metric-label">{t('cacheMetricEntries' as any) || 'Cached Entries'}</span>
+                  <span className="metric-value">{cacheStats ? cacheStats.total_entries : '—'}</span>
+                </div>
+                <div className="cache-metric-card">
+                  <span className="metric-label">{t('cacheMetricSize' as any) || 'Cache File Size'}</span>
+                  <span className="metric-value">{cacheStats ? formatBytes(cacheStats.cache_file_size_bytes) : '—'}</span>
+                </div>
+                <div className="cache-metric-card">
+                  <span className="metric-label">{t('cacheMetricStatus' as any) || 'Cache Status'}</span>
+                  <span className="metric-value" style={{ color: cacheStats?.is_valid ? '#4ade80' : '#f87171' }}>
+                    {cacheStats ? (cacheStats.is_valid ? 'Valid / Active' : 'Stale / Rebuilt') : '—'}
+                  </span>
+                </div>
+                <div className="cache-metric-card">
+                  <span className="metric-label">{t('cacheMetricUpdated' as any) || 'Last Generated'}</span>
+                  <span className="metric-value" style={{ fontSize: '0.85rem' }}>
+                    {cacheStats?.last_generated ? new Date(cacheStats.last_generated).toLocaleString() : 'Never'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Strategy Form Controls */}
+              <div className="cache-strategy-form">
+                <label className="checkbox-group">
+                  <input
+                    type="checkbox"
+                    checked={cacheStrategy.static_cache_enabled}
+                    onChange={(e) =>
+                      setCacheStrategy((prev) => ({ ...prev, static_cache_enabled: e.target.checked }))
+                    }
+                    disabled={isSavingCacheStrategy || disabled}
+                  />
+                  <span>{t('enableStaticCache' as any) || 'Enable High-Performance Static Disk Cache (media_cache.json)'}</span>
+                </label>
+
+                <label className="checkbox-group">
+                  <input
+                    type="checkbox"
+                    checked={cacheStrategy.daily_recache_enabled}
+                    onChange={(e) =>
+                      setCacheStrategy((prev) => ({ ...prev, daily_recache_enabled: e.target.checked }))
+                    }
+                    disabled={isSavingCacheStrategy || disabled}
+                  />
+                  <span>{t('enableDailyAutomation' as any) || 'Enable Daily Automated Background Recaching'}</span>
+                </label>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  <label style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    {t('dailyAutomationHour' as any) || 'Execution Time (UTC):'}
+                  </label>
+                  <select
+                    className="input-control"
+                    value={cacheStrategy.daily_recache_hour_utc}
+                    onChange={(e) =>
+                      setCacheStrategy((prev) => ({
+                        ...prev,
+                        daily_recache_hour_utc: parseInt(e.target.value, 10),
+                      }))
+                    }
+                    disabled={!cacheStrategy.daily_recache_enabled || isSavingCacheStrategy || disabled}
+                    style={{ width: '120px' }}
+                  >
+                    {Array.from({ length: 24 }).map((_, h) => (
+                      <option key={h} value={h}>
+                        {String(h).padStart(2, '0')}:00 UTC
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleSaveCacheStrategy}
+                    disabled={isSavingCacheStrategy || disabled}
+                    id="btn-save-cache-strategy"
+                    style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                  >
+                    {isSavingCacheStrategy ? '💾 Saving...' : '💾 Save Strategy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Manual Recaching Controls */}
+              <div>
+                <label style={{ fontWeight: 600 }}>🚀 Manual Caching Actions</label>
+                <p className="description">
+                  {t('cachingStrategyDesc' as any) || 'Run an on-demand recache for all configured media folders or a specific folder.'}
+                </p>
+
+                <div className="cache-actions-row">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, minWidth: '280px' }}>
+                    <label style={{ margin: 0, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                      {t('cacheFolderSelectLabel' as any) || 'Target Folder:'}
+                    </label>
+                    <select
+                      className="input-control"
+                      value={cacheSelectedFolder}
+                      onChange={(e) => setCacheSelectedFolder(e.target.value)}
+                      disabled={isRecaching || disabled}
+                      style={{ flex: 1, minWidth: '180px' }}
+                      id="select-cache-target-folder"
+                    >
+                      <option value="">📂 {t('cacheFolderSelectAll' as any) || 'All Configured Folders'}</option>
+                      {(formData.input_folders || []).filter(Boolean).map((f, i) => (
+                        <option key={i} value={f}>
+                          📁 {f}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => handleRecache()}
+                    disabled={isRecaching || disabled}
+                    id="btn-recache-action"
+                    style={{ padding: '0.65rem 1.25rem' }}
+                  >
+                    {isRecaching ? '⏳ Recaching...' : cacheSelectedFolder ? `📁 ${t('btnRecacheFolder' as any) || 'Recache Folder'}` : `🚀 ${t('btnRecacheAll' as any) || 'Recache All Files'}`}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={handleClearCache}
+                    disabled={isClearingCache || isRecaching || disabled}
+                    id="btn-clear-cache-action"
+                    style={{ padding: '0.65rem 1.15rem' }}
+                  >
+                    {isClearingCache ? '⏳ Clearing...' : `🗑️ ${t('btnClearCache' as any) || 'Clear Cache'}`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

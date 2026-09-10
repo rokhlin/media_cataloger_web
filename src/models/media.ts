@@ -44,9 +44,17 @@ export interface FamilyContextData {
   milestones?: FamilyMilestoneContext[];
 }
 
+export interface ModulesStatus {
+  transcribe?: boolean | null;
+  faces?: boolean;
+  duplicates?: boolean;
+  vision?: boolean;
+}
+
 export interface MediaFileItem {
   filename: string;
   file_path?: string;
+  modules_status?: ModulesStatus;
   relative_path?: string;
   absolute_path?: string;
   type?: MediaType;

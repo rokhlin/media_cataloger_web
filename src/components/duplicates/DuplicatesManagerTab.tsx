@@ -10,6 +10,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../services/authContext';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import LibraryOrganizationPanel from './LibraryOrganizationPanel';
+import DuplicateDetectionRules from './DuplicateDetectionRules';
 import './DuplicatesManagerTab.css';
 
 export interface DuplicatesManagerTabProps {
@@ -401,156 +402,26 @@ export default function DuplicatesManagerTab({
         </div>
       </div>
 
-      {/* Control Panel */}
-      <div className="dup-control-panel">
-        <div className="dup-panel-header">
-          <h3 className="dup-panel-title">
-            <span>🔍</span>
-            <span>{t('duplicateDetectionRules' as any) || 'Duplicate & Similarity Detection'}</span>
-          </h3>
-
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            {isScanning ? (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleStopScan}
-                style={{ borderColor: '#ef4444', color: '#ef4444' }}
-              >
-                🛑 {t('btnStopScan' as any) || 'Stop Scan'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleStartScan}
-                id="btn-start-duplicate-scan"
-              >
-                🚀 {t('btnStartDuplicateScan' as any) || 'Start Scan'}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="dup-controls-form">
-          <div className="dup-form-group">
-            <label>{t('duplicateEngine' as any) || 'Processing Engine'}</label>
-            <select
-              className="dup-form-select"
-              value={selectedEngine}
-              onChange={(e) => setSelectedEngine(e.target.value as any)}
-              disabled={isScanning}
-            >
-              <option value="auto">Auto-Detect (GPU with CPU Fallback)</option>
-              <option value="cpu">CPU Engine (Zimaboard Low-Memory Safe)</option>
-              <option value="gpu">GPU AI Engine (RTX 4080 Accelerated)</option>
-            </select>
-          </div>
-
-          <div className="dup-form-group">
-            <label>{t('duplicateMatchMode' as any) || 'Detection Mode'}</label>
-            <select
-              className="dup-form-select"
-              value={selectedMode}
-              onChange={(e) => setSelectedMode(e.target.value as any)}
-              disabled={isScanning}
-            >
-              <option value="all">All Methods (Exact + Visual + Burst)</option>
-              <option value="exact">Exact Hash (100% Byte Identity)</option>
-              <option value="visual">Visual Similarity (pHash Perceptual)</option>
-              <option value="burst">Burst Series (Time Proximity)</option>
-            </select>
-          </div>
-
-          <div className="dup-form-group">
-            <label>
-              <span>{t('similarityThreshold' as any) || 'Similarity Threshold'}</span>
-              <span className="dup-range-badge">{Math.round(similarityThreshold * 100)}%</span>
-            </label>
-            <div className="dup-range-wrap">
-              <input
-                type="range"
-                className="dup-range-input"
-                min="0.70"
-                max="1.00"
-                step="0.01"
-                value={similarityThreshold}
-                onChange={(e) => setSimilarityThreshold(parseFloat(e.target.value))}
-                disabled={isScanning}
-              />
-            </div>
-          </div>
-
-          <div className="dup-form-group">
-            <label>
-              <span>{t('burstWindow' as any) || 'Burst Time Window'}</span>
-              <span className="dup-range-badge">{burstWindowSec}s</span>
-            </label>
-            <div className="dup-range-wrap">
-              <input
-                type="range"
-                className="dup-range-input"
-                min="1"
-                max="30"
-                step="1"
-                value={burstWindowSec}
-                onChange={(e) => setBurstWindowSec(parseInt(e.target.value, 10))}
-                disabled={isScanning}
-              />
-            </div>
-          </div>
-
-          {activeInputFolders.length > 1 && (
-            <div className="dup-form-group">
-              <label>{t('targetFolderScope' as any) || 'Scan Scope'}</label>
-              <select
-                className="dup-form-select"
-                value={selectedFolderScope}
-                onChange={(e) => setSelectedFolderScope(e.target.value)}
-                disabled={isScanning}
-              >
-                <option value="all">All Input Sources</option>
-                {activeInputFolders.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="dup-form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.4rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-              <input
-                type="checkbox"
-                checked={forceRehash}
-                onChange={(e) => setForceRehash(e.target.checked)}
-                disabled={isScanning}
-              />
-              <span>Force Re-hash Files</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Live Scan Progress Card */}
-        {isScanning && (
-          <div className="dup-progress-card">
-            <div className="dup-progress-header">
-              <span>{scanStatus?.stage || 'Scanning in progress...'}</span>
-              <span><strong>{scanStatus?.current || 0}</strong> / {scanStatus?.total || 0} ({scanStatus?.percent || 0}%)</span>
-            </div>
-            <div className="dup-progress-bar-bg">
-              <div
-                className="dup-progress-bar-fill"
-                style={{ width: `${scanStatus?.percent || 0}%` }}
-              />
-            </div>
-            {scanStatus?.currentFile && (
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                📄 {scanStatus.currentFile}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Control Panel: Detection Rules & Thresholds */}
+      <DuplicateDetectionRules
+        activeInputFolders={activeInputFolders}
+        selectedEngine={selectedEngine}
+        setSelectedEngine={setSelectedEngine}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        similarityThreshold={similarityThreshold}
+        setSimilarityThreshold={setSimilarityThreshold}
+        burstWindowSec={burstWindowSec}
+        setBurstWindowSec={setBurstWindowSec}
+        selectedFolderScope={selectedFolderScope}
+        setSelectedFolderScope={setSelectedFolderScope}
+        forceRehash={forceRehash}
+        setForceRehash={setForceRehash}
+        isScanning={Boolean(scanStatus?.isScanning)}
+        scanStatus={scanStatus}
+        onStartScan={handleStartScan}
+        onStopScan={handleStopScan}
+      />
 
       {/* Smart Selection & Action Bar */}
       {groups.length > 0 && (

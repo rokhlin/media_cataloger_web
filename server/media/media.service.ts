@@ -102,6 +102,12 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         faces: fileFaces,
         face_names: faceNames,
         has_unassigned_faces: fileFaces.some((f: any) => !f.is_reference || f.name?.startsWith('face_')),
+        modules_status: r.modules_status ? (typeof r.modules_status === 'string' ? JSON.parse(r.modules_status) : r.modules_status) : {
+          transcribe: r.media_type === 'video' ? Boolean(r.transcription) : null,
+          faces: fileFaces.length > 0 || faceNames.length > 0,
+          duplicates: Boolean(r.phash),
+          vision: Boolean(r.summary || r.description),
+        },
         is_vault: Boolean(r.is_vault),
         error_message: null,
       };
@@ -857,10 +863,11 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Check and ingest sidecar JSON file from disk (using sidecar cache)
+      let sdata: any = null;
       const resolvedSidecar = this.findSidecarFile(filePath, folder, sidecar, outputDirSidecars);
       if (resolvedSidecar) {
         sidecar = resolvedSidecar;
-        const sdata = this.readParsedSidecar(resolvedSidecar);
+        sdata = this.readParsedSidecar(resolvedSidecar);
         if (sdata) {
           const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
 
@@ -998,6 +1005,20 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       const hashRec = mediaHashMap.get(normPath) || mediaHashMap.get(baseName.toLowerCase());
       const phash = hashRec?.phash || null;
 
+      let modulesStatus = sdata?.modules_status || null;
+      if (!modulesStatus) {
+        const hasTranscribe = isVideo ? Boolean(transcription && transcription.trim().length > 0) : null;
+        const hasFaces = (dedupFaces && dedupFaces.length > 0) || (faceNames && faceNames.length > 0);
+        const hasDuplicates = Boolean(phash || sdata?.phash);
+        const hasVision = Boolean((summ && summ.trim().length > 0) || (desc && desc.trim().length > 0) || (sdata?.tags && sdata.tags.length > 0));
+        modulesStatus = {
+          transcribe: hasTranscribe,
+          faces: hasFaces,
+          duplicates: hasDuplicates,
+          vision: hasVision,
+        };
+      }
+
       const item: any = {
         file_path: filePath,
         filename: baseName,
@@ -1011,6 +1032,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         is_image: isImage,
         status: status,
         sidecar_path: sidecar,
+        modules_status: modulesStatus,
         description: desc,
         description_ru: descRu,
         summary: summ,

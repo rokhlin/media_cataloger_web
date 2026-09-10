@@ -10,6 +10,7 @@ import { useAuth } from '../../services/authContext';
 import { useVault } from '../../services/vaultContext';
 import { useFamilyTreeStore } from '../../packages/family-tree/state/useFamilyTreeStore';
 import MetadataEditorModal from './MetadataEditorModal';
+import ModuleStatusBadges from './ModuleStatusBadges';
 import './MediaViewerModal.css';
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -917,18 +918,22 @@ export default function MediaViewerModal({
                     {selectedMedia.file_path || selectedMedia.filename}
                   </span>
                 </div>
-                <div className="lightbox-detail-row">
+                <div className="lightbox-detail-row" style={{ alignItems: 'flex-start' }}>
                   <span className="lightbox-label">{t('status')}:</span>
-                  <span
-                    className={`badge-pill ${selectedMedia.status === 'PROCESSED'
-                      ? 'badge-pill-success'
-                      : selectedMedia.status === 'PENDING'
-                        ? 'badge-pill-warning'
-                        : 'badge-pill-secondary'
-                      }`}
-                  >
-                    {selectedMedia.status || 'UNPROCESSED'}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1 }}>
+                    <span
+                      className={`badge-pill ${selectedMedia.status === 'PROCESSED'
+                        ? 'badge-pill-success'
+                        : selectedMedia.status === 'PENDING'
+                          ? 'badge-pill-warning'
+                          : 'badge-pill-secondary'
+                        }`}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      {selectedMedia.status || 'UNPROCESSED'}
+                    </span>
+                    <ModuleStatusBadges media={selectedMedia} variant="chips" />
+                  </div>
                 </div>
               </div>
 
