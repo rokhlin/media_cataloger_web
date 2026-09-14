@@ -77,14 +77,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch('/api/auth/me', {
         headers: {
           Authorization: `Bearer ${activeToken}`,
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
-        const data = await res.json();
-        if (data.authenticated && data.user) {
+        const contentType = res.headers.get('content-type') || '';
+        const data = contentType.includes('application/json') ? await res.json() : null;
+        if (data?.authenticated && data?.user) {
           setCurrentUser(data.user);
           try {
             localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
@@ -108,8 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem(AUTH_USER_KEY);
         } catch {}
       }
-    } catch (err) {
-      console.warn('Failed to verify authentication status:', err);
+    } catch (err: any) {
+      console.warn('Failed to verify authentication status:', err?.name === 'AbortError' ? 'Verification timed out' : err);
     } finally {
       setIsLoading(false);
     }
@@ -121,20 +126,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(
     async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username, password }),
-        });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-        const data = await res.json();
+      try {
+        let res: Response;
+        try {
+          res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+            signal: controller.signal,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          if (fetchErr?.name === 'AbortError') {
+            return {
+              success: false,
+              error: 'Authentication request timed out. Please verify that the backend server is running.',
+            };
+          }
+          return {
+            success: false,
+            error: 'Authentication server is unreachable. Please verify that the backend server is running.',
+          };
+        }
+        clearTimeout(timeoutId);
+
+        let data: any = {};
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch {
+            data = {};
+          }
+        } else {
+          const text = await res.text().catch(() => '');
+          data = { message: text.slice(0, 150) };
+        }
+
         if (!res.ok) {
           return {
             success: false,
-            error: data.message || 'Invalid username or password',
+            error: data?.message || (res.status === 401 ? 'Invalid username or password' : `Server error (${res.status}): ${res.statusText || 'Unavailable'}`),
           };
         }
 
@@ -153,9 +190,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return { success: true };
       } catch (err: any) {
+        clearTimeout(timeoutId);
         return {
           success: false,
-          error: err.message || 'Connection error while logging in',
+          error: err?.message || 'Connection error while logging in',
         };
       }
     },

@@ -495,6 +495,9 @@ export interface AuthAndVaultTranslations {
   authCannotDeleteSelf: string;
   authConfirmDeleteUser: string;
   authPasswordMinLength: string;
+  authVerifyingPassword: string;
+  authServerUnreachable: string;
+  authTimeoutError: string;
 
   navVault: string;
   navVaultTooltip: string;

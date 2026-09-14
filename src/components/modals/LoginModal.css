@@ -146,6 +146,74 @@
   opacity: 1;
 }
 
+.login-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #9aa0a6);
+}
+
+.login-pwd-toggle:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.login-modal-close:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.login-verifying-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 8px;
+  color: #c7d2fe;
+  font-size: 0.84rem;
+  animation: loginFadeIn 0.2s ease;
+}
+
+.login-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(199, 210, 254, 0.3);
+  border-top-color: #818cf8;
+  border-radius: 50%;
+  animation: loginSpin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+.login-spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: loginSpin 0.75s linear infinite;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-login-content-submitting {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes loginSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .login-modal-footer {
   padding: 1.25rem 2rem 1.75rem;
   display: flex;
@@ -195,4 +263,10 @@
   background: rgba(99, 102, 241, 0.15);
   border-color: var(--color-primary, #6366f1);
   color: var(--text-main, #fff);
+}
+
+.btn-quick-admin:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }

@@ -37,14 +37,17 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
       // Auto-submit if PIN length is 4 or more
       if (nextPin.length === 4 && isConfigured) {
         setIsSubmitting(true);
-        const res = await unlockVault(nextPin);
-        setIsSubmitting(false);
-        if (res.success) {
-          onClose();
-          if (onUnlocked) onUnlocked();
-        } else {
-          setError(res.error || t('vaultIncorrectPin' as any) || 'Incorrect PIN');
-          setPinInput('');
+        try {
+          const res = await unlockVault(nextPin);
+          if (res.success) {
+            onClose();
+            if (onUnlocked) onUnlocked();
+          } else {
+            setError(res.error || t('vaultIncorrectPin' as any) || 'Incorrect PIN');
+            setPinInput('');
+          }
+        } finally {
+          setIsSubmitting(false);
         }
       }
     },
@@ -64,24 +67,28 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
   const handleManualUnlock = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!pinInput) return;
+      if (!pinInput || isSubmitting) return;
       setIsSubmitting(true);
       setError(null);
-      const res = await unlockVault(pinInput);
-      setIsSubmitting(false);
-      if (res.success) {
-        onClose();
-        if (onUnlocked) onUnlocked();
-      } else {
-        setError(res.error || t('vaultIncorrectPin' as any) || 'Incorrect PIN');
+      try {
+        const res = await unlockVault(pinInput);
+        if (res.success) {
+          onClose();
+          if (onUnlocked) onUnlocked();
+        } else {
+          setError(res.error || t('vaultIncorrectPin' as any) || 'Incorrect PIN');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
     },
-    [pinInput, unlockVault, onClose, onUnlocked, t]
+    [pinInput, isSubmitting, unlockVault, onClose, onUnlocked, t]
   );
 
   const handleSetupSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (isSubmitting) return;
       if (!setupPin || setupPin.length < 4) {
         setError(t('vaultPinMinLength' as any) || 'PIN must be at least 4 digits');
         return;
@@ -93,18 +100,21 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
 
       setIsSubmitting(true);
       setError(null);
-      const res = await setupVault(setupPin, vaultFolder);
-      setIsSubmitting(false);
-      if (res.success) {
-        // Automatically unlock with newly created PIN
-        await unlockVault(setupPin);
-        onClose();
-        if (onUnlocked) onUnlocked();
-      } else {
-        setError(res.error || 'Failed to setup vault');
+      try {
+        const res = await setupVault(setupPin, vaultFolder);
+        if (res.success) {
+          // Automatically unlock with newly created PIN
+          await unlockVault(setupPin);
+          onClose();
+          if (onUnlocked) onUnlocked();
+        } else {
+          setError(res.error || 'Failed to setup vault');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
     },
-    [setupPin, setupConfirm, vaultFolder, setupVault, unlockVault, onClose, onUnlocked, t]
+    [setupPin, setupConfirm, vaultFolder, isSubmitting, setupVault, unlockVault, onClose, onUnlocked, t]
   );
 
   if (!isOpen) return null;
@@ -134,7 +144,13 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
               </p>
             </div>
           </div>
-          <button type="button" className="vault-modal-close" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="vault-modal-close"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={isSubmitting}
+          >
             &times;
           </button>
         </div>
@@ -175,6 +191,7 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
                   placeholder="1234"
                   maxLength={16}
                   autoFocus
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -187,6 +204,7 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
                   onChange={(e) => setSetupConfirm(e.target.value)}
                   placeholder="1234"
                   maxLength={16}
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -198,6 +216,7 @@ export default function VaultModal({ isOpen, onClose, onUnlocked }: VaultModalPr
                   value={vaultFolder}
                   onChange={(e) => setVaultFolder(e.target.value)}
                   placeholder="vault"
+                  disabled={isSubmitting}
                 />
                 <span style={{ fontSize: '0.78rem', color: '#9aa0a6' }}>
                   {t('vaultFolderHelp' as any) || 'Files inside folders named "vault" will be automatically excluded from searches.'}
