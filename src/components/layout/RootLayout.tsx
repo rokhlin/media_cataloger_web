@@ -1,17 +1,23 @@
-import { Link, Outlet, useLocation } from "react-router-dom"
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { Home, Users, Copy, Settings, ShieldAlert, LogOut, User } from "lucide-react"
 import { cn } from "@/utils"
+import { useAuth } from "../../services/authContext"
 
 export default function RootLayout() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { currentUser, isAdmin, logout } = useAuth()
   
   const navItems = [
     { label: "Галерея", path: "/", icon: Home },
     { label: "Семейное древо", path: "/family-tree", icon: Users },
     { label: "Управление дубликатами", path: "/duplicates", icon: Copy },
     { label: "Настройки", path: "/settings", icon: Settings },
-    { label: "Админ панель", path: "/admin", icon: ShieldAlert },
   ]
+  
+  if (isAdmin) {
+    navItems.push({ label: "Админ панель", path: "/admin", icon: ShieldAlert })
+  }
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
@@ -51,9 +57,15 @@ export default function RootLayout() {
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                 <User size={16} />
               </div>
-              User
+              {currentUser?.username || 'User'}
             </div>
-            <button className="text-muted-foreground hover:text-foreground">
+            <button 
+              className="text-muted-foreground hover:text-foreground"
+              onClick={async () => {
+                await logout();
+                navigate('/login');
+              }}
+            >
               <LogOut size={16} />
             </button>
           </div>

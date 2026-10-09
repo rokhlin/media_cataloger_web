@@ -6,6 +6,7 @@ import DuplicatesManagerTab from "./components/duplicates/DuplicatesManagerTab"
 import LoginPage from "./components/auth/LoginPage"
 import RegisterPage from "./components/auth/RegisterPage"
 import OnboardingPage from "./components/auth/OnboardingPage"
+import AdminPage from "./components/admin/AdminPage"
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full">
@@ -49,7 +50,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/admin",
-        element: <Placeholder title="Админ панель" />
+        element: <AdminPage />
       }
     ]
   }
