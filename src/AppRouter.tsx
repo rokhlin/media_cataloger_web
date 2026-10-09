@@ -1,13 +1,20 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
+import React, { Suspense } from "react"
 import RootLayout from "./components/layout/RootLayout"
-import GalleryPage from "./components/gallery/GalleryPage"
-import { FamilyTreeTab } from "./packages/family-tree/components/FamilyTreeTab"
-import DuplicatesManagerTab from "./components/duplicates/DuplicatesManagerTab"
-import LoginPage from "./components/auth/LoginPage"
-import RegisterPage from "./components/auth/RegisterPage"
-import OnboardingPage from "./components/auth/OnboardingPage"
-import AdminPage from "./components/admin/AdminPage"
 
+const GalleryPage = React.lazy(() => import("./components/gallery/GalleryPage"))
+const FamilyTreeTab = React.lazy(() => import("./packages/family-tree/components/FamilyTreeTab").then(m => ({ default: m.FamilyTreeTab })))
+const DuplicatesManagerTab = React.lazy(() => import("./components/duplicates/DuplicatesManagerTab"))
+const LoginPage = React.lazy(() => import("./components/auth/LoginPage"))
+const RegisterPage = React.lazy(() => import("./components/auth/RegisterPage"))
+const OnboardingPage = React.lazy(() => import("./components/auth/OnboardingPage"))
+const AdminPage = React.lazy(() => import("./components/admin/AdminPage"))
+
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-full w-full">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+)
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full">
     <h2 className="text-2xl font-bold">{title}</h2>
@@ -18,15 +25,15 @@ const Placeholder = ({ title }: { title: string }) => (
 const router = createBrowserRouter([
   {
     path: "/login",
-    element: <LoginPage />
+    element: <Suspense fallback={<LoadingFallback />}><LoginPage /></Suspense>
   },
   {
     path: "/register",
-    element: <RegisterPage />
+    element: <Suspense fallback={<LoadingFallback />}><RegisterPage /></Suspense>
   },
   {
     path: "/onboarding",
-    element: <OnboardingPage />
+    element: <Suspense fallback={<LoadingFallback />}><OnboardingPage /></Suspense>
   },
   {
     path: "/",
@@ -34,15 +41,15 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <GalleryPage />
+        element: <Suspense fallback={<LoadingFallback />}><GalleryPage /></Suspense>
       },
       {
         path: "/family-tree",
-        element: <FamilyTreeTab />
+        element: <Suspense fallback={<LoadingFallback />}><FamilyTreeTab /></Suspense>
       },
       {
         path: "/duplicates",
-        element: <DuplicatesManagerTab />
+        element: <Suspense fallback={<LoadingFallback />}><DuplicatesManagerTab /></Suspense>
       },
       {
         path: "/settings",
@@ -50,7 +57,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/admin",
-        element: <AdminPage />
+        element: <Suspense fallback={<LoadingFallback />}><AdminPage /></Suspense>
       }
     ]
   }
