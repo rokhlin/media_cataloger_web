@@ -5,11 +5,13 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Search, Image as ImageIcon, Video, FilterX } from 'lucide-react';
 import type { GalleryMediaFile } from '../../models';
+import MediaViewerModal from './MediaViewerModal';
 
 export default function GalleryPage() {
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [selectedFile, setSelectedFile] = useState<GalleryMediaFile | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   // Initial load
@@ -147,6 +149,7 @@ export default function GalleryPage() {
                 return (
                   <div 
                     key={colIndex}
+                    onClick={() => setSelectedFile(file)}
                     className="relative group bg-muted rounded-md overflow-hidden border cursor-pointer hover:border-primary transition-colors flex items-center justify-center aspect-square"
                   >
                     <img 
@@ -185,6 +188,26 @@ export default function GalleryPage() {
           )}
         </div>
       </div>
+      
+      {selectedFile && (
+        <MediaViewerModal
+          isOpen={true}
+          mediaFile={selectedFile}
+          onClose={() => setSelectedFile(null)}
+          currentIndex={filteredFiles.indexOf(selectedFile)}
+          totalFiles={filteredFiles.length}
+          onPrev={() => {
+            const idx = filteredFiles.indexOf(selectedFile);
+            if (idx > 0) setSelectedFile(filteredFiles[idx - 1]);
+          }}
+          onNext={() => {
+            const idx = filteredFiles.indexOf(selectedFile);
+            if (idx < filteredFiles.length - 1) setSelectedFile(filteredFiles[idx + 1]);
+          }}
+          hasPrev={filteredFiles.indexOf(selectedFile) > 0}
+          hasNext={filteredFiles.indexOf(selectedFile) < filteredFiles.length - 1}
+        />
+      )}
     </div>
   );
 }
