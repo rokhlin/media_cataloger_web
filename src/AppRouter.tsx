@@ -3,6 +3,9 @@ import RootLayout from "./components/layout/RootLayout"
 import GalleryPage from "./components/gallery/GalleryPage"
 import { FamilyTreeTab } from "./packages/family-tree/components/FamilyTreeTab"
 import DuplicatesManagerTab from "./components/duplicates/DuplicatesManagerTab"
+import LoginPage from "./components/auth/LoginPage"
+import RegisterPage from "./components/auth/RegisterPage"
+import OnboardingPage from "./components/auth/OnboardingPage"
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full">
@@ -12,6 +15,18 @@ const Placeholder = ({ title }: { title: string }) => (
 )
 
 const router = createBrowserRouter([
+  {
+    path: "/login",
+    element: <LoginPage />
+  },
+  {
+    path: "/register",
+    element: <RegisterPage />
+  },
+  {
+    path: "/onboarding",
+    element: <OnboardingPage />
+  },
   {
     path: "/",
     element: <RootLayout />,
