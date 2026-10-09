@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import RootLayout from "./components/layout/RootLayout"
+import GalleryPage from "./components/gallery/GalleryPage"
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full">
@@ -15,7 +16,7 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <Placeholder title="Галерея" />
+        element: <GalleryPage />
       },
       {
         path: "/family-tree",
