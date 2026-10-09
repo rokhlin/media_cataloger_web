@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import RootLayout from "./components/layout/RootLayout"
 import GalleryPage from "./components/gallery/GalleryPage"
 import { FamilyTreeTab } from "./packages/family-tree/components/FamilyTreeTab"
+import DuplicatesManagerTab from "./components/duplicates/DuplicatesManagerTab"
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-full">
@@ -25,7 +26,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/duplicates",
-        element: <Placeholder title="Управление дубликатами" />
+        element: <DuplicatesManagerTab />
       },
       {
         path: "/settings",
