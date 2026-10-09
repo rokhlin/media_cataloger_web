@@ -1,3 +1,4 @@
+import React from "react"
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { Home, Users, Copy, Settings, ShieldAlert, LogOut, User } from "lucide-react"
 import { cn } from "@/utils"
@@ -6,7 +7,13 @@ import { useAuth } from "../../services/authContext"
 export default function RootLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { currentUser, isAdmin, logout } = useAuth()
+  const { currentUser, isAdmin, logout, isLoading } = useAuth()
+  
+  React.useEffect(() => {
+    if (!isLoading && !currentUser) {
+      navigate('/login')
+    }
+  }, [currentUser, isLoading, navigate])
   
   const navItems = [
     { label: "Галерея", path: "/", icon: Home },
