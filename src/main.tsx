@@ -1,10 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import App from './App';
+import AppRouter from './AppRouter';
 import { LanguageProvider } from './i18n/LanguageContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { FeatureFlagsProvider } from './services/featureFlagsContext';
+
+import { AuthProvider } from './services/authContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,12 +15,14 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <LanguageProvider>
-      <ThemeProvider>
-        <FeatureFlagsProvider>
-          <App />
-        </FeatureFlagsProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    <AuthProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <FeatureFlagsProvider>
+            <AppRouter />
+          </FeatureFlagsProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </AuthProvider>
   </StrictMode>
 );

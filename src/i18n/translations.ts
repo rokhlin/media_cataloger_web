@@ -1005,6 +1005,9 @@ export const authAndVaultTranslationsEn = {
   authCannotDeleteSelf: 'You cannot delete your own user account',
   authConfirmDeleteUser: 'Are you sure you want to delete user account',
   authPasswordMinLength: 'Password must be at least 4 characters',
+  authVerifyingPassword: 'Verifying credentials...',
+  authServerUnreachable: 'Authentication server is unreachable. Please verify that the backend server is running.',
+  authTimeoutError: 'Authentication request timed out. Please try again.',
 
   navVault: 'Secret Vault',
   navVaultTooltip: 'Secret Vault - Encrypted and hidden private media storage',
@@ -1191,6 +1194,9 @@ export const authAndVaultTranslationsRu = {
   authCannotDeleteSelf: 'Вы не можете удалить свою собственную учетную запись',
   authConfirmDeleteUser: 'Вы уверены, что хотите удалить пользователя',
   authPasswordMinLength: 'Пароль должен содержать не менее 4 символов',
+  authVerifyingPassword: 'Проверка учетных данных...',
+  authServerUnreachable: 'Сервер авторизации недоступен. Убедитесь, что бэкенд запущен.',
+  authTimeoutError: 'Время ожидания ответа сервера истекло. Пожалуйста, попробуйте снова.',
 
   navVault: 'Сейф',
   navVaultTooltip: 'Сейф - Защищенное изолированное хранилище личных медиафайлов',
