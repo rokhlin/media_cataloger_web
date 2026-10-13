@@ -14,6 +14,7 @@ interface AuthContextValue {
   hasRole: (role: UserRole | UserRole[]) => boolean;
   hasPermission: (permission: Permission | Permission[]) => boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, password: string, displayName?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
@@ -200,6 +201,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
+  const register = useCallback(
+    async (username: string, password: string, displayName?: string): Promise<{ success: boolean; error?: string }> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        let res: Response;
+        try {
+          res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, displayName: displayName || username }),
+            signal: controller.signal,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          return {
+            success: false,
+            error: fetchErr?.name === 'AbortError' ? 'Registration timed out' : 'Server is unreachable',
+          };
+        }
+        clearTimeout(timeoutId);
+
+        let data: any = {};
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch {
+            data = {};
+          }
+        } else {
+          const text = await res.text().catch(() => '');
+          data = { message: text.slice(0, 150) };
+        }
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data?.message || `Registration error (${res.status})`,
+          };
+        }
+
+        const newToken = data.token;
+        const newUser: User = data.user;
+
+        if (newToken && newUser) {
+          setToken(newToken);
+          setCurrentUser(newUser);
+
+          try {
+            localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+            localStorage.setItem(AUTH_USER_KEY, JSON.stringify(newUser));
+          } catch (e) {
+            console.warn('Failed to save auth state to localStorage:', e);
+          }
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        return {
+          success: false,
+          error: err?.message || 'Connection error while registering',
+        };
+      }
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     try {
       if (token) {
@@ -277,6 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasRole,
       hasPermission,
       login,
+      register,
       logout,
       refreshProfile,
       authFetch,
@@ -293,6 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasRole,
       hasPermission,
       login,
+      register,
       logout,
       refreshProfile,
       authFetch,

@@ -12,10 +12,13 @@ import {
   LogOut,
   X,
   Check,
+  Folder,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
 import { useTheme } from '../../theme/ThemeContext';
+import FolderConfigModal from '../common/FolderConfigModal';
 
 export interface TopNavBarProps {
   onMenuToggle?: () => void;
@@ -31,6 +34,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [folderModalOpen, setFolderModalOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -78,12 +82,13 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
   const userInitial = (currentUser?.username || 'U').charAt(0).toUpperCase();
 
   return (
-    <header
-      className={cn(
-        'h-16 border-b border-border/80 bg-card/95 backdrop-blur-md px-4 flex items-center justify-between gap-3 sticky top-0 z-30 shrink-0 shadow-xs',
-        className
-      )}
-    >
+    <>
+      <header
+        className={cn(
+          'h-16 border-b border-border/80 bg-card/95 backdrop-blur-md px-4 flex items-center justify-between gap-3 sticky top-0 z-30 shrink-0 shadow-xs',
+          className
+        )}
+      >
       {/* Left: Mobile Drawer Trigger */}
       <div className="flex items-center gap-2">
         <button
@@ -245,6 +250,27 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
 
               {/* Menu Actions */}
               <div className="py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setFolderModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                >
+                  <Folder size={16} className="text-primary" />
+                  <span>Настройка папок и источников</span>
+                </button>
+
+                <Link
+                  to="/onboarding"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <Sparkles size={16} className="text-[#f3cd03]" />
+                  <span>Мастер настройки (С нуля)</span>
+                </Link>
+
                 <Link
                   to="/settings"
                   onClick={() => setProfileOpen(false)}
@@ -286,6 +312,13 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
         </div>
       </div>
     </header>
+
+    {/* Folder Configuration Modal */}
+    <FolderConfigModal
+      isOpen={folderModalOpen}
+      onClose={() => setFolderModalOpen(false)}
+    />
+    </>
   );
 };
 

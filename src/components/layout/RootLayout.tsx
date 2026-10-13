@@ -49,12 +49,7 @@ export default function RootLayout() {
         </main>
 
         {/* Global Bottom Status Bar */}
-        <StatusBar
-          progress={45}
-          title="Фоновое сканирование медиатеки"
-          detail="Обработано 1,240 из 2,800 файлов (AI индексация)"
-          status="running"
-        />
+        <StatusBar />
       </div>
     </div>
   );

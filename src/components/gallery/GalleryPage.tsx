@@ -144,7 +144,8 @@ export default function GalleryPage() {
                 
                 if (!file) return <div key={colIndex} />;
 
-                const thumbnailUrl = `/api/thumbnail/${encodeURIComponent(file.file_path || file.filename || '')}`;
+                const filePathOrName = file.file_path || file.filename || '';
+                const thumbnailUrl = file.thumbnail_url || `/api/media/thumbnail?path=${encodeURIComponent(filePathOrName)}&size=360`;
 
                 return (
                   <div 

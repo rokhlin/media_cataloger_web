@@ -18,9 +18,12 @@ import {
   ChevronRight,
   HardDrive,
   X,
+  Folder,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
+import FolderConfigModal from '../common/FolderConfigModal';
 
 export interface LeftNavSidebarProps {
   isOpen?: boolean;
@@ -36,6 +39,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
   const location = useLocation();
   const { isAdmin } = useAuth();
   const [albumsExpanded, setAlbumsExpanded] = useState(true);
+  const [folderModalOpen, setFolderModalOpen] = useState(false);
 
   const mainRoutes = [
     { label: 'Фото', path: '/', icon: Image },
@@ -239,6 +243,35 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
               {libraryRoutes.map(renderNavLink)}
             </div>
 
+            {/* Folder Config and Onboarding Actions */}
+            <div className="pt-2 border-t border-border/40 space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.();
+                  setFolderModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-all"
+              >
+                <Folder className="h-5 w-5 shrink-0 text-primary" />
+                <span className="truncate">Папки медиа</span>
+              </button>
+
+              <NavLink
+                to="/onboarding"
+                onClick={onClose}
+                className={cn(
+                  'flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all',
+                  location.pathname === '/onboarding'
+                    ? 'bg-primary/15 text-primary font-semibold'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                )}
+              >
+                <Sparkles className="h-5 w-5 shrink-0 text-[#f3cd03]" />
+                <span className="truncate">Мастер настройки</span>
+              </NavLink>
+            </div>
+
             {/* Admin Route (Role Protected) */}
             {isAdmin && (
               <div className="pt-2">
@@ -305,6 +338,11 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
           </div>
         </div>
       </aside>
+
+      <FolderConfigModal
+        isOpen={folderModalOpen}
+        onClose={() => setFolderModalOpen(false)}
+      />
     </>
   );
 };
