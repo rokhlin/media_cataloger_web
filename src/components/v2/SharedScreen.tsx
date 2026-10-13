@@ -12,7 +12,7 @@ export const SharedScreen: React.FC = () => {
       views: 124,
       createdAt: '10 фев 2025',
       expiresAt: 'Без ограничений',
-      url: 'https://immich.local/s/rome-2025-vacation',
+      url: 'https://cataloger.local/s/rome-2025-vacation',
     },
     {
       id: 2,
@@ -21,7 +21,7 @@ export const SharedScreen: React.FC = () => {
       views: 38,
       createdAt: '01 фев 2025',
       expiresAt: 'До 01 марта 2025',
-      url: 'https://immich.local/s/family-anniversary-75',
+      url: 'https://cataloger.local/s/family-anniversary-75',
     },
   ];
 

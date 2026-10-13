@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Image,
@@ -24,6 +24,7 @@ import {
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
 import FolderConfigModal from '../common/FolderConfigModal';
+import { getRealAlbums, type CatalogAlbum } from '../../services/albumService';
 
 export interface LeftNavSidebarProps {
   isOpen?: boolean;
@@ -40,6 +41,28 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
   const { isAdmin } = useAuth();
   const [albumsExpanded, setAlbumsExpanded] = useState(true);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
+  const [albums, setAlbums] = useState<CatalogAlbum[]>([]);
+  const [stats, setStats] = useState<{ total: number; photos: number; videos: number } | null>(null);
+  const [serverOnline, setServerOnline] = useState<boolean>(true);
+
+  useEffect(() => {
+    getRealAlbums().then((loaded) => setAlbums(loaded));
+
+    fetch('/api/media/files?limit=1')
+      .then((r) => {
+        if (!r.ok) throw new Error('Network error');
+        return r.json();
+      })
+      .then((data) => {
+        if (data?.stats) {
+          setStats(data.stats);
+        }
+        setServerOnline(true);
+      })
+      .catch(() => {
+        setServerOnline(false);
+      });
+  }, []);
 
   const mainRoutes = [
     { label: 'Фото', path: '/', icon: Image },
@@ -56,12 +79,6 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
     { label: 'Архив', path: '/archive', icon: Archive },
     { label: 'Личная папка', path: '/locked-folder', icon: Lock },
     { label: 'Корзина', path: '/trash', icon: Trash2 },
-  ];
-
-  const sampleAlbums = [
-    { name: 'Горы', count: 12, path: '/albums' },
-    { name: 'Красные авто', count: 8, path: '/albums' },
-    { name: '2024\'12 — Декабрь', count: 45, path: '/albums' },
   ];
 
   const renderNavLink = (item: { label: string; path: string; icon: React.ElementType }) => {
@@ -149,7 +166,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
 
               <div className="flex flex-col">
                 <span className="font-extrabold text-base tracking-tight text-foreground group-hover:text-primary transition-colors">
-                  immich
+                  Media Cataloger
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground -mt-1">
                   Cataloger V2
@@ -219,11 +236,11 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
               </div>
 
               {/* Nested Album Mini-List */}
-              {albumsExpanded && (
+              {albumsExpanded && albums.length > 0 && (
                 <div className="ml-5 pl-3 border-l border-border/60 space-y-1 py-1">
-                  {sampleAlbums.map((album) => (
+                  {albums.map((album) => (
                     <NavLink
-                      key={album.name}
+                      key={album.id}
                       to={album.path}
                       onClick={onClose}
                       className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -295,31 +312,42 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                 Хранилище
               </span>
               <span className="text-[11px] font-mono text-muted-foreground">
-                25.5 / 100 GiB
+                {stats ? `${stats.total} медиа` : 'Сканирование...'}
               </span>
             </div>
 
             {/* Storage Meter Bar */}
-            <div
-              role="meter"
-              aria-label="Использование дискового хранилища"
-              aria-valuenow={25.5}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              className="w-full h-2 bg-muted/60 rounded-full overflow-hidden flex"
-            >
-              {/* Photos slice (blue) */}
+            {stats && stats.total > 0 ? (
               <div
-                className="h-full bg-[#23a6f0]"
-                style={{ width: '20%' }}
-                title="Фотографии: 20 GiB"
-              />
-              {/* Videos slice (accent/yellow) */}
-              <div
-                className="h-full bg-[#f3cd03]"
-                style={{ width: '5.5%' }}
-                title="Видео: 5.5 GiB"
-              />
+                role="meter"
+                aria-label="Использование медиатеки"
+                aria-valuenow={stats.total}
+                aria-valuemin={0}
+                aria-valuemax={stats.total}
+                className="w-full h-2 bg-muted/60 rounded-full overflow-hidden flex"
+              >
+                {/* Photos slice (blue) */}
+                <div
+                  className="h-full bg-[#23a6f0] transition-all duration-500"
+                  style={{ width: `${Math.round((stats.photos / stats.total) * 100)}%` }}
+                  title={`Фотографий: ${stats.photos}`}
+                />
+                {/* Videos slice (accent/yellow) */}
+                <div
+                  className="h-full bg-[#f3cd03] transition-all duration-500"
+                  style={{ width: `${Math.round((stats.videos / stats.total) * 100)}%` }}
+                  title={`Видеозаписей: ${stats.videos}`}
+                />
+              </div>
+            ) : (
+              <div className="w-full h-2 bg-muted/60 rounded-full overflow-hidden">
+                <div className="h-full bg-primary/40 w-1/3 animate-pulse" />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1.5">
+              <span>Фото: {stats?.photos ?? 0}</span>
+              <span>Видео: {stats?.videos ?? 0}</span>
             </div>
           </div>
 
@@ -327,13 +355,17 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
           <div className="flex items-center justify-between px-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2dc071] opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2dc071]" />
+                {serverOnline && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2dc071] opacity-75" />
+                )}
+                <span className={cn("relative inline-flex rounded-full h-2 w-2", serverOnline ? "bg-[#2dc071]" : "bg-[#e74040]")} />
               </span>
-              <span className="text-muted-foreground text-[11px]">Сервер в сети</span>
+              <span className="text-muted-foreground text-[11px]">
+                {serverOnline ? 'Сервер в сети' : 'Сервер недоступен'}
+              </span>
             </div>
-            <span className="text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded">
-              v3.3.1
+            <span className="text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded" title="Версия веб-клиента">
+              Клиент: v1.0.0
             </span>
           </div>
         </div>

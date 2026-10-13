@@ -28,8 +28,8 @@ describe('V2 Base Layout & Adaptive Navigation Architecture', () => {
   it('should verify LeftNavSidebar contains complete navigation hierarchy and footer widgets', () => {
     const sidebarContent = fs.readFileSync(path.join(layoutDir, 'LeftNavSidebar.tsx'), 'utf-8');
 
-    // Immich logo & branding
-    assert.ok(sidebarContent.includes('immich'), 'Sidebar must include immich branding');
+    // Media Cataloger logo & branding
+    assert.ok(sidebarContent.includes('Media Cataloger'), 'Sidebar must include Media Cataloger branding');
     assert.ok(sidebarContent.includes('Cataloger V2'), 'Sidebar must include Cataloger V2 brand label');
 
     // Core navigation routes
@@ -58,9 +58,8 @@ describe('V2 Base Layout & Adaptive Navigation Architecture', () => {
 
     // Storage Widget & Server Status Pill
     assert.ok(sidebarContent.includes('Хранилище'), 'Sidebar must contain StorageUsageWidget');
-    assert.ok(sidebarContent.includes('25.5 / 100 GiB'), 'Sidebar must display storage capacity');
     assert.ok(sidebarContent.includes('Сервер в сети'), 'Sidebar must display live server health pill');
-    assert.ok(sidebarContent.includes('v3.3.1'), 'Sidebar must display server version v3.3.1');
+    assert.ok(sidebarContent.includes('Клиент: v1.0.0'), 'Sidebar must display client version');
   });
 
   it('should verify TopNavBar contains search pill, upload CTA, and profile popover', () => {

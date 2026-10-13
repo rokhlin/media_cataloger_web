@@ -11,6 +11,7 @@ import { useVault } from '../../services/vaultContext';
 import { useFamilyTreeStore } from '../../packages/family-tree/state/useFamilyTreeStore';
 import MetadataEditorModal from './MetadataEditorModal';
 import ModuleStatusBadges from './ModuleStatusBadges';
+import { useFavorites } from '../../services/favoritesService';
 import './MediaViewerModal.css';
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -96,6 +97,7 @@ export default function MediaViewerModal({
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
   const { addVaultItem, removeVaultItem } = useVault();
   const { galleryKinshipFactsConfig, treeDataVersion } = useFamilyTreeStore();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // Selected media state (can be updated locally on tagging/vault actions)
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(() => {
@@ -706,6 +708,27 @@ export default function MediaViewerModal({
                   ▶
                 </button>
               )}
+
+              <button
+                className="btn-icon favorite-toggle-btn"
+                onClick={() => {
+                  const target = selectedMedia?.file_path || selectedMedia?.filename;
+                  if (target) toggleFavorite(target);
+                }}
+                title={isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? 'Удалить из избранного' : 'Добавить в избранное'}
+                aria-label="Избранное"
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.05rem',
+                  padding: '0 0.35rem',
+                  color: isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? '#e74040' : 'var(--text-secondary)',
+                }}
+              >
+                {isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? '❤️' : '🤍'}
+              </button>
 
               <button
                 className="close-btn"

@@ -4,14 +4,14 @@
 - **System**: Media Cataloger Web Application & Backend (`media_cataloger_web`)
 - **Version**: 2.0.0
 - **Architect**: SDM System Architect (`sdm-system-architect`)
-- **Status**: `Living Document — Synchronized with V2 Immich Architecture`
-- **Last Updated**: 2026-10-13
+- **Status**: `Living Document — Synchronized with V2 Media Cataloger Architecture`
+- **Last Updated**: 2026-10-14
 
 ---
 
 ## 1. Architectural Overview
 
-`media_cataloger_web` is a modern, high-performance personal media management platform engineered to deliver an **Immich-style** user experience. The system is designed as a cohesive full-stack web application:
+`media_cataloger_web` is a modern, high-performance personal media management platform engineered to deliver an advanced, intuitive user experience. The system is designed as a cohesive full-stack web application:
 
 - **Client Architecture**:
   - **Framework**: React 19 with functional components and hooks.

@@ -14,6 +14,7 @@ import {
   Check,
   Folder,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
@@ -201,18 +202,43 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                 </span>
               </div>
               <div className="py-2 space-y-2 text-xs">
-                <div className="p-2 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors">
-                  <p className="font-medium text-foreground">Индексация завершена</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">
-                    120 новых фотографий добавлены в общую ленту.
-                  </p>
-                </div>
-                <div className="p-2 rounded-lg hover:bg-muted/40 transition-colors">
-                  <p className="font-medium text-foreground">Обнаружены дубликаты</p>
-                  <p className="text-muted-foreground text-[11px] mt-0.5">
-                    Найдено 14 групп схожих медиафайлов для анализа.
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    navigate('/photos');
+                  }}
+                  className="w-full text-left p-2.5 rounded-xl bg-muted/40 hover:bg-muted/80 transition-all flex items-start justify-between group cursor-pointer"
+                >
+                  <div className="space-y-0.5 pr-2">
+                    <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                      Индексация завершена
+                    </p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      Медиафайлы добавлены в общую ленту. Нажмите для перехода к галерее.
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    navigate('/duplicates');
+                  }}
+                  className="w-full text-left p-2.5 rounded-xl hover:bg-muted/60 transition-all flex items-start justify-between group cursor-pointer"
+                >
+                  <div className="space-y-0.5 pr-2">
+                    <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                      Обнаружены дубликаты
+                    </p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      Найдены группы схожих медиафайлов. Нажмите для анализа и очистки.
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+                </button>
               </div>
             </div>
           )}

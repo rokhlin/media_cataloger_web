@@ -57,6 +57,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Dynamic cache recalculation on folder removal and rename operations (`recalculateCacheAfterFolderChange`).
   - Added dedicated navigation link button to **Tree Settings** (`tab-settings-tree`) inside `SystemSettings` tabs navigation, automatically switching to the Family Tree screen and activating the Tree Settings subtab.
 
+### Fixed
+- **Media Cataloger V2 Migration Quality Restoration (`BUG-001`)**:
+  - **Immich Branding Cleanup**: Completely purged residual Immich logos, labels, and local URLs across navigation sidebars, headers, and documentation in favor of `Media Cataloger` (`Cataloger V2`).
+  - **Gallery Virtualization Overlap**: Fixed severe row collision and overlap in fullscreen and zoomed view modes by replacing static height estimations with dynamic `ResizeObserver` tracking and column-proportional row heights (`rowHeight = cardWidth + gap`).
+  - **Sidebar Telemetry & Versioning**: Replaced static `25.5 / 100 GiB` mock quota with live catalog telemetry (total media items, formatted footprint, photo/video breakdown) and unambiguous `Клиент: v1.0.0` / `Сервер: в сети` badges.
+  - **People & Faces Real Binding**: Removed hardcoded mock individuals; bound the view directly to backend face clusters (`/api/faces/persons`) with a clean empty state when no faces are recognized.
+  - **Albums Real Directory Collections**: Replaced mock albums ("Горы", "Красное авто") with real filesystem catalog folders discovered from active media, with dedicated empty state and deep-link filtering.
+  - **Interactive Notification Bell Routing**: Wired notification popover items to deep-link directly to `/photos` (for indexing completion) and `/duplicates` (for detected duplicate clusters).
+  - **Favorites System**: Implemented reactive persistent `favoritesService` (`localStorage`), added heart favorite toggle buttons to all gallery cards and the fullscreen media viewer lightbox, and bound `/favorites` to real favorited media items.
+
 ---
 
 ## [0.7.0] - 2026-09-05
