@@ -3,9 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import { useFavorites } from '../../services/favoritesService';
-import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Search, Image as ImageIcon, Video, FilterX, Heart, ZoomIn, ZoomOut, Folder } from 'lucide-react';
+import { Image as ImageIcon, Video, FilterX, Heart, ZoomIn, ZoomOut, Folder } from 'lucide-react';
 import { cn } from '@/utils';
 import type { GalleryMediaFile } from '../../models';
 import MediaViewerModal from './MediaViewerModal';
@@ -13,9 +12,9 @@ import MediaViewerModal from './MediaViewerModal';
 export default function GalleryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const folderParam = searchParams.get('folder');
+  const queryParam = searchParams.get('q') || '';
 
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
   const [selectedFile, setSelectedFile] = useState<GalleryMediaFile | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(1200);
@@ -63,9 +62,9 @@ export default function GalleryPage() {
       if (typeFilter === 'image' && !file.is_image && file.type !== 'image') return false;
       if (typeFilter === 'video' && !file.is_video && file.type !== 'video') return false;
       
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
+      // Global Search query filter
+      if (queryParam) {
+        const query = queryParam.toLowerCase();
         const nameMatch = file.filename?.toLowerCase().includes(query);
         const pathMatch = file.file_path?.toLowerCase().includes(query);
         if (!nameMatch && !pathMatch) return false;
@@ -73,7 +72,7 @@ export default function GalleryPage() {
       
       return true;
     });
-  }, [mediaFiles, searchQuery, typeFilter, folderParam]);
+  }, [mediaFiles, queryParam, typeFilter, folderParam]);
 
   // Derived column count based on container width and zoom level
   const columns = useMemo(() => {
@@ -119,15 +118,22 @@ export default function GalleryPage() {
           </div>
         )}
 
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Поиск по имени или пути..." 
-            className="pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        {queryParam && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 border border-primary/25 text-primary text-xs font-medium rounded-lg">
+            <span>Поиск: "{queryParam}"</span>
+            <button
+              type="button"
+              onClick={() => {
+                searchParams.delete('q');
+                setSearchParams(searchParams);
+              }}
+              className="ml-1 hover:opacity-75 font-bold"
+              title="Сбросить поиск"
+            >
+              ×
+            </button>
+          </div>
+        )}
         
         <div className="flex items-center gap-2 border rounded-md p-1 bg-background">
           <Button 
@@ -178,12 +184,14 @@ export default function GalleryPage() {
           className="h-10 w-10 shrink-0"
           title="Сбросить фильтры"
           onClick={() => {
-            setSearchQuery('');
-            setTypeFilter('all');
+            if (queryParam) {
+              searchParams.delete('q');
+            }
             if (folderParam) {
               searchParams.delete('folder');
-              setSearchParams(searchParams);
             }
+            setSearchParams(searchParams);
+            setTypeFilter('all');
           }}
         >
           <FilterX size={16} />

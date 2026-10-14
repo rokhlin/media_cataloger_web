@@ -58,6 +58,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added dedicated navigation link button to **Tree Settings** (`tab-settings-tree`) inside `SystemSettings` tabs navigation, automatically switching to the Family Tree screen and activating the Tree Settings subtab.
 
 ### Fixed
+- **Multi-User Isolation, Session Cookies & Public Virtual Albums (`BUG-002`)**:
+  - **Browser Cookie & Session Persistence**: Standardized `media_cataloger_session` cookie authentication across client and NestJS backend (`auth.guard.ts`, `auth.controller.ts`), allowing seamless authentication without localStorage token loss.
+  - **Client Cache Isolation & Wiping**: Enhanced `mediaCacheService.clearCache()` to thoroughly purge in-memory cache maps, request deduplication queues, and the IndexedDB `media-files` object store upon logout and on 401s, preventing cross-account media bleed.
+  - **Prominent Login Entry & Logout Flow**: Added a distinct "Войти" button in `TopNavBar` for unauthenticated sessions, wired user logout to clear cookies/tokens/caches and redirect to `/login`.
+  - **Setup Wizard Scoping**: Removed "Мастер настройки" from global navigation dropdowns, `LeftNavSidebar`, and `StatusBar` for configured users, relocating it to Account Settings (`UserSettingsScreen`) with contextual alerts for accounts with 0 configured scan folders.
+  - **Status Bar Visibility**: Restricted "Медиатека готова к работе" status bar badge strictly to gallery views (`/` and `/photos`), cleanly suppressing it when idle on non-gallery screens.
+  - **Virtual Albums & Public Token Sharing**: Engineered `virtualAlbumService` and `PublicSharedAlbumView` (`/shared/:token`), enabling users to create custom virtual albums with tags and photo selections, and securely share read-only galleries with recipients outside system accounts.
+  - **Mock Data Elimination**: Removed mock pins from `GeoMapScreen` and mock albums from `SharedScreen`, wiring both to live media GPS metadata and persisted virtual albums.
+  - **Search Bar Consolidation & Keyboard Shortcut**: Removed duplicate search bar from `GalleryPage`, bound gallery filtering to URL search parameters (`?q=...`) with clearable active filter chips, wired global `Ctrl+K` / `⌘K` keyboard shortcut in `TopNavBar`, and integrated real face clustering into `SearchHubScreen`.
 - **Media Cataloger V2 Migration Quality Restoration (`BUG-001`)**:
   - **Immich Branding Cleanup**: Completely purged residual Immich logos, labels, and local URLs across navigation sidebars, headers, and documentation in favor of `Media Cataloger` (`Cataloger V2`).
   - **Gallery Virtualization Overlap**: Fixed severe row collision and overlap in fullscreen and zoomed view modes by replacing static height estimations with dynamic `ResizeObserver` tracking and column-proportional row heights (`rowHeight = cardWidth + gap`).

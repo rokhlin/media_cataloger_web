@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Settings,
   User,
@@ -13,12 +14,25 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  FolderPlus,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 
 export const UserSettingsScreen: React.FC = () => {
   const { currentUser } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('account');
+  const [configuredFolders, setConfiguredFolders] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data && Array.isArray(data.input_folders)) {
+          setConfiguredFolders(data.input_folders);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleSection = (id: string) => {
     setExpandedSection(expandedSection === id ? null : id);
@@ -32,6 +46,25 @@ export const UserSettingsScreen: React.FC = () => {
       icon: User,
       renderContent: () => (
         <div className="space-y-4 pt-3">
+          {/* New User Configuration Prompt if zero folders configured */}
+          {configuredFolders.length === 0 && (
+            <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-foreground">Начало работы: каталоги не настроены</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Укажите папки на диске с фотографиями и видеозаписями для запуска каталогизатора.
+                </p>
+              </div>
+              <Link
+                to="/onboarding"
+                className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs shrink-0 flex items-center gap-1.5"
+              >
+                <FolderPlus size={14} />
+                <span>Настроить папки</span>
+              </Link>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -54,13 +87,33 @@ export const UserSettingsScreen: React.FC = () => {
               />
             </div>
           </div>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
-          >
-            <Save size={14} />
-            <span>Сохранить изменения</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+            >
+              <Save size={14} />
+              <span>Сохранить изменения</span>
+            </button>
+          </div>
+
+          {/* Setup Wizard Relocated Card */}
+          <div className="mt-6 pt-4 border-t border-border/50">
+            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
+              <Sparkles size={14} className="text-[#f3cd03]" />
+              <span>Мастер первоначальной настройки системы</span>
+            </h4>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Пошаговый мастер настройки поможет сконфигурировать сканируемые директории, модули AI распознавания лиц и правила дубликатов.
+            </p>
+            <Link
+              to="/onboarding"
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border/80 text-xs font-semibold rounded-xl transition-colors"
+            >
+              <Sparkles size={13} className="text-[#f3cd03]" />
+              <span>Запустить мастер настройки</span>
+            </Link>
+          </div>
         </div>
       ),
     },

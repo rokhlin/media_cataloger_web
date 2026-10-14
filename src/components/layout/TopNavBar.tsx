@@ -13,8 +13,8 @@ import {
   X,
   Check,
   Folder,
-  Sparkles,
   ChevronRight,
+  LogIn,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
@@ -244,98 +244,100 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
           )}
         </div>
 
-        {/* User Profile Popover */}
-        <div className="relative" ref={profileRef}>
-          <button
-            type="button"
-            onClick={() => setProfileOpen(!profileOpen)}
-            className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-sm flex items-center justify-center shadow-xs hover:ring-2 hover:ring-primary/40 transition-all focus:ring-2 focus:ring-primary"
-            aria-label="Профиль пользователя"
-            title="Профиль пользователя"
-          >
-            {userInitial}
-          </button>
+        {/* User Profile Popover / Login Button */}
+        {currentUser ? (
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setProfileOpen(!profileOpen)}
+              className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-sm flex items-center justify-center shadow-xs hover:ring-2 hover:ring-primary/40 transition-all focus:ring-2 focus:ring-primary"
+              aria-label="Профиль пользователя"
+              title="Профиль пользователя"
+            >
+              {userInitial}
+            </button>
 
-          {/* Profile Menu Dropdown */}
-          {profileOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-card border border-border/80 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              {/* User details header */}
-              <div className="px-4 py-2.5 border-b border-border/50">
-                <p className="font-semibold text-sm text-foreground truncate">
-                  {currentUser?.username || 'Пользователь'}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {currentUser?.displayName || currentUser?.username || 'user@example.local'}
-                </p>
-                <div className="mt-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary/15 text-primary px-2 py-0.5 rounded-full">
-                    {isAdmin ? 'Администратор' : 'Пользователь'}
-                  </span>
+            {/* Profile Menu Dropdown */}
+            {profileOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-card border border-border/80 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* User details header */}
+                <div className="px-4 py-2.5 border-b border-border/50">
+                  <p className="font-semibold text-sm text-foreground truncate">
+                    {currentUser.username}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {currentUser.displayName || currentUser.username}
+                  </p>
+                  <div className="mt-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                      {isAdmin ? 'Администратор' : 'Пользователь'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Menu Actions */}
-              <div className="py-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    setFolderModalOpen(true);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
-                >
-                  <Folder size={16} className="text-primary" />
-                  <span>Настройка папок и источников</span>
-                </button>
+                {/* Menu Actions */}
+                <div className="py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setFolderModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                  >
+                    <Folder size={16} className="text-primary" />
+                    <span>Настройка папок и источников</span>
+                  </button>
 
-                <Link
-                  to="/onboarding"
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
-                  <Sparkles size={16} className="text-[#f3cd03]" />
-                  <span>Мастер настройки (С нуля)</span>
-                </Link>
-
-                <Link
-                  to="/settings"
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
-                  <Settings size={16} />
-                  <span>Настройки учётной записи</span>
-                </Link>
-
-                {isAdmin && (
                   <Link
-                    to="/admin"
+                    to="/settings"
                     onClick={() => setProfileOpen(false)}
                     className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   >
-                    <ShieldAlert size={16} />
-                    <span>Управление сервером</span>
+                    <Settings size={16} />
+                    <span>Настройки учётной записи</span>
                   </Link>
-                )}
+
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <ShieldAlert size={16} />
+                      <span>Управление сервером</span>
+                    </Link>
+                  )}
+                </div>
+
+                <div className="border-t border-border/50 my-1" />
+
+                {/* Logout Button */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setProfileOpen(false);
+                    await logout();
+                    navigate('/login');
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[#e74040] hover:bg-[#e74040]/10 transition-colors text-left"
+                >
+                  <LogOut size={16} />
+                  <span>Выход</span>
+                </button>
               </div>
-
-              <div className="border-t border-border/50 my-1" />
-
-              {/* Logout Button */}
-              <button
-                type="button"
-                onClick={async () => {
-                  setProfileOpen(false);
-                  await logout();
-                  navigate('/login');
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[#e74040] hover:bg-[#e74040]/10 transition-colors text-left"
-              >
-                <LogOut size={16} />
-                <span>Выход</span>
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <Link
+            to="/login"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs"
+            title="Войти в систему"
+          >
+            <LogIn size={15} />
+            <span>Войти</span>
+          </Link>
+        )}
       </div>
     </header>
 

@@ -19,7 +19,6 @@ import {
   HardDrive,
   X,
   Folder,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
@@ -273,20 +272,6 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                 <Folder className="h-5 w-5 shrink-0 text-primary" />
                 <span className="truncate">Папки медиа</span>
               </button>
-
-              <NavLink
-                to="/onboarding"
-                onClick={onClose}
-                className={cn(
-                  'flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all',
-                  location.pathname === '/onboarding'
-                    ? 'bg-primary/15 text-primary font-semibold'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                )}
-              >
-                <Sparkles className="h-5 w-5 shrink-0 text-[#f3cd03]" />
-                <span className="truncate">Мастер настройки</span>
-              </NavLink>
             </div>
 
             {/* Admin Route (Role Protected) */}

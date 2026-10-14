@@ -54,6 +54,7 @@ const ArchiveScreen = React.lazy(() => import("./components/v2/ArchiveScreen"))
 const LockedFolderScreen = React.lazy(() => import("./components/v2/LockedFolderScreen"))
 const TrashScreen = React.lazy(() => import("./components/v2/TrashScreen"))
 const UserSettingsScreen = React.lazy(() => import("./components/v2/UserSettingsScreen"))
+const PublicSharedAlbumView = React.lazy(() => import("./components/v2/PublicSharedAlbumView"))
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full py-16">
@@ -62,6 +63,11 @@ const LoadingFallback = () => (
 )
 
 const router = createBrowserRouter([
+  {
+    path: "/shared/:token",
+    element: <Suspense fallback={<LoadingFallback />}><PublicSharedAlbumView /></Suspense>,
+    errorElement: <RouteErrorBoundary />
+  },
   {
     path: "/login",
     element: <Suspense fallback={<LoadingFallback />}><LoginPage /></Suspense>,

@@ -1,34 +1,40 @@
-import React, { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Search, MapPin, Smile, Sparkles, Calendar, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, MapPin, Smile, Sparkles, ArrowRight, Folder } from 'lucide-react';
 
 export const SearchHubScreen: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
+  const [queryInput, setQueryInput] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [realPersons, setRealPersons] = useState<{ id: string; name: string; count?: number }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/faces/persons')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRealPersons(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const categories = [
     { id: 'all', label: 'Все категории' },
-    { id: 'people', label: 'Люди и лица' },
-    { id: 'places', label: 'Гео-локации' },
-    { id: 'memories', label: 'Воспоминания' },
-    { id: 'documents', label: 'Документы и текст' },
+    { id: 'people', label: 'Люди и лица', link: '/people' },
+    { id: 'places', label: 'Гео-локации', link: '/map' },
+    { id: 'albums', label: 'Альбомы', link: '/albums' },
+    { id: 'favorites', label: 'Избранное', link: '/favorites' },
   ];
 
-  const peopleSamples = [
-    { name: 'Анна', count: 184, avatar: '👩' },
-    { name: 'Михаил', count: 142, avatar: '👨' },
-    { name: 'Елена', count: 96, avatar: '👱‍♀️' },
-    { name: 'Дмитрий', count: 78, avatar: '🧔' },
-    { name: 'Без имени', count: 24, avatar: '👤' },
-  ];
-
-  const placeSamples = [
-    { name: 'Алматы, Казахстан', count: 320, photoGradient: 'from-blue-600 to-indigo-800' },
-    { name: 'Рим, Италия', count: 195, photoGradient: 'from-amber-500 to-red-700' },
-    { name: 'Париж, Франция', count: 142, photoGradient: 'from-purple-600 to-pink-700' },
-    { name: 'Санкт-Петербург', count: 88, photoGradient: 'from-teal-600 to-cyan-800' },
-  ];
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (queryInput.trim()) {
+      navigate(`/photos?q=${encodeURIComponent(queryInput.trim())}`);
+    }
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -43,8 +49,28 @@ export const SearchHubScreen: React.FC = () => {
             Поиск по всей медиатеке
           </h1>
           <p className="text-muted-foreground text-sm mt-2">
-            Ищите фотографии по лицам, географическим координатам, датам или текстовым описаниям объектов.
+            Ищите фотографии по именам файлов, распознанным лицам, каталогам или метаданным.
           </p>
+
+          {/* Integrated Search Input Form */}
+          <form onSubmit={handleSearchSubmit} className="mt-4 flex items-center gap-2 max-w-lg">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Поиск по имени файла, папке или тегам..."
+                value={queryInput}
+                onChange={(e) => setQueryInput(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-card/90 border border-border/80 rounded-xl text-sm outline-none focus:border-primary shadow-xs"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs shrink-0"
+            >
+              Искать
+            </button>
+          </form>
 
           {initialQuery && (
             <div className="mt-4 flex items-center gap-2 text-sm bg-card border border-border/80 rounded-xl px-4 py-2 w-fit">
@@ -55,13 +81,16 @@ export const SearchHubScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Category Pills */}
+        {/* Category Navigation Pills */}
         <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-1 scrollbar-none">
           {categories.map((cat) => (
             <button
               key={cat.id}
               type="button"
-              onClick={() => setActiveCategory(cat.id)}
+              onClick={() => {
+                setActiveCategory(cat.id);
+                if (cat.link) navigate(cat.link);
+              }}
               className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
                 activeCategory === cat.id
                   ? 'bg-primary text-white shadow-xs'
@@ -74,12 +103,12 @@ export const SearchHubScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* People Carousel Section */}
+      {/* People Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Smile className="text-primary h-5 w-5" />
-            <h2 className="text-lg font-bold text-foreground">Люди</h2>
+            <h2 className="text-lg font-bold text-foreground">Распознанные лица</h2>
           </div>
           <Link
             to="/people"
@@ -90,28 +119,38 @@ export const SearchHubScreen: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-          {peopleSamples.map((person) => (
-            <Link
-              key={person.name}
-              to={`/people?filter=${encodeURIComponent(person.name)}`}
-              className="bg-card border border-border/70 hover:border-primary/50 rounded-2xl p-4 flex flex-col items-center text-center group transition-all hover:shadow-md"
-            >
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-3xl mb-3 group-hover:scale-105 transition-transform">
-                {person.avatar}
-              </div>
-              <span className="font-semibold text-sm text-foreground truncate w-full">
-                {person.name}
-              </span>
-              <span className="text-xs text-muted-foreground mt-0.5">
-                {person.count} фото
-              </span>
-            </Link>
-          ))}
-        </div>
+        {realPersons.length === 0 ? (
+          <div className="p-8 text-center bg-card/60 border border-border/70 rounded-2xl">
+            <p className="text-xs text-muted-foreground">
+              Нет распознанных лиц в медиатеке. Запустите индексацию для автоматической кластеризации лиц.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+            {realPersons.slice(0, 5).map((person) => (
+              <Link
+                key={person.id || person.name}
+                to={`/photos?person=${encodeURIComponent(person.name)}`}
+                className="bg-card border border-border/70 hover:border-primary/50 rounded-2xl p-4 flex flex-col items-center text-center group transition-all hover:shadow-md"
+              >
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-2xl mb-3 group-hover:scale-105 transition-transform">
+                  👤
+                </div>
+                <span className="font-semibold text-sm text-foreground truncate w-full">
+                  {person.name}
+                </span>
+                {person.count !== undefined && (
+                  <span className="text-xs text-muted-foreground mt-0.5">
+                    {person.count} фото
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* Places Grid Section */}
+      {/* Places & Directories Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -127,57 +166,32 @@ export const SearchHubScreen: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          {placeSamples.map((place) => (
-            <Link
-              key={place.name}
-              to={`/map?place=${encodeURIComponent(place.name)}`}
-              className="group relative overflow-hidden rounded-2xl border border-border/70 h-36 flex flex-col justify-end p-4 transition-all hover:shadow-lg"
-            >
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${place.photoGradient} opacity-80 group-hover:opacity-90 group-hover:scale-105 transition-all duration-300`}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="relative z-10 text-white">
-                <p className="font-bold text-sm truncate">{place.name}</p>
-                <p className="text-xs text-white/80 mt-0.5">{place.count} медиафайлов</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* "On This Day" Memories Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="text-[#f3cd03] h-5 w-5" />
-          <h2 className="text-lg font-bold text-foreground">В этот день — Воспоминания</h2>
-        </div>
-
-        <div className="bg-card border border-border/70 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
-          <div className="w-full md:w-48 h-32 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
-            <span className="font-extrabold text-2xl">2 года назад</span>
-          </div>
-          <div className="flex-1 space-y-2">
-            <span className="text-xs font-bold text-[#f3cd03] uppercase tracking-wider">
-              13 октября 2024
-            </span>
-            <h3 className="text-xl font-bold text-foreground">
-              Поездка в горы и золотая осень
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              42 снимка сделаны в этот день. Альбом содержит снимки с дрона и пейзажные панорамы.
-            </p>
-            <div className="pt-2">
-              <Link
-                to="/"
-                className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors"
-              >
-                <span>Просмотреть фотографии воспоминания</span>
-                <ArrowRight size={14} />
-              </Link>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <Link
+            to="/map"
+            className="bg-card border border-border/70 hover:border-primary/40 rounded-2xl p-5 flex items-center gap-4 transition-all hover:shadow-xs"
+          >
+            <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <MapPin size={24} />
             </div>
-          </div>
+            <div>
+              <p className="font-bold text-sm text-foreground">Интерактивная карта мира</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Кластеризация снимков по координатам GPS</p>
+            </div>
+          </Link>
+
+          <Link
+            to="/albums"
+            className="bg-card border border-border/70 hover:border-primary/40 rounded-2xl p-5 flex items-center gap-4 transition-all hover:shadow-xs"
+          >
+            <div className="w-12 h-12 rounded-xl bg-[#f3cd03]/10 text-[#f3cd03] flex items-center justify-center shrink-0">
+              <Folder size={24} />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-foreground">Коллекции и папки</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Группировка по структуре директорий</p>
+            </div>
+          </Link>
         </div>
       </section>
     </div>

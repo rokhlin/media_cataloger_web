@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, UserRole, Permission } from '../models/auth';
+import { mediaCacheService } from './mediaCacheService';
 
 interface AuthContextValue {
   currentUser: User | null;
@@ -22,12 +23,32 @@ interface AuthContextValue {
 
 const AUTH_TOKEN_KEY = 'media_cataloger_jwt_token';
 const AUTH_USER_KEY = 'media_cataloger_user_data';
+export const COOKIE_SESSION_KEY = 'media_cataloger_session';
+
+export function getSessionCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(^|;\\s*)' + COOKIE_SESSION_KEY + '=([^;]*)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+export function setSessionCookie(token: string, maxAgeDays = 7): void {
+  if (typeof document === 'undefined') return;
+  const maxAge = maxAgeDays * 24 * 60 * 60;
+  document.cookie = `${COOKIE_SESSION_KEY}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+export function clearSessionCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${COOKIE_SESSION_KEY}=; path=/; max-age=0; SameSite=Lax`;
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
     try {
+      const cookieToken = getSessionCookie();
+      if (cookieToken) return cookieToken;
       return localStorage.getItem(AUTH_TOKEN_KEY);
     } catch {
       return null;
@@ -58,12 +79,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers,
       });
       if (response.status === 401) {
+        clearSessionCookie();
         setToken(null);
         setCurrentUser(null);
         try {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(AUTH_USER_KEY);
         } catch {}
+        mediaCacheService.clearCache().catch(() => {});
       }
       return response;
     },
@@ -72,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Refresh current user profile from backend
   const refreshProfile = useCallback(async () => {
-    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+    const activeToken = token || (typeof window !== 'undefined' ? (getSessionCookie() || localStorage.getItem(AUTH_TOKEN_KEY)) : null);
     if (!activeToken) {
       setIsLoading(false);
       return;
@@ -98,21 +121,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Failed to persist user profile:', e);
           }
         } else {
+          clearSessionCookie();
           setToken(null);
           setCurrentUser(null);
           try {
             localStorage.removeItem(AUTH_TOKEN_KEY);
             localStorage.removeItem(AUTH_USER_KEY);
           } catch {}
+          mediaCacheService.clearCache().catch(() => {});
         }
       } else {
         // Token is invalid/expired
+        clearSessionCookie();
         setToken(null);
         setCurrentUser(null);
         try {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(AUTH_USER_KEY);
         } catch {}
+        mediaCacheService.clearCache().catch(() => {});
       }
     } catch (err: any) {
       console.warn('Failed to verify authentication status:', err?.name === 'AbortError' ? 'Verification timed out' : err);
@@ -179,6 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newToken = data.token;
         const newUser: User = data.user;
 
+        setSessionCookie(newToken);
         setToken(newToken);
         setCurrentUser(newUser);
 
@@ -248,6 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newUser: User = data.user;
 
         if (newToken && newUser) {
+          setSessionCookie(newToken);
           setToken(newToken);
           setCurrentUser(newUser);
 
@@ -282,12 +311,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }).catch(() => {});
       }
     } finally {
+      clearSessionCookie();
       setToken(null);
       setCurrentUser(null);
       try {
         localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.removeItem(AUTH_USER_KEY);
       } catch {}
+      await mediaCacheService.clearCache();
     }
   }, [token]);
 

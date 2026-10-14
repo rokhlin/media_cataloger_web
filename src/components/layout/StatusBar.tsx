@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder, Play, Sparkles } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder, Play } from 'lucide-react';
 import { cn } from '@/utils';
 import FolderConfigModal from '../common/FolderConfigModal';
 
@@ -25,7 +25,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onConfigureFolders,
   className,
 }) => {
-  const navigate = useNavigate();
+  const location = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
@@ -127,6 +127,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const effectiveStatus = propStatus !== undefined ? propStatus : backendStatus;
   const effectiveProgress = propProgress !== undefined ? propProgress : liveProgress;
   const effectiveTitle = propTitle !== undefined ? propTitle : liveTitle;
+
+  // The idle status badge and folder config button is only relevant when viewing the photo gallery (/ or /photos)
+  const isGalleryView = location.pathname === '/' || location.pathname === '/photos';
+  if (effectiveStatus === 'idle' && !isGalleryView) {
+    return null;
+  }
+
   const effectiveDetail = propDetail !== undefined ? propDetail : (
     effectiveStatus === 'idle'
       ? (configuredFolders.length > 0 ? `Папки: ${configuredFolders.join(', ')}` : 'Папки для сканирования не настроены')
@@ -193,16 +200,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   >
                     <Play size={12} className="fill-white" />
                     <span>Сканировать</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigate('/onboarding')}
-                    className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                    title="Открыть пошаговый мастер первоначальной настройки"
-                  >
-                    <Sparkles size={12} className="text-[#f3cd03]" />
-                    <span>Мастер настройки</span>
                   </button>
                 </>
               )}
