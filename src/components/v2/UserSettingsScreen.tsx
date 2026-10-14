@@ -14,7 +14,13 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
-  FolderPlus,
+  Folder,
+  Plus,
+  Trash2,
+  Cpu,
+  Eye,
+  EyeOff,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 
@@ -22,13 +28,40 @@ export const UserSettingsScreen: React.FC = () => {
   const { currentUser } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('account');
   const [configuredFolders, setConfiguredFolders] = useState<string[]>([]);
+  const [newFolderInput, setNewFolderInput] = useState('');
+
+  // Account profile avatar
+  const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem('user_avatar_url') || '');
+  const [username, setUsername] = useState(() => currentUser?.username || 'Anton Rokhlin');
+  const [email, setEmail] = useState('user@example.local');
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  // AI Configuration
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'local'>('gemini');
+  const [aiModel, setAiModel] = useState<'gemini-3.8-flash' | 'gemini-3.1-pro-preview' | 'local-model' | string>('gemini-3.8-flash');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [aiFaceClustering, setAiFaceClustering] = useState(true);
+  const [aiClipSearch, setAiClipSearch] = useState(true);
+  const [aiOcrRecognition, setAiOcrRecognition] = useState(true);
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const [folderStatus, setFolderStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/settings')
-      .then((res) => res.ok ? res.json() : null)
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data.input_folders)) {
           setConfiguredFolders(data.input_folders);
+        }
+        if (data?.gemini_api_key) {
+          setGeminiApiKey(data.gemini_api_key);
+        }
+        if (data?.ai_model) {
+          setAiModel(data.ai_model);
+        }
+        if (data?.ai_provider) {
+          setAiProvider(data.ai_provider);
         }
       })
       .catch(() => {});
@@ -36,6 +69,68 @@ export const UserSettingsScreen: React.FC = () => {
 
   const toggleSection = (id: string) => {
     setExpandedSection(expandedSection === id ? null : id);
+  };
+
+  const handleSaveAccount = () => {
+    localStorage.setItem('user_avatar_url', avatarUrl.trim());
+    window.dispatchEvent(new CustomEvent('user_avatar_updated', { detail: { avatarUrl: avatarUrl.trim() } }));
+    setAccountStatus('Профиль успешно обновлён');
+    setTimeout(() => setAccountStatus(null), 3000);
+  };
+
+  const handleAddFolder = () => {
+    const trimmed = newFolderInput.trim();
+    if (trimmed && !configuredFolders.includes(trimmed)) {
+      setConfiguredFolders([...configuredFolders, trimmed]);
+      setNewFolderInput('');
+    }
+  };
+
+  const handleRemoveFolder = (folder: string) => {
+    setConfiguredFolders(configuredFolders.filter((f) => f !== folder));
+  };
+
+  const handleSaveFolders = async () => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+        },
+        body: JSON.stringify({ input_folders: configuredFolders }),
+      });
+      if (res.ok) {
+        setFolderStatus('Папки и источники сохранены');
+      } else {
+        setFolderStatus('Ошибка при сохранении папок');
+      }
+    } catch {
+      setFolderStatus('Каталоги сохранены локально');
+    }
+    setTimeout(() => setFolderStatus(null), 3000);
+  };
+
+  const handleSaveAi = async () => {
+    localStorage.setItem('gemini_api_key', geminiApiKey.trim());
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+        },
+        body: JSON.stringify({
+          gemini_api_key: geminiApiKey.trim(),
+          ai_provider: aiProvider,
+          ai_model: aiModel,
+        }),
+      });
+      setAiStatus('Параметры AI успешно сохранены');
+    } catch {
+      setAiStatus('Параметры AI сохранены локально');
+    }
+    setTimeout(() => setAiStatus(null), 3000);
   };
 
   const sections = [
@@ -46,24 +141,46 @@ export const UserSettingsScreen: React.FC = () => {
       icon: User,
       renderContent: () => (
         <div className="space-y-4 pt-3">
-          {/* New User Configuration Prompt if zero folders configured */}
-          {configuredFolders.length === 0 && (
-            <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold text-foreground">Начало работы: каталоги не настроены</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Укажите папки на диске с фотографиями и видеозаписями для запуска каталогизатора.
-                </p>
-              </div>
-              <Link
-                to="/onboarding"
-                className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs shrink-0 flex items-center gap-1.5"
-              >
-                <FolderPlus size={14} />
-                <span>Настроить папки</span>
-              </Link>
+          {accountStatus && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
+              <CheckCircle2 size={15} />
+              <span>{accountStatus}</span>
             </div>
           )}
+
+          {/* Avatar Settings */}
+          <div className="flex items-center gap-4 pb-2 border-b border-border/50">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-xl flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={username}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : null}
+              <span className="absolute inset-0 flex items-center justify-center">
+                {(username || 'U').charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="block text-xs font-semibold text-muted-foreground">
+                URL аватара пользователя
+              </label>
+              <input
+                type="text"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://example.com/avatar.jpg"
+                className="w-full px-3 py-1.5 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Укажите прямую ссылку на фото профиля для отображения в панели навигации.
+              </p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -72,7 +189,8 @@ export const UserSettingsScreen: React.FC = () => {
               </label>
               <input
                 type="text"
-                defaultValue={currentUser?.username || 'Anton Rokhlin'}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
               />
             </div>
@@ -82,18 +200,21 @@ export const UserSettingsScreen: React.FC = () => {
               </label>
               <input
                 type="email"
-                defaultValue="user@example.local"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
               />
             </div>
           </div>
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+              onClick={handleSaveAccount}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
             >
               <Save size={14} />
-              <span>Сохранить изменения</span>
+              <span>Сохранить изменения профиля</span>
             </button>
           </div>
 
@@ -113,6 +234,248 @@ export const UserSettingsScreen: React.FC = () => {
               <Sparkles size={13} className="text-[#f3cd03]" />
               <span>Запустить мастер настройки</span>
             </Link>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'folders',
+      title: 'Папки и источники медиатеки',
+      subtitle: 'Сканируемые директории и каталоги для каталогизации',
+      icon: Folder,
+      renderContent: () => (
+        <div className="space-y-4 pt-3">
+          {folderStatus && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
+              <CheckCircle2 size={15} />
+              <span>{folderStatus}</span>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Укажите директории на диске, в которых находятся ваши фото и видеоматериалы для автоматического сканирования и распознавания.
+          </p>
+
+          {/* List of configured folders */}
+          <div className="space-y-2">
+            {configuredFolders.length === 0 ? (
+              <div className="p-3 border border-dashed rounded-xl text-xs text-muted-foreground text-center">
+                Нет добавленных папок. Каталогизатор будет использовать директорию по умолчанию (media_input/).
+              </div>
+            ) : (
+              configuredFolders.map((folder) => (
+                <div
+                  key={folder}
+                  className="flex items-center justify-between p-2.5 bg-muted/30 border border-border/60 rounded-xl text-xs"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Folder size={14} className="text-primary shrink-0" />
+                    <span className="font-mono truncate">{folder}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFolder(folder)}
+                    className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
+                    title="Удалить папку из сканирования"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Add folder input */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newFolderInput}
+              onChange={(e) => setNewFolderInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddFolder();
+              }}
+              placeholder="C:\Photos или /media/external/photos"
+              className="flex-1 px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
+            />
+            <button
+              type="button"
+              onClick={handleAddFolder}
+              className="flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border/80 text-xs font-semibold rounded-xl transition-colors shrink-0"
+            >
+              <Plus size={14} />
+              <span>Добавить</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleSaveFolders}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+            >
+              <Save size={14} />
+              <span>Сохранить каталоги</span>
+            </button>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'ai-features',
+      title: 'Функции искусственного интеллекта и AI-ассистент',
+      subtitle: 'Выбор провайдера (Gemini / Local LLM), модели и токена API',
+      icon: Sparkles,
+      renderContent: () => (
+        <div className="space-y-4 pt-3 text-xs">
+          {aiStatus && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
+              <CheckCircle2 size={15} />
+              <span>{aiStatus}</span>
+            </div>
+          )}
+
+          {/* AI Provider Selector */}
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-2">
+              Провайдер искусственного интеллекта
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                onClick={() => setAiProvider('gemini')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  aiProvider === 'gemini'
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Sparkles size={16} className="text-primary" />
+                  <span>Google Gemini API (Облачный SOTA)</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Продвинутый мультимодальный анализ, мгновенное описание сцен и распознавание лиц через модели gemini-3.8-flash и gemini-3.1-pro-preview.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setAiProvider('local')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  aiProvider === 'local'
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Cpu size={16} className="text-[#f3cd03]" />
+                  <span>Локальная нейросеть (Local LLM / LM Studio)</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Локальная обработка на вашем оборудовании без отправки данных во внешние сети через LM Studio или Ollama.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Model Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                Используемая модель
+              </label>
+              {aiProvider === 'gemini' ? (
+                <select
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                >
+                  <option value="gemini-3.8-flash">gemini-3.8-flash (Быстрая, мультимодальная, рекомендуется)</option>
+                  <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Глубокий визуальный анализ)</option>
+                </select>
+              ) : (
+                <select
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                >
+                  <option value="local-model">local-model (Модель по умолчанию из LM Studio)</option>
+                  <option value="qwen2.5-coder-7b">qwen2.5-coder-7b (Локальная)</option>
+                  <option value="custom">Пользовательская локальная модель</option>
+                </select>
+              )}
+            </div>
+
+            {/* Gemini API Token */}
+            {aiProvider === 'gemini' && (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  Токен / Ключ доступа Gemini API (gemini_api_key)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full pl-3 pr-9 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AI Feature Toggles */}
+          <div className="pt-2 border-t border-border/50 space-y-2.5">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aiFaceClustering}
+                onChange={(e) => setAiFaceClustering(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span className="text-foreground font-medium">
+                Кластеризация лиц и распознавание людей на фото и видео
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aiClipSearch}
+                onChange={(e) => setAiClipSearch(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span className="text-foreground font-medium">
+                Семантический поиск по описаниям сцен (CLIP)
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aiOcrRecognition}
+                onChange={(e) => setAiOcrRecognition(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span className="text-foreground font-medium">
+                OCR распознавание текста и надписей на изображениях
+              </span>
+            </label>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleSaveAi}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+            >
+              <Save size={14} />
+              <span>Сохранить параметры AI</span>
+            </button>
           </div>
         </div>
       ),
@@ -204,28 +567,6 @@ export const UserSettingsScreen: React.FC = () => {
       ),
     },
     {
-      id: 'ai-features',
-      title: 'Функции искусственного интеллекта',
-      subtitle: 'Распознавание лиц, векторизация CLIP, поиск дубликатов',
-      icon: Sparkles,
-      renderContent: () => (
-        <div className="space-y-3 pt-3 text-xs">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-            <span className="text-foreground font-medium">
-              Кластеризация лиц и распознавание людей на фото
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-            <span className="text-foreground font-medium">
-              Семантический поиск по описаниям сцен (CLIP)
-            </span>
-          </label>
-        </div>
-      ),
-    },
-    {
       id: 'notifications',
       title: 'Уведомления',
       subtitle: 'Оповещения об окончании сканирования и системных событиях',
@@ -307,7 +648,7 @@ export const UserSettingsScreen: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-foreground">Настройки учётной записи</h1>
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Конфигурация профиля, дискового пространства, искусственного интеллекта и безопасности.
+          Конфигурация профиля, папок медиатеки, параметров AI-ассистента и безопасности.
         </p>
       </div>
 

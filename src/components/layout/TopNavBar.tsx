@@ -12,14 +12,12 @@ import {
   LogOut,
   X,
   Check,
-  Folder,
   ChevronRight,
   LogIn,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
 import { useTheme } from '../../theme/ThemeContext';
-import FolderConfigModal from '../common/FolderConfigModal';
 
 export interface TopNavBarProps {
   onMenuToggle?: () => void;
@@ -34,12 +32,13 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
   const [searchQuery, setSearchQuery] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [folderModalOpen, setFolderModalOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Global Cmd+K / Ctrl+K keyboard shortcut
   useEffect(() => {
@@ -75,11 +74,43 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
   };
 
   const handleUploadClick = () => {
-    // Simulated upload trigger
-    setUploadSuccess(true);
-    setTimeout(() => setUploadSuccess(false), 2500);
+    fileInputRef.current?.click();
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData();
+        formData.append('file', files[i]);
+        const res = await fetch('/api/media/upload', {
+          method: 'POST',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: formData,
+        });
+        if (!res.ok) {
+          console.error('Failed to upload file:', files[i].name);
+        }
+      }
+      setUploadSuccess(true);
+      window.dispatchEvent(new CustomEvent('media_uploaded'));
+      setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (err) {
+      console.error('Upload error:', err);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const avatarUrl = (currentUser as any)?.avatarUrl || (currentUser as any)?.avatar || localStorage.getItem('user_avatar_url');
   const userInitial = (currentUser?.username || 'U').charAt(0).toUpperCase();
 
   return (
@@ -139,22 +170,41 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
 
       {/* Right Cluster: Upload CTA, Theme Toggle, Notifications, User Profile */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Hidden File Input for Real Media Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          style={{ display: 'none' }}
+          onChange={handleFileSelect}
+        />
+
         {/* Upload CTA Button */}
         <button
           type="button"
           onClick={handleUploadClick}
+          disabled={isUploading}
           className={cn(
-            'flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200 shadow-xs focus:ring-2 focus:ring-primary/30',
+            'flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200 shadow-xs focus:ring-2 focus:ring-primary/30 cursor-pointer',
             uploadSuccess
               ? 'bg-[#2dc071]'
-              : 'bg-[#23a6f0] hover:bg-[#2091f9] active:bg-[#1c7ed6]'
+              : isUploading
+                ? 'bg-primary/70 cursor-wait'
+                : 'bg-[#23a6f0] hover:bg-[#2091f9] active:bg-[#1c7ed6]'
           )}
           title="Загрузить медиафайлы"
         >
           {uploadSuccess ? (
             <>
               <Check size={16} />
-              <span className="hidden sm:inline">Готово</span>
+              <span className="hidden sm:inline">Загружено</span>
+            </>
+          ) : isUploading ? (
+            <>
+              <UploadCloud size={16} className="animate-bounce" />
+              <span className="hidden sm:inline">Загрузка...</span>
             </>
           ) : (
             <>
@@ -250,11 +300,23 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
             <button
               type="button"
               onClick={() => setProfileOpen(!profileOpen)}
-              className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-sm flex items-center justify-center shadow-xs hover:ring-2 hover:ring-primary/40 transition-all focus:ring-2 focus:ring-primary"
+              className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-sm flex items-center justify-center shadow-xs hover:ring-2 hover:ring-primary/40 transition-all focus:ring-2 focus:ring-primary overflow-hidden relative"
               aria-label="Профиль пользователя"
               title="Профиль пользователя"
             >
-              {userInitial}
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={currentUser.username}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : null}
+              <span className="absolute inset-0 flex items-center justify-center">
+                {userInitial}
+              </span>
             </button>
 
             {/* Profile Menu Dropdown */}
@@ -277,18 +339,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
 
                 {/* Menu Actions */}
                 <div className="py-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      setFolderModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
-                  >
-                    <Folder size={16} className="text-primary" />
-                    <span>Настройка папок и источников</span>
-                  </button>
-
                   <Link
                     to="/settings"
                     onClick={() => setProfileOpen(false)}
@@ -340,12 +390,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
         )}
       </div>
     </header>
-
-    {/* Folder Configuration Modal */}
-    <FolderConfigModal
-      isOpen={folderModalOpen}
-      onClose={() => setFolderModalOpen(false)}
-    />
     </>
   );
 };

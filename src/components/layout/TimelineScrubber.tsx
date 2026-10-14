@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn } from '@/utils';
+import { mediaCacheService } from '../../services/mediaCacheService';
+import { useNavigate } from 'react-router-dom';
 
 export interface TimelineScrubberProps {
   years?: number[];
@@ -9,12 +11,53 @@ export interface TimelineScrubberProps {
 }
 
 export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
-  years = [2025, 2024, 2023, 2022, 2020, 2018, 2015, 2012, 2008],
-  activeYear = 2025,
+  years: propYears,
+  activeYear: propActiveYear,
   onSelectYear,
   className,
 }) => {
+  const navigate = useNavigate();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [detectedYears, setDetectedYears] = useState<number[]>([]);
+
+  // Dynamically extract real years from mediaCacheService
+  useEffect(() => {
+    const computeYears = () => {
+      const files = mediaCacheService.getAll();
+      if (files && files.length > 0) {
+        const set = new Set<number>();
+        for (const file of files) {
+          const f = file as any;
+          const raw = f.date_taken || f.creation_time || f.created_at || f.timestamp || f.modified_time;
+          if (raw) {
+            const yr = new Date(raw).getFullYear();
+            if (!isNaN(yr) && yr >= 1970 && yr <= 2035) {
+              set.add(yr);
+            }
+          }
+        }
+        if (set.size > 0) {
+          setDetectedYears(Array.from(set).sort((a, b) => b - a));
+        }
+      }
+    };
+
+    computeYears();
+    window.addEventListener('media_uploaded', computeYears);
+    return () => window.removeEventListener('media_uploaded', computeYears);
+  }, []);
+
+  const defaultYears = [2025, 2024, 2023, 2022, 2020, 2018, 2015, 2012, 2008];
+  const effectiveYears = propYears || (detectedYears.length > 0 ? detectedYears : defaultYears);
+  const effectiveActiveYear = propActiveYear || effectiveYears[0] || 2025;
+
+  const handleYearClick = (year: number) => {
+    if (onSelectYear) {
+      onSelectYear(year);
+    } else {
+      navigate(`/photos?q=${year}`);
+    }
+  };
 
   const months = ['Дек', 'Окт', 'Авг', 'Июн', 'Апр', 'Фев'];
 
@@ -27,8 +70,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       )}
     >
       <div className="flex flex-col items-center gap-1.5 py-3 px-1.5 rounded-full bg-card/60 backdrop-blur-md border border-border/40 shadow-xs">
-        {years.map((year, idx) => {
-          const isActive = year === activeYear;
+        {effectiveYears.map((year, idx) => {
+          const isActive = year === effectiveActiveYear;
 
           return (
             <React.Fragment key={year}>
@@ -36,7 +79,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               <div className="relative group flex items-center">
                 <button
                   type="button"
-                  onClick={() => onSelectYear?.(year)}
+                  onClick={() => handleYearClick(year)}
                   onMouseEnter={() => setHoveredItem(`${year}`)}
                   onMouseLeave={() => setHoveredItem(null)}
                   className={cn(
@@ -69,7 +112,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
                           type="button"
                           onMouseEnter={() => setHoveredItem(dotKey)}
                           onMouseLeave={() => setHoveredItem(null)}
-                          onClick={() => onSelectYear?.(year)}
+                          onClick={() => handleYearClick(year)}
                           className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 hover:bg-primary hover:scale-150 transition-all"
                           aria-label={`${month} ${year}`}
                         />

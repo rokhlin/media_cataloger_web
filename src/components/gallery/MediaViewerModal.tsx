@@ -117,6 +117,88 @@ export default function MediaViewerModal({
   const [analysisSuccess, setAnalysisSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; avatarUrl?: string | null; count: number }[]>([]);
+
+  // Dynamically load known persons if not provided via props
+  useEffect(() => {
+    let isMounted = true;
+    const fetchKnown = async () => {
+      try {
+        const fetchFn = authFetch || fetch;
+        const res = await fetchFn('/api/faces/persons');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            const mapped = data.map((p: any) => ({
+              name: p.name,
+              count: p.media_count || p.count || 1,
+              avatarUrl: p.representative_face_id ? `/api/faces/image/${p.representative_face_id}` : null,
+            }));
+            setInternalKnownPersons(mapped);
+          }
+        }
+      } catch {
+        // ignore fetch errors
+      }
+    };
+    fetchKnown();
+    return () => { isMounted = false; };
+  }, [authFetch]);
+
+  const effectiveKnownPersons = useMemo(() => {
+    const list = knownPersonOptions && knownPersonOptions.length > 0 ? [...knownPersonOptions] : [...internalKnownPersons];
+    if (persons && persons.length > 0) {
+      for (const p of persons) {
+        if (p.name && !list.some((existing) => existing.name.toLowerCase() === p.name.toLowerCase())) {
+          list.push({ name: p.name, count: 1, avatarUrl: null });
+        }
+      }
+    }
+    return list;
+  }, [knownPersonOptions, internalKnownPersons, persons]);
+
+  // Video face grouping: cluster multiple frame crops of the same moving individual
+  const groupedVideoFaces = useMemo(() => {
+    if (!selectedMedia?.is_video || facesForSelected.length <= 1) {
+      return facesForSelected.map((f) => ({ ...f, occurrencesCount: 1, allFaceIds: [f.face_id] }));
+    }
+
+    const clusters = new Map<string, {
+      repFace: DetectedFaceRecord;
+      occurrencesCount: number;
+      allFaceIds: string[];
+    }>();
+
+    for (const f of facesForSelected) {
+      const name = (f.name || '').trim();
+      const isNamed = name && !name.toLowerCase().startsWith('face_') && !name.toLowerCase().startsWith('person_') && !['unknown', 'unnamed'].includes(name.toLowerCase());
+      
+      const key = isNamed ? `named:${name.toLowerCase()}` : (f.person_id ? `person:${f.person_id}` : 'unassigned_video_subject');
+
+      if (!clusters.has(key)) {
+        clusters.set(key, {
+          repFace: f,
+          occurrencesCount: 1,
+          allFaceIds: [f.face_id],
+        });
+      } else {
+        const c = clusters.get(key)!;
+        c.occurrencesCount += 1;
+        c.allFaceIds.push(f.face_id);
+        if ((f.confidence || 0) > (c.repFace.confidence || 0)) {
+          c.repFace = f;
+        }
+      }
+    }
+
+    return Array.from(clusters.values()).map((c) => ({
+      ...c.repFace,
+      occurrencesCount: c.occurrencesCount,
+      allFaceIds: c.allFaceIds,
+    }));
+  }, [facesForSelected, selectedMedia?.is_video]);
+
+
   // Sync prop changes while preserving series group files
   useEffect(() => {
     if (mediaFile) {
@@ -524,6 +606,10 @@ export default function MediaViewerModal({
         };
         setSelectedMedia(updated);
         if (onMediaUpdated) onMediaUpdated(updated);
+        setInternalKnownPersons((prev) => {
+          if (prev.some((p) => p.name.toLowerCase() === targetName.toLowerCase())) return prev;
+          return [...prev, { name: targetName, count: 1, avatarUrl: null }];
+        });
         setSelectedPersonToTag('');
         setCustomPersonName('');
         setIsAddingPerson(false);
@@ -541,77 +627,80 @@ export default function MediaViewerModal({
   };
 
   // Remove or unlink a face / person from the selected media file
-  const handleRemoveFace = async (faceId: string) => {
+  const handleRemoveFace = async (faceIdOrIds: string | string[]) => {
     if (!selectedMedia) return;
+    const ids = Array.isArray(faceIdOrIds) ? faceIdOrIds : [faceIdOrIds];
     try {
       const fetchFn = authFetch || fetch;
-      const res = await fetchFn('/api/media/remove-face', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file: selectedMedia.file_path || selectedMedia.filename,
-          face_id: faceId,
-        }),
-      });
-      if (res.ok) {
-        setFacesForSelected((prev) => prev.filter((f) => f.face_id !== faceId));
-        const updatedFaces = (selectedMedia.faces || []).filter((f) => f.face_id !== faceId);
-        const remainingNames = Array.from(new Set(updatedFaces.map((f) => f.name).filter(Boolean))) as string[];
-        const updated: GalleryMediaFile = {
-          ...selectedMedia,
-          face_count: Math.max(0, (selectedMedia.face_count || 1) - 1),
-          face_names: remainingNames,
-          faces: updatedFaces,
-        };
-        setSelectedMedia(updated);
-        if (onMediaUpdated) onMediaUpdated(updated);
-        if (onRefresh) onRefresh();
-        if (onReloadFaces) onReloadFaces();
+      for (const faceId of ids) {
+        await fetchFn('/api/media/remove-face', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: selectedMedia.file_path || selectedMedia.filename,
+            face_id: faceId,
+          }),
+        });
       }
+      setFacesForSelected((prev) => prev.filter((f) => !ids.includes(f.face_id)));
+      const updatedFaces = (selectedMedia.faces || []).filter((f) => f.face_id && !ids.includes(f.face_id));
+      const remainingNames = Array.from(new Set(updatedFaces.map((f) => f.name).filter(Boolean))) as string[];
+      const updated: GalleryMediaFile = {
+        ...selectedMedia,
+        face_count: Math.max(0, (selectedMedia.face_count || ids.length) - ids.length),
+        face_names: remainingNames,
+        faces: updatedFaces,
+      };
+      setSelectedMedia(updated);
+      if (onMediaUpdated) onMediaUpdated(updated);
+      if (onRefresh) onRefresh();
+      if (onReloadFaces) onReloadFaces();
     } catch (err) {
       console.error('Failed to remove face:', err);
     }
   };
 
   // Reassign a detected face to a known or new Person
-  const handleReassignFace = async (faceId: string, targetName: string) => {
+  const handleReassignFace = async (faceIdOrIds: string | string[], targetName: string) => {
     if (!selectedMedia || !targetName.trim()) return;
     const trimmed = targetName.trim();
+    const ids = Array.isArray(faceIdOrIds) ? faceIdOrIds : [faceIdOrIds];
     setIsReassigning(true);
     try {
       const fetchFn = authFetch || fetch;
-      const res = await fetchFn('/api/faces/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          face_id: faceId,
-          name: trimmed,
-        }),
-      });
-      if (res.ok) {
-        setFacesForSelected((prev) =>
-          prev.map((f) => (f.face_id === faceId ? { ...f, name: trimmed, person_id: trimmed, is_reference: 1 } : f))
-        );
-        const updatedFaces = (selectedMedia.faces || []).map((f) =>
-          f.face_id === faceId ? { ...f, name: trimmed, person_id: trimmed, is_reference: 1 } : f
-        );
-        const newNames = Array.from(new Set(updatedFaces.map((f) => f.name).filter(Boolean))) as string[];
-        const updated: GalleryMediaFile = {
-          ...selectedMedia,
-          face_names: newNames,
-          faces: updatedFaces,
-        };
-        setSelectedMedia(updated);
-        if (onMediaUpdated) onMediaUpdated(updated);
-        setReassigningFaceId(null);
-        setReassignTargetPerson('');
-        setReassignCustomName('');
-        if (onRefresh) onRefresh();
-        if (onReloadFaces) onReloadFaces();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || err.message || 'Failed to reassign face');
+      for (const faceId of ids) {
+        await fetchFn('/api/faces/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            face_id: faceId,
+            name: trimmed,
+          }),
+        });
       }
+      setFacesForSelected((prev) =>
+        prev.map((f) => (ids.includes(f.face_id) ? { ...f, name: trimmed, person_id: trimmed, is_reference: 1 } : f))
+      );
+      const updatedFaces = (selectedMedia.faces || []).map((f) =>
+        f.face_id && ids.includes(f.face_id) ? { ...f, name: trimmed, person_id: trimmed, is_reference: 1 } : f
+      );
+      const newNames = Array.from(new Set(updatedFaces.map((f) => f.name).filter(Boolean))) as string[];
+      const updated: GalleryMediaFile = {
+        ...selectedMedia,
+        face_names: newNames,
+        faces: updatedFaces,
+      };
+      setSelectedMedia(updated);
+      setInternalKnownPersons((prev) => {
+        if (prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+        return [...prev, { name: trimmed, count: 1, avatarUrl: null }];
+      });
+      if (onMediaUpdated) onMediaUpdated(updated);
+      setReassigningFaceId(null);
+      setReassignTargetPerson('');
+      setReassignCustomName('');
+      if (onRefresh) onRefresh();
+      if (onReloadFaces) onReloadFaces();
     } catch (err) {
       console.error('Failed to reassign face:', err);
     } finally {
@@ -1487,7 +1576,7 @@ export default function MediaViewerModal({
                         onChange={(e) => setSelectedPersonToTag(e.target.value)}
                       >
                         <option value="">-- {t('selectPersonPlaceholder')} --</option>
-                        {knownPersonOptions.map((p) => (
+                        {effectiveKnownPersons.map((p) => (
                           <option key={p.name} value={p.name}>
                             {p.name} ({p.count})
                           </option>
@@ -1526,7 +1615,7 @@ export default function MediaViewerModal({
                   </div>
                 )}
 
-                {facesForSelected.length === 0 ? (
+                {groupedVideoFaces.length === 0 ? (
                   <div className='no-faces-indexed-container' style={{ margin: '0.5rem 0' }}>
                     <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 0.4rem 0' }}>
                       {loadingFaces ? t('loadingFaces') : t('noFacesIndexed')}
@@ -1544,7 +1633,7 @@ export default function MediaViewerModal({
                   </div>
                 ) : (
                   <div className="lightbox-faces-list">
-                    {facesForSelected.map((f) => {
+                    {groupedVideoFaces.map((f: any) => {
                       const isManual = !f.face_id || f.face_id.startsWith('manual_') || f.face_id.startsWith('face_manual_');
                       const cropUrl = !isManual
                         ? (f.image_path
@@ -1601,7 +1690,7 @@ export default function MediaViewerModal({
                                   onChange={(e) => setReassignTargetPerson(e.target.value)}
                                 >
                                   <option value="">-- {t('selectPersonPlaceholder')} --</option>
-                                  {knownPersonOptions.map((p) => (
+                                  {effectiveKnownPersons.map((p) => (
                                     <option key={p.name} value={p.name}>
                                       {p.name}
                                     </option>
@@ -1633,7 +1722,7 @@ export default function MediaViewerModal({
                                     onClick={() => {
                                       const finalName =
                                         reassignTargetPerson === '__custom__' ? reassignCustomName.trim() : reassignTargetPerson.trim();
-                                      handleReassignFace(f.face_id, finalName);
+                                      handleReassignFace(f.allFaceIds || f.face_id, finalName);
                                     }}
                                   >
                                     ✓
@@ -1662,6 +1751,25 @@ export default function MediaViewerModal({
                                     </span>
                                   )}
                                 </div>
+                                {f.occurrencesCount > 1 && (
+                                  <div
+                                    className="badge-pill video-occurrences-badge"
+                                    style={{
+                                      fontSize: '0.68rem',
+                                      background: 'rgba(59, 130, 246, 0.15)',
+                                      color: '#60a5fa',
+                                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                                      padding: '1px 6px',
+                                      borderRadius: '4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      marginTop: '0.2rem',
+                                    }}
+                                  >
+                                    📹 {f.occurrencesCount} кадров в видео
+                                  </div>
+                                )}
                                 {bbox && bbox.length >= 4 && (
                                   <div
                                     className="lightbox-face-coords"
@@ -1764,7 +1872,7 @@ export default function MediaViewerModal({
                                     type="button"
                                     className="btn-icon-subtle"
                                     style={{ color: 'var(--error-color, #ef4444)' }}
-                                    onClick={() => handleRemoveFace(f.face_id)}
+                                    onClick={() => handleRemoveFace(f.allFaceIds || f.face_id)}
                                     title={t('removePersonTooltip')}
                                   >
                                     🗑️

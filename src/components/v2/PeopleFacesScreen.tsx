@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw } from 'lucide-react';
+import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink } from 'lucide-react';
 import { cn } from '@/utils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface PersonDisplay {
   id: string | number;
@@ -14,6 +14,7 @@ interface PersonDisplay {
 }
 
 export const PeopleFacesScreen: React.FC = () => {
+  const navigate = useNavigate();
   const [people, setPeople] = useState<PersonDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
@@ -201,20 +202,29 @@ export const PeopleFacesScreen: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
           {filteredPeople.map((person) => {
             const isEditing = editingId === person.id;
+            const photoLabel = person.count === 1 ? '1 фото' : `${person.count} фото`;
 
             return (
               <div
                 key={person.id}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button, input')) return;
+                  navigate(`/photos?person=${encodeURIComponent(person.name)}`);
+                }}
                 className={cn(
-                  'group bg-card border rounded-2xl p-4 flex flex-col items-center text-center transition-all duration-200 relative shadow-xs hover:shadow-md hover:border-primary/50',
+                  'group bg-card border rounded-2xl p-4 flex flex-col items-center text-center transition-all duration-200 relative shadow-xs hover:shadow-md hover:border-primary/50 cursor-pointer',
                   person.isHidden ? 'opacity-60 border-dashed border-border' : 'border-border/70'
                 )}
+                title={`Нажмите, чтобы просмотреть все фото с ${person.name}`}
               >
                 {/* Hide / Show Hover Button */}
                 <button
                   type="button"
-                  onClick={() => toggleVisibility(person.id)}
-                  className="absolute top-2.5 right-2.5 p-1 rounded-md text-muted-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleVisibility(person.id);
+                  }}
+                  className="absolute top-2.5 right-2.5 p-1 rounded-md text-muted-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   title={person.isHidden ? 'Восстановить видимость' : 'Скрыть лицо'}
                 >
                   {person.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -223,8 +233,8 @@ export const PeopleFacesScreen: React.FC = () => {
                 {/* Circular Avatar Crop */}
                 <div
                   className={cn(
-                    'w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold shadow-sm mb-3 group-hover:scale-105 transition-transform overflow-hidden',
-                    !person.avatarUrl && `bg-gradient-to-tr ${person.avatarColor} text-white`
+                    'w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold shadow-sm mb-3 group-hover:scale-105 transition-transform overflow-hidden relative',
+                    `bg-gradient-to-tr ${person.avatarColor || 'from-blue-500 to-indigo-600'} text-white`
                   )}
                 >
                   {person.avatarUrl ? (
@@ -236,14 +246,15 @@ export const PeopleFacesScreen: React.FC = () => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                  ) : (
-                    person.initials || '👤'
-                  )}
+                  ) : null}
+                  <span className="absolute inset-0 flex items-center justify-center -z-0">
+                    {person.initials || '👤'}
+                  </span>
                 </div>
 
                 {/* Editable Name Tag */}
                 {isEditing ? (
-                  <div className="flex items-center gap-1 w-full mt-1">
+                  <div className="flex items-center gap-1 w-full mt-1 z-10" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="text"
                       value={editName}
@@ -270,7 +281,10 @@ export const PeopleFacesScreen: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleStartEdit(person.id, person.name)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEdit(person.id, person.name);
+                      }}
                       className="p-0.5 text-muted-foreground hover:text-primary opacity-0 group-hover/name:opacity-100 transition-opacity"
                       title="Изменить имя"
                     >
@@ -279,10 +293,11 @@ export const PeopleFacesScreen: React.FC = () => {
                   </div>
                 )}
 
-                {/* Photo Count Badge */}
-                <span className="text-xs text-muted-foreground mt-1">
-                  {person.count} фото
-                </span>
+                {/* Photo Count Badge & Link */}
+                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                  <span>{photoLabel}</span>
+                  <ExternalLink size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
               </div>
             );
           })}

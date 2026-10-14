@@ -13,6 +13,7 @@ export default function GalleryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const folderParam = searchParams.get('folder');
   const queryParam = searchParams.get('q') || '';
+  const personParam = searchParams.get('person') || searchParams.get('face') || '';
 
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
@@ -58,6 +59,14 @@ export default function GalleryPage() {
         if (!match) return false;
       }
 
+      // Person / Face filter
+      if (personParam) {
+        const target = personParam.toLowerCase();
+        const faceNamesMatch = file.face_names?.some((n) => n.toLowerCase() === target || n.toLowerCase().includes(target));
+        const facesMatch = file.faces?.some((f) => (f.name || '').toLowerCase() === target || (f.name || '').toLowerCase().includes(target));
+        if (!faceNamesMatch && !facesMatch) return false;
+      }
+
       // Type filter
       if (typeFilter === 'image' && !file.is_image && file.type !== 'image') return false;
       if (typeFilter === 'video' && !file.is_video && file.type !== 'video') return false;
@@ -72,7 +81,7 @@ export default function GalleryPage() {
       
       return true;
     });
-  }, [mediaFiles, queryParam, typeFilter, folderParam]);
+  }, [mediaFiles, queryParam, typeFilter, folderParam, personParam]);
 
   // Derived column count based on container width and zoom level
   const columns = useMemo(() => {
@@ -112,6 +121,24 @@ export default function GalleryPage() {
               }}
               className="ml-1 hover:text-primary/70 font-bold"
               title="Сбросить фильтр каталога"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {personParam && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 border border-primary/25 text-primary text-xs font-medium rounded-lg">
+            <span>Лицо: {personParam}</span>
+            <button
+              type="button"
+              onClick={() => {
+                searchParams.delete('person');
+                searchParams.delete('face');
+                setSearchParams(searchParams);
+              }}
+              className="ml-1 hover:opacity-75 font-bold"
+              title="Сбросить фильтр по лицу"
             >
               ×
             </button>
@@ -189,6 +216,10 @@ export default function GalleryPage() {
             }
             if (folderParam) {
               searchParams.delete('folder');
+            }
+            if (personParam) {
+              searchParams.delete('person');
+              searchParams.delete('face');
             }
             setSearchParams(searchParams);
             setTypeFilter('all');
