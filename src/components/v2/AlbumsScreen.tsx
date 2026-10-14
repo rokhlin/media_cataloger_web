@@ -10,6 +10,9 @@ import {
   Check,
   X,
   Trash2,
+  Edit2,
+  ExternalLink,
+  Search,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRealAlbums, type CatalogAlbum } from '../../services/albumService';
@@ -28,9 +31,20 @@ export const AlbumsScreen: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [createSearch, setCreateSearch] = useState('');
   const [availablePhotos, setAvailablePhotos] = useState<GalleryMediaFile[]>([]);
   const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+
+  // Edit Album Modal State
+  const [editingAlbum, setEditingAlbum] = useState<VirtualAlbum | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPhotoPaths, setEditPhotoPaths] = useState<string[]>([]);
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [photosToAdd, setPhotosToAdd] = useState<string[]>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const loadAllAlbums = async () => {
     setLoading(true);
@@ -52,12 +66,30 @@ export const AlbumsScreen: React.FC = () => {
     loadAllAlbums();
   }, []);
 
-  const handleOpenCreateModal = () => {
+  const ensureAvailablePhotosLoaded = async (): Promise<GalleryMediaFile[]> => {
+    let all = mediaCacheService.getAll();
+    if (all.length === 0) {
+      try {
+        await mediaCacheService.init();
+        all = mediaCacheService.getAll();
+        if (all.length === 0) {
+          const chunk = await mediaCacheService.fetchChunk({ offset: 0, limit: 200 });
+          all = chunk.files || [];
+        }
+      } catch (err) {
+        console.warn('Failed to prefetch media for albums:', err);
+      }
+    }
+    setAvailablePhotos(all);
+    return all;
+  };
+
+  const handleOpenCreateModal = async () => {
     setNewTitle('');
     setNewDescription('');
+    setCreateSearch('');
     setSelectedPhotoPaths([]);
-    const all = mediaCacheService.getAll();
-    setAvailablePhotos(all.slice(0, 100)); // display first 100 photos for quick selection
+    await ensureAvailablePhotosLoaded();
     setCreateModalOpen(true);
   };
 
@@ -82,6 +114,57 @@ export const AlbumsScreen: React.FC = () => {
       console.error('Failed to create virtual album:', err);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleOpenEditAlbum = async (album: VirtualAlbum, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setEditingAlbum(album);
+    setEditTitle(album.title);
+    setEditDescription(album.description || '');
+    setEditPhotoPaths([...album.filePaths]);
+    setPhotosToAdd([]);
+    setShowAddSection(false);
+    setAddSearch('');
+    await ensureAvailablePhotosLoaded();
+  };
+
+  const handleRemovePhotoFromEditAlbum = (pathToRemove: string) => {
+    setEditPhotoPaths((prev) => prev.filter((p) => p !== pathToRemove));
+  };
+
+  const togglePhotoToAdd = (filePath: string) => {
+    setPhotosToAdd((prev) =>
+      prev.includes(filePath) ? prev.filter((p) => p !== filePath) : [...prev, filePath]
+    );
+  };
+
+  const handleConfirmAddPhotos = () => {
+    const existing = new Set(editPhotoPaths);
+    photosToAdd.forEach((p) => existing.add(p));
+    setEditPhotoPaths(Array.from(existing));
+    setPhotosToAdd([]);
+    setShowAddSection(false);
+  };
+
+  const handleSaveAlbumEdit = async () => {
+    if (!editingAlbum || !editTitle.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      await virtualAlbumService.updateAlbum(editingAlbum.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        filePaths: editPhotoPaths,
+      });
+      setEditingAlbum(null);
+      await loadAllAlbums();
+    } catch (err) {
+      console.error('Failed to update virtual album:', err);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -215,13 +298,15 @@ export const AlbumsScreen: React.FC = () => {
                   const coverUrl = cover ? `/api/media/image?path=${encodeURIComponent(cover)}` : null;
 
                   return (
-                    <Link
+                    <div
                       key={album.id}
-                      to={`/photos?album=${album.id}`}
                       className="group bg-card border border-border/70 hover:border-primary/50 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 shadow-xs hover:shadow-md relative"
                     >
                       {/* Album Cover Thumbnail */}
-                      <div className="aspect-4/3 w-full bg-muted/60 relative overflow-hidden flex items-center justify-center">
+                      <div
+                        onClick={() => handleOpenEditAlbum(album)}
+                        className="aspect-4/3 w-full bg-muted/60 relative overflow-hidden flex items-center justify-center cursor-pointer"
+                      >
                         {coverUrl ? (
                           <img
                             src={coverUrl}
@@ -236,20 +321,41 @@ export const AlbumsScreen: React.FC = () => {
                         )}
                         <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
 
-                        {/* Delete Album Action */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteVirtualAlbum(album.id, e)}
-                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-white/80 hover:text-red-400 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Удалить альбом"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {/* Actions overlay on hover */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditAlbum(album, e)}
+                            className="p-1.5 rounded-lg bg-black/60 text-white hover:text-primary hover:bg-black/80 transition-colors"
+                            title="Редактировать альбом"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <Link
+                            to={`/photos?album=${album.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-lg bg-black/60 text-white hover:text-primary hover:bg-black/80 transition-colors"
+                            title="Открыть в галерее"
+                          >
+                            <ExternalLink size={13} />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteVirtualAlbum(album.id, e)}
+                            className="p-1.5 rounded-lg bg-black/60 text-white/80 hover:text-red-400 hover:bg-black/80 transition-colors"
+                            title="Удалить альбом"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Album Metadata */}
                       <div className="p-4 flex flex-col flex-1 justify-between">
-                        <div>
+                        <div
+                          onClick={() => handleOpenEditAlbum(album)}
+                          className="cursor-pointer"
+                        >
                           <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors truncate">
                             {album.title}
                           </h3>
@@ -264,11 +370,24 @@ export const AlbumsScreen: React.FC = () => {
                         </div>
 
                         <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/40 text-[11px] text-muted-foreground">
-                          <span>Создан {new Date(album.createdAt).toLocaleDateString()}</span>
-                          <MoreVertical size={14} className="hover:text-foreground" />
+                          <Link
+                            to={`/photos?album=${album.id}`}
+                            className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                          >
+                            <span>В галерее</span>
+                            <ExternalLink size={11} />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditAlbum(album, e)}
+                            className="hover:text-foreground font-semibold flex items-center gap-1 text-muted-foreground hover:underline"
+                          >
+                            <Edit2 size={11} />
+                            <span>Изменить</span>
+                          </button>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -385,41 +504,55 @@ export const AlbumsScreen: React.FC = () => {
                   Выберите фотографии ({selectedPhotoPaths.length} выбрано)
                 </span>
                 <span className="text-muted-foreground text-[11px]">
-                  Показаны первые {availablePhotos.length} файлов из галереи
+                  Всего в галерее: {availablePhotos.length}
                 </span>
               </div>
 
-              <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/20 min-h-[160px] max-h-[260px]">
-                {availablePhotos.map((photo) => {
-                  const path = photo.file_path || photo.filename;
-                  const isSelected = selectedPhotoPaths.includes(path);
-                  const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+              {/* Photo Search Filter */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={createSearch}
+                  onChange={(e) => setCreateSearch(e.target.value)}
+                  placeholder="Поиск по имени файла..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-muted/30 border border-border/60 rounded-lg text-xs outline-none focus:border-primary"
+                />
+              </div>
 
-                  return (
-                    <div
-                      key={path}
-                      onClick={() => toggleSelectPhoto(path)}
-                      className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                        isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-transparent hover:border-border'
-                      }`}
-                    >
-                      <img
-                        src={thumb}
-                        alt={photo.filename}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
-                      {isSelected && (
-                        <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
-                          <Check size={12} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/20 min-h-[160px] max-h-[260px]">
+                {availablePhotos
+                  .filter((p) => !createSearch || (p.filename || '').toLowerCase().includes(createSearch.toLowerCase()))
+                  .map((photo) => {
+                    const path = photo.file_path || photo.filename;
+                    const isSelected = selectedPhotoPaths.includes(path);
+                    const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+
+                    return (
+                      <div
+                        key={path}
+                        onClick={() => toggleSelectPhoto(path)}
+                        className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+                          isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-transparent hover:border-border'
+                        }`}
+                      >
+                        <img
+                          src={thumb}
+                          alt={photo.filename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        {isSelected && (
+                          <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
+                            <Check size={12} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 
@@ -439,6 +572,205 @@ export const AlbumsScreen: React.FC = () => {
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-xs"
               >
                 {creating ? 'Создание...' : 'Создать альбом'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Virtual Album Modal */}
+      {editingAlbum && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-card border border-border/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-bold text-foreground">Редактирование альбома</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/photos?album=${editingAlbum.id}`}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted text-foreground flex items-center gap-1.5 transition-colors"
+                >
+                  <ExternalLink size={13} />
+                  <span>Открыть в галерее</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setEditingAlbum(null)}
+                  className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Название альбома *
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Описание
+                </label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Краткое описание альбома..."
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Photos in Album */}
+            <div className="flex-1 min-h-0 flex flex-col space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">
+                  Фотографии в альбоме ({editPhotoPaths.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSection(!showAddSection)}
+                  className="text-primary font-semibold hover:underline flex items-center gap-1"
+                >
+                  <Plus size={13} />
+                  <span>{showAddSection ? 'Скрыть выбор фото' : 'Добавить фото в альбом'}</span>
+                </button>
+              </div>
+
+              {editPhotoPaths.length === 0 ? (
+                <div className="p-6 border border-dashed border-border/60 rounded-xl text-center text-xs text-muted-foreground">
+                  В этом альбоме пока нет фотографий. Нажмите «Добавить фото в альбом», чтобы внести файлы.
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/20 min-h-[120px] max-h-[220px]">
+                  {editPhotoPaths.map((path) => {
+                    const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+                    const filename = path.split(/[\\/]/).pop() || path;
+
+                    return (
+                      <div
+                        key={path}
+                        className="group/item relative aspect-square rounded-lg overflow-hidden border border-border/60 bg-muted/40"
+                      >
+                        <img
+                          src={thumb}
+                          alt={filename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhotoFromEditAlbum(path)}
+                          className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-full shadow-xs hover:bg-red-700 transition-colors opacity-80 group-hover/item:opacity-100"
+                          title="Удалить из альбома"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add Photos Section */}
+              {showAddSection && (
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-foreground">
+                      Выберите фотографии из медиатеки ({photosToAdd.length} выбрано)
+                    </span>
+                    {photosToAdd.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleConfirmAddPhotos}
+                        className="px-3 py-1 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                      >
+                        Добавить выбранные ({photosToAdd.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add Search Filter */}
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={addSearch}
+                      onChange={(e) => setAddSearch(e.target.value)}
+                      placeholder="Поиск по имени файла..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-muted/30 border border-border/60 rounded-lg text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/30 max-h-[160px]">
+                    {availablePhotos
+                      .filter((photo) => !editPhotoPaths.includes(photo.file_path || photo.filename))
+                      .filter((photo) => !addSearch || (photo.filename || '').toLowerCase().includes(addSearch.toLowerCase()))
+                      .map((photo) => {
+                        const path = photo.file_path || photo.filename;
+                        const isSelected = photosToAdd.includes(path);
+                        const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+
+                        return (
+                          <div
+                            key={path}
+                            onClick={() => togglePhotoToAdd(path)}
+                            className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+                              isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-transparent hover:border-border'
+                            }`}
+                          >
+                            <img
+                              src={thumb}
+                              alt={photo.filename}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
+                                <Check size={12} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setEditingAlbum(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAlbumEdit}
+                disabled={isSavingEdit || !editTitle.trim()}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-xs"
+              >
+                {isSavingEdit ? 'Сохранение...' : 'Сохранить изменения'}
               </button>
             </div>
           </div>

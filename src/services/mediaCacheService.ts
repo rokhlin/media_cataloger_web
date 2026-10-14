@@ -220,6 +220,9 @@ export class MediaCacheService {
         }
 
         await this.mergeChunk(files, total);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('media_loaded', { detail: { count: files.length } }));
+        }
 
         return {
           files,

@@ -57,11 +57,13 @@ export const UserSettingsScreen: React.FC = () => {
         if (data?.gemini_api_key) {
           setGeminiApiKey(data.gemini_api_key);
         }
-        if (data?.ai_model) {
-          setAiModel(data.ai_model);
+        const prov = data?.model_provider || data?.ai_provider;
+        if (prov) {
+          setAiProvider(prov);
         }
-        if (data?.ai_provider) {
-          setAiProvider(data.ai_provider);
+        const mod = data?.gemini_model || data?.local_model_name || data?.ai_model;
+        if (mod) {
+          setAiModel(mod);
         }
       })
       .catch(() => {});
@@ -122,12 +124,17 @@ export const UserSettingsScreen: React.FC = () => {
         },
         body: JSON.stringify({
           gemini_api_key: geminiApiKey.trim(),
+          model_provider: aiProvider,
+          gemini_model: aiModel,
+          local_model_name: aiModel,
           ai_provider: aiProvider,
           ai_model: aiModel,
         }),
       });
+      window.dispatchEvent(new CustomEvent('ai_settings_updated'));
       setAiStatus('Параметры AI успешно сохранены');
     } catch {
+      window.dispatchEvent(new CustomEvent('ai_settings_updated'));
       setAiStatus('Параметры AI сохранены локально');
     }
     setTimeout(() => setAiStatus(null), 3000);

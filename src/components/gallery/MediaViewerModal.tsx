@@ -1642,6 +1642,11 @@ export default function MediaViewerModal({
                             ? `/api/faces/image/${f.face_id}`
                             : null)
                         : null;
+                      const personMeta = effectiveKnownPersons.find(
+                        (kp) => (f.name && kp.name.toLowerCase() === f.name.toLowerCase()) ||
+                                (f.person_id && (kp as any).person_id === f.person_id)
+                      );
+                      const displayAvatarUrl = cropUrl || personMeta?.avatarUrl || null;
                       const isEditing = reassigningFaceId === f.face_id;
                       const isSelected = selectedFaceId === f.face_id;
                       const rawBbox = f.bbox || (f as any).bounding_box;
@@ -1667,9 +1672,9 @@ export default function MediaViewerModal({
                           style={{ cursor: 'pointer' }}
                           title={bbox ? `Click to highlight face [${bbox.join(', ')}] on photo` : 'Click to select face'}
                         >
-                          {cropUrl ? (
+                          {displayAvatarUrl ? (
                             <img
-                              src={cropUrl}
+                              src={displayAvatarUrl}
                               alt={f.name || f.face_id}
                               className="lightbox-face-crop"
                               onError={(e) => {

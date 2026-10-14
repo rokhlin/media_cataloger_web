@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Menu,
   Search,
@@ -66,10 +66,61 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+
+  // Sync search input with URL search param
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== searchQuery && location.pathname !== '/search') {
+      setSearchQuery(q);
+    }
+  }, [searchParams, location.pathname]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    const trimmed = val.trim();
+    const isGallery = location.pathname === '/' || location.pathname === '/photos';
+
+    if (trimmed.length >= 4) {
+      if (isGallery) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set('q', trimmed);
+        setSearchParams(nextParams, { replace: true });
+      } else {
+        navigate(`/photos?q=${encodeURIComponent(trimmed)}`);
+      }
+    } else if (trimmed.length === 0) {
+      if (isGallery && searchParams.has('q')) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('q');
+        setSearchParams(nextParams, { replace: true });
+      }
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    const isGallery = location.pathname === '/' || location.pathname === '/photos';
+    if (isGallery && searchParams.has('q')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('q');
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    const trimmed = searchQuery.trim();
+    const isGallery = location.pathname === '/' || location.pathname === '/photos';
+    if (trimmed) {
+      if (isGallery) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set('q', trimmed);
+        setSearchParams(nextParams, { replace: true });
+      } else {
+        navigate(`/photos?q=${encodeURIComponent(trimmed)}`);
+      }
     }
   };
 
@@ -95,6 +146,20 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
         });
         if (!res.ok) {
           console.error('Failed to upload file:', files[i].name);
+        } else {
+          try {
+            const data = await res.json();
+            if (data?.file_path && !data?.analysis_triggered) {
+              fetch(`/api/analyze-file?file=${encodeURIComponent(data.file_path)}`, {
+                method: 'POST',
+                headers: {
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+              }).catch(() => {});
+            }
+          } catch {
+            // ignore
+          }
         }
       }
       setUploadSuccess(true);
@@ -143,18 +208,18 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
           <Search className="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             ref={searchInputRef}
-            type="search"
+            type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Поиск фотографий, людей, мест... (⌘K)"
             aria-label="Поиск по медиатеке"
-            className="w-full h-10 pl-10 pr-16 bg-muted/50 hover:bg-muted/70 focus:bg-background border border-border/60 focus:border-primary rounded-full text-sm placeholder:text-muted-foreground/80 text-foreground transition-all duration-200 outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full h-10 pl-10 pr-16 bg-muted/50 hover:bg-muted/70 focus:bg-background border border-border/60 focus:border-primary rounded-full text-sm placeholder:text-muted-foreground/80 text-foreground transition-all duration-200 outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:hidden"
           />
 
           {searchQuery ? (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
+              onClick={handleClearSearch}
               className="absolute right-10 p-1 text-muted-foreground hover:text-foreground"
               aria-label="Очистить поиск"
             >

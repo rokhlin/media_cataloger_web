@@ -74,6 +74,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     }
   }, []);
 
+  const [modelProvider, setModelProvider] = useState<'gemini' | 'local'>('gemini');
+  const [activeModelName, setActiveModelName] = useState('Gemini 3.8 Flash');
+
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/settings');
@@ -81,6 +84,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         const data = await res.json();
         if (Array.isArray(data.input_folders)) {
           setConfiguredFolders(data.input_folders);
+        }
+        if (data.model_provider) {
+          setModelProvider(data.model_provider);
+        }
+        if (data.model_provider === 'gemini') {
+          setActiveModelName(data.gemini_model || 'Gemini 3.8 Flash');
+        } else if (data.local_model_name) {
+          setActiveModelName(data.local_model_name);
         }
       }
     } catch {
@@ -92,7 +103,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     fetchStatus();
     fetchSettings();
     const interval = setInterval(fetchStatus, 3000);
-    return () => clearInterval(interval);
+    window.addEventListener('ai_settings_updated', fetchSettings);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ai_settings_updated', fetchSettings);
+    };
   }, [fetchStatus, fetchSettings]);
 
   const handleStartScan = async () => {
@@ -269,8 +284,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               </div>
               <div>
                 <span className="font-medium text-foreground">ИИ Модели:</span>{' '}
-                {modelsLoaded.vision_llm ? 'Qwen2.5-VL онлайн' : 'Загрузка'}
-                {modelsLoaded.whisper ? ', Whisper готов' : ''}
+                {modelProvider === 'gemini' ? (
+                  `${activeModelName} (Онлайн)`
+                ) : (
+                  <>
+                    {modelsLoaded.vision_llm ? (activeModelName || 'Qwen2.5-VL онлайн') : 'Загрузка'}
+                    {modelsLoaded.whisper ? ', Whisper готов' : ''}
+                  </>
+                )}
               </div>
               <div>
                 <span className="font-medium text-foreground">Источники:</span>{' '}

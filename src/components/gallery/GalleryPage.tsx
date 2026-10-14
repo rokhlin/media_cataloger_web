@@ -4,9 +4,11 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import { useFavorites } from '../../services/favoritesService';
 import { Button } from '../ui/button';
-import { Image as ImageIcon, Video, FilterX, Heart, ZoomIn, ZoomOut, Folder } from 'lucide-react';
+import { Image as ImageIcon, Video, FilterX, Heart, ZoomIn, ZoomOut, Folder, BookOpen } from 'lucide-react';
 import { cn } from '@/utils';
 import type { GalleryMediaFile } from '../../models';
+import { virtualAlbumService, type VirtualAlbum } from '../../services/virtualAlbumService';
+import { extractMediaYear } from '../layout/TimelineScrubber';
 import MediaViewerModal from './MediaViewerModal';
 
 export default function GalleryPage() {
@@ -14,8 +16,10 @@ export default function GalleryPage() {
   const folderParam = searchParams.get('folder');
   const queryParam = searchParams.get('q') || '';
   const personParam = searchParams.get('person') || searchParams.get('face') || '';
+  const albumParam = searchParams.get('album');
 
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
+  const [activeAlbum, setActiveAlbum] = useState<VirtualAlbum | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
   const [selectedFile, setSelectedFile] = useState<GalleryMediaFile | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(1200);
@@ -32,6 +36,18 @@ export default function GalleryPage() {
     };
     loadData();
   }, []);
+
+  // Sync album metadata if album param is set
+  useEffect(() => {
+    if (albumParam) {
+      virtualAlbumService.getAlbums().then((albums) => {
+        const found = albums.find((a) => a.id === albumParam);
+        setActiveAlbum(found || null);
+      });
+    } else {
+      setActiveAlbum(null);
+    }
+  }, [albumParam]);
 
   // Responsive container width measurement via ResizeObserver
   useEffect(() => {
@@ -50,6 +66,17 @@ export default function GalleryPage() {
   // Filtered files
   const filteredFiles = useMemo(() => {
     return mediaFiles.filter((file) => {
+      // Album filter
+      if (albumParam && activeAlbum) {
+        const normPath = (file.file_path || '').replace(/\\/g, '/').toLowerCase();
+        const normName = (file.filename || '').toLowerCase();
+        const isInAlbum = activeAlbum.filePaths.some((p) => {
+          const np = p.replace(/\\/g, '/').toLowerCase();
+          return np === normPath || np.endsWith('/' + normName) || normPath.endsWith('/' + np);
+        });
+        if (!isInAlbum) return false;
+      }
+
       // Folder filter
       if (folderParam) {
         const normPath = (file.file_path || '').replace(/\\/g, '/').toLowerCase();
@@ -71,17 +98,49 @@ export default function GalleryPage() {
       if (typeFilter === 'image' && !file.is_image && file.type !== 'image') return false;
       if (typeFilter === 'video' && !file.is_video && file.type !== 'video') return false;
       
-      // Global Search query filter
+      // Global Search query filter (matching filename, path, folder, description, summary, OCR, faces, tags, location)
       if (queryParam) {
         const query = queryParam.toLowerCase();
         const nameMatch = file.filename?.toLowerCase().includes(query);
         const pathMatch = file.file_path?.toLowerCase().includes(query);
-        if (!nameMatch && !pathMatch) return false;
+        const folderMatch = file.folder?.toLowerCase().includes(query);
+        const descMatch = (file as any).description?.toLowerCase().includes(query) || (file as any).description_ru?.toLowerCase().includes(query);
+        const summMatch = (file as any).summary?.toLowerCase().includes(query) || (file as any).summary_ru?.toLowerCase().includes(query);
+        const ocrMatch = (file as any).ocr_text?.toLowerCase().includes(query);
+        const exifMatch = (file as any).exif_analysis?.toLowerCase().includes(query) || (file as any).exif_analysis_ru?.toLowerCase().includes(query);
+        const transMatch = (file as any).transcription?.toLowerCase().includes(query) || (file as any).transcription_ru?.toLowerCase().includes(query);
+        const locationMatch = (file as any).location_name?.toLowerCase().includes(query);
+        const facesMatch = file.face_names?.some((fn) => fn.toLowerCase().includes(query)) ||
+          file.faces?.some((f) => (f.name || '').toLowerCase().includes(query));
+        const tags = (file as any).tags;
+        const tagsMatch = Array.isArray(tags)
+          ? tags.some((t: any) => String(t).toLowerCase().includes(query))
+          : typeof tags === 'string' && tags.toLowerCase().includes(query);
+
+        const queryYear = /^\d{4}$/.test(query) ? parseInt(query, 10) : null;
+        const yearMatch = queryYear !== null && extractMediaYear(file) === queryYear;
+
+        if (
+          !nameMatch &&
+          !pathMatch &&
+          !folderMatch &&
+          !descMatch &&
+          !summMatch &&
+          !ocrMatch &&
+          !exifMatch &&
+          !transMatch &&
+          !locationMatch &&
+          !facesMatch &&
+          !tagsMatch &&
+          !yearMatch
+        ) {
+          return false;
+        }
       }
       
       return true;
     });
-  }, [mediaFiles, queryParam, typeFilter, folderParam, personParam]);
+  }, [mediaFiles, queryParam, typeFilter, folderParam, personParam, albumParam, activeAlbum]);
 
   // Derived column count based on container width and zoom level
   const columns = useMemo(() => {
@@ -121,6 +180,24 @@ export default function GalleryPage() {
               }}
               className="ml-1 hover:text-primary/70 font-bold"
               title="Сбросить фильтр каталога"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {albumParam && activeAlbum && (
+          <div className="flex items-center gap-2 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-lg text-xs font-semibold">
+            <BookOpen size={14} />
+            <span>Альбом: «{activeAlbum.title}»</span>
+            <button
+              type="button"
+              onClick={() => {
+                searchParams.delete('album');
+                setSearchParams(searchParams);
+              }}
+              className="ml-1 hover:text-primary/70 font-bold"
+              title="Сбросить фильтр альбома"
             >
               ×
             </button>

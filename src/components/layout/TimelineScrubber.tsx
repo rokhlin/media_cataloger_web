@@ -10,6 +10,35 @@ export interface TimelineScrubberProps {
   className?: string;
 }
 
+export function extractMediaYear(file: any): number | null {
+  if (!file) return null;
+  const candidates = [
+    file.capture_date,
+    file.media_date,
+    file.exif?.DateTimeOriginal,
+    file.exif?.CreateDate,
+    file.date_taken,
+    file.created_at,
+  ];
+  for (const c of candidates) {
+    if (c) {
+      const str = String(c).trim();
+      const match = str.match(/\b(19\d\d|20\d\d)\b/);
+      if (match) {
+        const y = parseInt(match[1], 10);
+        if (y >= 1900 && y <= 2035) return y;
+      }
+    }
+  }
+  // Fallback to mtime (seconds or milliseconds)
+  if (typeof file.mtime === 'number' && file.mtime > 0) {
+    const ms = file.mtime < 10000000000 ? file.mtime * 1000 : file.mtime;
+    const y = new Date(ms).getFullYear();
+    if (!isNaN(y) && y >= 1970 && y <= 2035) return y;
+  }
+  return null;
+}
+
 export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   years: propYears,
   activeYear: propActiveYear,
@@ -27,13 +56,9 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       if (files && files.length > 0) {
         const set = new Set<number>();
         for (const file of files) {
-          const f = file as any;
-          const raw = f.date_taken || f.creation_time || f.created_at || f.timestamp || f.modified_time;
-          if (raw) {
-            const yr = new Date(raw).getFullYear();
-            if (!isNaN(yr) && yr >= 1970 && yr <= 2035) {
-              set.add(yr);
-            }
+          const yr = extractMediaYear(file);
+          if (yr !== null) {
+            set.add(yr);
           }
         }
         if (set.size > 0) {
@@ -44,12 +69,21 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
     computeYears();
     window.addEventListener('media_uploaded', computeYears);
-    return () => window.removeEventListener('media_uploaded', computeYears);
+    window.addEventListener('media_loaded', computeYears);
+    const interval = setInterval(computeYears, 2000);
+    return () => {
+      window.removeEventListener('media_uploaded', computeYears);
+      window.removeEventListener('media_loaded', computeYears);
+      clearInterval(interval);
+    };
   }, []);
 
-  const defaultYears = [2025, 2024, 2023, 2022, 2020, 2018, 2015, 2012, 2008];
-  const effectiveYears = propYears || (detectedYears.length > 0 ? detectedYears : defaultYears);
-  const effectiveActiveYear = propActiveYear || effectiveYears[0] || 2025;
+  const effectiveYears = propYears || detectedYears;
+  const effectiveActiveYear = propActiveYear || effectiveYears[0];
+
+  if (!effectiveYears || effectiveYears.length === 0) {
+    return null;
+  }
 
   const handleYearClick = (year: number) => {
     if (onSelectYear) {

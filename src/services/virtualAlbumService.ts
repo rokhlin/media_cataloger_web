@@ -80,6 +80,45 @@ export class VirtualAlbumService {
   }
 
   /**
+   * Get a single virtual album by id
+   */
+  async getAlbum(id: string): Promise<VirtualAlbum | null> {
+    const albums = this.getStoredAlbums();
+    return albums.find((a) => a.id === id) || null;
+  }
+
+  /**
+   * Add files to an existing virtual album
+   */
+  async addFilesToAlbum(albumId: string, filePaths: string[]): Promise<VirtualAlbum | null> {
+    const albums = this.getStoredAlbums();
+    const index = albums.findIndex((a) => a.id === albumId);
+    if (index === -1) return null;
+
+    const existingPaths = new Set(albums[index].filePaths);
+    filePaths.forEach((p) => existingPaths.add(p));
+    albums[index].filePaths = Array.from(existingPaths);
+    albums[index].updatedAt = new Date().toISOString();
+    this.saveStoredAlbums(albums);
+    return albums[index];
+  }
+
+  /**
+   * Remove files from an existing virtual album
+   */
+  async removeFilesFromAlbum(albumId: string, filePaths: string[]): Promise<VirtualAlbum | null> {
+    const albums = this.getStoredAlbums();
+    const index = albums.findIndex((a) => a.id === albumId);
+    if (index === -1) return null;
+
+    const removeSet = new Set(filePaths);
+    albums[index].filePaths = albums[index].filePaths.filter((p) => !removeSet.has(p));
+    albums[index].updatedAt = new Date().toISOString();
+    this.saveStoredAlbums(albums);
+    return albums[index];
+  }
+
+  /**
    * Update an existing virtual album
    */
   async updateAlbum(id: string, updates: Partial<VirtualAlbum>): Promise<VirtualAlbum | null> {

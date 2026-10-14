@@ -86,7 +86,7 @@ describe('V2 Base Layout & Adaptive Navigation Architecture', () => {
   it('should verify TimelineScrubber provides vertical year milestones', () => {
     const scrubberContent = fs.readFileSync(path.join(layoutDir, 'TimelineScrubber.tsx'), 'utf-8');
 
-    assert.ok(scrubberContent.includes('2025'), 'TimelineScrubber must contain year milestone anchors');
+    assert.ok(scrubberContent.includes('extractMediaYear') || scrubberContent.includes('years.map'), 'TimelineScrubber must dynamically construct year milestone anchors from media files');
     assert.ok(scrubberContent.includes('onSelectYear'), 'TimelineScrubber must provide year selection handler');
     assert.ok(scrubberContent.includes('hoveredItem'), 'TimelineScrubber must support hover preview tooltip');
   });

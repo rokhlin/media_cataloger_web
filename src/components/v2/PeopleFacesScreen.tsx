@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink } from 'lucide-react';
+import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink, Camera, X } from 'lucide-react';
 import { cn } from '@/utils';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ interface PersonDisplay {
   avatarUrl?: string | null;
   avatarColor?: string;
   initials?: string;
+  availableFaces?: Array<{ face_id: string; image_path?: string }>;
 }
 
 export const PeopleFacesScreen: React.FC = () => {
@@ -21,6 +22,7 @@ export const PeopleFacesScreen: React.FC = () => {
   const [showHidden, setShowHidden] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
+  const [choosingCoverPerson, setChoosingCoverPerson] = useState<PersonDisplay | null>(null);
 
   const loadFaces = async () => {
     setLoading(true);
@@ -45,6 +47,26 @@ export const PeopleFacesScreen: React.FC = () => {
             const avatarUrl = repFace ? `/api/faces/image/${repFace}` : null;
             const initials = name.slice(0, 2).toUpperCase();
 
+            // Collect available faces for cover photo selection
+            const facesList: Array<{ face_id: string; image_path?: string }> = [];
+            if (Array.isArray(item.reference_faces) && item.reference_faces.length > 0) {
+              for (const rf of item.reference_faces) {
+                if (rf.face_id && !facesList.some((f) => f.face_id === rf.face_id)) {
+                  facesList.push({ face_id: rf.face_id, image_path: rf.image_path });
+                }
+              }
+            }
+            if (Array.isArray(item.face_ids)) {
+              for (const fid of item.face_ids) {
+                if (fid && !facesList.some((f) => f.face_id === fid)) {
+                  facesList.push({ face_id: fid });
+                }
+              }
+            }
+            if (repFace && !facesList.some((f) => f.face_id === repFace)) {
+              facesList.unshift({ face_id: repFace });
+            }
+
             return {
               id: item.person_id || item.id || name,
               name,
@@ -53,6 +75,7 @@ export const PeopleFacesScreen: React.FC = () => {
               avatarUrl,
               avatarColor: colors[i % colors.length],
               initials,
+              availableFaces: facesList,
             };
           });
 
@@ -96,6 +119,26 @@ export const PeopleFacesScreen: React.FC = () => {
       } catch {}
     }
     setEditingId(null);
+  };
+
+  const handleSetPrimaryFace = async (person: PersonDisplay, faceId: string) => {
+    const newAvatarUrl = `/api/faces/image/${faceId}`;
+    setPeople((prev) =>
+      prev.map((p) => (p.id === person.id ? { ...p, avatarUrl: newAvatarUrl } : p))
+    );
+    try {
+      await fetch('/api/faces/set-primary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+        },
+        body: JSON.stringify({ name: person.name, person_id: String(person.id), face_id: faceId }),
+      });
+    } catch (e) {
+      console.warn('Failed to set primary face on backend:', e);
+    }
+    setChoosingCoverPerson(null);
   };
 
   const toggleVisibility = (id: string | number) => {
@@ -230,26 +273,43 @@ export const PeopleFacesScreen: React.FC = () => {
                   {person.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
                 </button>
 
-                {/* Circular Avatar Crop */}
-                <div
-                  className={cn(
-                    'w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold shadow-sm mb-3 group-hover:scale-105 transition-transform overflow-hidden relative',
-                    `bg-gradient-to-tr ${person.avatarColor || 'from-blue-500 to-indigo-600'} text-white`
-                  )}
-                >
-                  {person.avatarUrl ? (
-                    <img
-                      src={person.avatarUrl}
-                      alt={person.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
+                {/* Circular Avatar Crop with Primary Photo Selector */}
+                <div className="relative mb-3 group/avatar">
+                  <div
+                    className={cn(
+                      'w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold shadow-sm group-hover:scale-105 transition-transform overflow-hidden relative',
+                      `bg-gradient-to-tr ${person.avatarColor || 'from-blue-500 to-indigo-600'} text-white`
+                    )}
+                  >
+                    {person.avatarUrl ? (
+                      <img
+                        src={person.avatarUrl}
+                        alt={person.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                    <span className="absolute inset-0 flex items-center justify-center -z-0">
+                      {person.initials || '👤'}
+                    </span>
+                  </div>
+
+                  {/* Change primary cover photo button */}
+                  {person.availableFaces && person.availableFaces.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setChoosingCoverPerson(person);
                       }}
-                    />
-                  ) : null}
-                  <span className="absolute inset-0 flex items-center justify-center -z-0">
-                    {person.initials || '👤'}
-                  </span>
+                      className="absolute -bottom-1 -right-1 p-1 rounded-full bg-card border border-border/80 shadow text-muted-foreground hover:text-primary transition-all opacity-0 group-hover:opacity-100 z-10"
+                      title="Выбрать базовое фото для этого человека"
+                    >
+                      <Camera size={12} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Editable Name Tag */}
@@ -301,6 +361,82 @@ export const PeopleFacesScreen: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Choose Primary Base Photo Modal */}
+      {choosingCoverPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-card border border-border/80 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60">
+              <div>
+                <h3 className="text-base font-bold text-foreground">
+                  Выбрать базовое фото
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {choosingCoverPerson.name}: выберите снимок для основного аватара
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChoosingCoverPerson(null)}
+                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto min-h-[140px] max-h-[300px] grid grid-cols-4 sm:grid-cols-5 gap-3 p-1">
+              {choosingCoverPerson.availableFaces && choosingCoverPerson.availableFaces.length > 0 ? (
+                choosingCoverPerson.availableFaces.map((f) => {
+                  const thumb = `/api/faces/image/${f.face_id}`;
+                  const isCurrent = choosingCoverPerson.avatarUrl?.includes(f.face_id);
+
+                  return (
+                    <div
+                      key={f.face_id}
+                      onClick={() => handleSetPrimaryFace(choosingCoverPerson, f.face_id)}
+                      className={cn(
+                        'relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:scale-105',
+                        isCurrent
+                          ? 'border-primary ring-2 ring-primary/40'
+                          : 'border-transparent hover:border-primary/50'
+                      )}
+                      title="Нажмите, чтобы сделать это фото базовым"
+                    >
+                      <img
+                        src={thumb}
+                        alt="Лицо"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                      {isCurrent && (
+                        <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
+                          <Check size={11} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-8 text-center text-xs text-muted-foreground">
+                  Нет сохранённых снимков лица для выбора
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setChoosingCoverPerson(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
