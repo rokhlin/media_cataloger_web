@@ -163,4 +163,77 @@ describe('BUG-004: Audio Feedback Bug Fixes & Enhancements Test Suite', () => {
       'AlbumsScreen must ensure gallery photos are pre-fetched when opening modals'
     );
   });
+
+  it('Requirement 7: Album photo picker must use /api/media/thumbnail endpoints and display filenames for all items', () => {
+    const albumsScreenPath = path.join(componentsDir, 'v2/AlbumsScreen.tsx');
+    const albumsContent = fs.readFileSync(albumsScreenPath, 'utf-8');
+
+    assert.ok(
+      !albumsContent.includes('/api/media/image?path='),
+      'AlbumsScreen must NOT use obsolete /api/media/image endpoint which returns 404'
+    );
+    assert.ok(
+      albumsContent.includes('/api/media/thumbnail?path='),
+      'AlbumsScreen must use /api/media/thumbnail endpoint for photo picker miniatures'
+    );
+    assert.ok(
+      albumsContent.includes('photo.filename') || albumsContent.includes('split(/[\\\\/]/).pop()'),
+      'AlbumsScreen photo pickers must render filename captions and titles'
+    );
+    assert.ok(
+      albumsContent.includes('loadingPhotos'),
+      'AlbumsScreen must maintain loadingPhotos state for pre-fetching indicators'
+    );
+  });
+
+  it('Requirement 8: MediaViewerModal must provide "Add to Album" action and open AddToAlbumModal dialog', () => {
+    const addToAlbumModalPath = path.join(componentsDir, 'gallery/AddToAlbumModal.tsx');
+    assert.ok(fs.existsSync(addToAlbumModalPath), 'AddToAlbumModal.tsx must exist');
+    const modalContent = fs.readFileSync(addToAlbumModalPath, 'utf-8');
+    assert.ok(
+      modalContent.includes('virtualAlbumService.getAlbums') &&
+      modalContent.includes('virtualAlbumService.addFilesToAlbum'),
+      'AddToAlbumModal must list albums and add files using virtualAlbumService'
+    );
+    assert.ok(
+      modalContent.includes('createAlbum'),
+      'AddToAlbumModal must allow quick inline creation of a new album'
+    );
+
+    const viewerPath = path.join(componentsDir, 'gallery/MediaViewerModal.tsx');
+    const viewerContent = fs.readFileSync(viewerPath, 'utf-8');
+    assert.ok(
+      viewerContent.includes('isAddToAlbumOpen') && viewerContent.includes('AddToAlbumModal'),
+      'MediaViewerModal must integrate AddToAlbumModal'
+    );
+    assert.ok(
+      viewerContent.includes('add_to_album_button_id') || viewerContent.includes('add-to-album-btn'),
+      'MediaViewerModal must render "Добавить в альбом" button'
+    );
+  });
+
+  it('Requirement 9: MediaViewerModal analysis button must reliably launch analysis with self-contained fallback to /api/analyze-file', () => {
+    const viewerPath = path.join(componentsDir, 'gallery/MediaViewerModal.tsx');
+    const viewerContent = fs.readFileSync(viewerPath, 'utf-8');
+
+    assert.ok(
+      viewerContent.includes('/api/analyze-file'),
+      'MediaViewerModal must contain self-contained fallback calling /api/analyze-file when prop is absent'
+    );
+    assert.ok(
+      viewerContent.includes('btn_analyze_file_id') || viewerContent.includes('handleAnalyzeClick'),
+      'MediaViewerModal must have analysis button and click handler'
+    );
+    assert.ok(
+      viewerContent.includes('isAnalyzing'),
+      'MediaViewerModal must track isAnalyzing state'
+    );
+
+    const galleryPath = path.join(componentsDir, 'gallery/GalleryPage.tsx');
+    const galleryContent = fs.readFileSync(galleryPath, 'utf-8');
+    assert.ok(
+      galleryContent.includes('onStartSingleAnalysis={handleStartSingleAnalysis}'),
+      'GalleryPage must pass onStartSingleAnalysis prop to MediaViewerModal'
+    );
+  });
 });

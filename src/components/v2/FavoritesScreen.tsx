@@ -12,22 +12,23 @@ export const FavoritesScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<GalleryMediaFile | null>(null);
 
-  useEffect(() => {
-    const loadMedia = async () => {
-      setLoading(true);
-      try {
-        let files = mediaCacheService.getAll();
-        if (files.length === 0) {
-          await mediaCacheService.fetchChunk({ offset: 0, limit: 1000 });
-          files = mediaCacheService.getAll();
-        }
-        setAllFiles(files);
-      } catch (e) {
-        console.warn('Failed to load media for favorites:', e);
-      } finally {
-        setLoading(false);
+  const loadMedia = async () => {
+    setLoading(true);
+    try {
+      let files = mediaCacheService.getAll();
+      if (files.length === 0) {
+        await mediaCacheService.fetchChunk({ offset: 0, limit: 1000 });
+        files = mediaCacheService.getAll();
       }
-    };
+      setAllFiles(files);
+    } catch (e) {
+      console.warn('Failed to load media for favorites:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadMedia();
   }, []);
 
@@ -165,6 +166,12 @@ export const FavoritesScreen: React.FC = () => {
           }}
           hasPrev={favoriteFiles.indexOf(selectedFile) > 0}
           hasNext={favoriteFiles.indexOf(selectedFile) < favoriteFiles.length - 1}
+          onRefresh={loadMedia}
+          onMediaUpdated={(updated) => {
+            setSelectedFile(updated);
+            mediaCacheService.upsert(updated);
+            loadMedia();
+          }}
         />
       )}
     </div>

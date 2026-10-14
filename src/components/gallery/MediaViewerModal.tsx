@@ -11,7 +11,9 @@ import { useVault } from '../../services/vaultContext';
 import { useFamilyTreeStore } from '../../packages/family-tree/state/useFamilyTreeStore';
 import MetadataEditorModal from './MetadataEditorModal';
 import ModuleStatusBadges from './ModuleStatusBadges';
+import AddToAlbumModal from './AddToAlbumModal';
 import { useFavorites } from '../../services/favoritesService';
+import { FolderPlus, Loader2 } from 'lucide-react';
 import './MediaViewerModal.css';
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -116,6 +118,7 @@ export default function MediaViewerModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisSuccess, setAnalysisSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
 
   const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; avatarUrl?: string | null; count: number }[]>([]);
 
@@ -304,37 +307,62 @@ export default function MediaViewerModal({
   };
 
   const handleAnalyzeClick = async () => {
-    if (!isEngineConnected || !engineOnline) {
-      setAnalysisError(t('aiEngineErrorDescription') || t('aiEngineOfflineTooltip'));
+    if (!selectedMedia) return;
+
+    if (!isEngineConnected && !engineOnline) {
+      setAnalysisError(t('aiEngineErrorDescription') || t('aiEngineOfflineTooltip') || 'AI Engine is offline');
       return;
     }
-    if (!onStartSingleAnalysis || !selectedMedia) return;
 
     setIsAnalyzing(true);
     setAnalysisSuccess(false);
     setAnalysisError(null);
     try {
       const filePath = selectedMedia.file_path || selectedMedia.filename;
-      await onStartSingleAnalysis(
-        filePath,
-        () => {
+      if (onStartSingleAnalysis) {
+        await onStartSingleAnalysis(
+          filePath,
+          () => {
+            setAnalysisSuccess(true);
+            setTimeout(() => setAnalysisSuccess(false), 5000);
+            fetchCurrentMediaDetails(filePath);
+            if (onRefresh) onRefresh();
+            if (onReloadFaces) onReloadFaces();
+
+            // Periodically re-fetch details in case AI semantics arrive a few seconds later
+            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 2000);
+            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 5000);
+            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 10000);
+          },
+          (errMsg) => {
+            setAnalysisError(errMsg || t('aiEngineErrorDescription') || 'Analysis failed');
+          }
+        );
+      } else {
+        // Direct self-contained fallback calling backend cataloger service
+        const fetchFn = authFetch || fetch;
+        const res = await fetchFn(`/api/analyze-file?file=${encodeURIComponent(filePath)}`, {
+          method: 'POST',
+        });
+        const result = await res.json().catch(() => ({}));
+        if (res.ok) {
           setAnalysisSuccess(true);
           setTimeout(() => setAnalysisSuccess(false), 5000);
           fetchCurrentMediaDetails(filePath);
           if (onRefresh) onRefresh();
           if (onReloadFaces) onReloadFaces();
+          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath } }));
 
-          // Periodically re-fetch details in case AI semantics arrive a few seconds later
           setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 2000);
           setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 5000);
           setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 10000);
-        },
-        (errMsg) => {
-          setAnalysisError(errMsg || t('aiEngineErrorDescription'));
+        } else {
+          const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
+          setAnalysisError(errMsg);
         }
-      );
+      }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('aiEngineErrorDescription');
+      const msg = err instanceof Error ? err.message : (t('aiEngineErrorDescription') || 'Analysis failed');
       setAnalysisError(msg);
     } finally {
       setIsAnalyzing(false);
@@ -817,6 +845,23 @@ export default function MediaViewerModal({
                 }}
               >
                 {isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? '❤️' : '🤍'}
+              </button>
+
+              <button
+                className="btn-icon add-to-album-btn"
+                onClick={() => setIsAddToAlbumOpen(true)}
+                title="Добавить в альбом"
+                aria-label="Добавить в альбом"
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 0.35rem',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <FolderPlus size={18} />
               </button>
 
               <button
@@ -1936,11 +1981,35 @@ export default function MediaViewerModal({
                 )}
 
                 <button
+                  id="add_to_album_button_id"
+                  className="btn btn-secondary"
+                  style={{
+                    width: '100%',
+                    fontSize: '0.85rem',
+                    padding: '0.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                  }}
+                  onClick={() => setIsAddToAlbumOpen(true)}
+                  type="button"
+                >
+                  <FolderPlus size={15} />
+                  <span>{t('btnAddToAlbum' as any) || 'Добавить в альбом'}</span>
+                </button>
+
+                <button
+                  id="btn_analyze_file_id"
                   className="btn btn-accent"
                   style={{
                     width: '100%',
                     fontSize: '0.85rem',
                     padding: '0.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
                     opacity: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 0.6 : 1,
                     cursor: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 'not-allowed' : 'pointer',
                   }}
@@ -1949,7 +2018,8 @@ export default function MediaViewerModal({
                   title={!isEngineConnected || !engineOnline ? t('aiEngineOfflineTooltip') : t('btnAnalyzeFile')}
                   type="button"
                 >
-                  {isAnalyzing ? t('aiAnalyzingInProgress') : t('btnAnalyzeFile')}
+                  {isAnalyzing && <Loader2 size={14} className="animate-spin" />}
+                  <span>{isAnalyzing ? (t('aiAnalyzingInProgress') || 'Анализ выполняется...') : (t('btnAnalyzeFile') || 'Запустить анализ')}</span>
                 </button>
 
                 {analysisSuccess && (
@@ -2064,6 +2134,18 @@ export default function MediaViewerModal({
         mediaFile={selectedMedia}
         onSaved={handleMetadataSaved}
       />
+
+      {/* Add To Virtual Album Modal */}
+      {isAddToAlbumOpen && selectedMedia && (
+        <AddToAlbumModal
+          isOpen={isAddToAlbumOpen}
+          onClose={() => setIsAddToAlbumOpen(false)}
+          mediaFile={selectedMedia}
+          onAdded={() => {
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
     </>
   );
 }

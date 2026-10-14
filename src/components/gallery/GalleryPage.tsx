@@ -28,6 +28,11 @@ export default function GalleryPage() {
   const parentRef = useRef<HTMLDivElement>(null);
   const { isFavorite, toggleFavorite } = useFavorites();
 
+  const refreshData = async () => {
+    await mediaCacheService.fetchChunk({ offset: 0, limit: 2000, refresh: true });
+    setMediaFiles(mediaCacheService.getAll());
+  };
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
@@ -36,6 +41,42 @@ export default function GalleryPage() {
     };
     loadData();
   }, []);
+
+  // Listen to media/album updates
+  useEffect(() => {
+    const onUpdate = () => {
+      setMediaFiles(mediaCacheService.getAll());
+    };
+    window.addEventListener('media_updated', onUpdate);
+    window.addEventListener('media_uploaded', onUpdate);
+    window.addEventListener('album_updated', onUpdate);
+    return () => {
+      window.removeEventListener('media_updated', onUpdate);
+      window.removeEventListener('media_uploaded', onUpdate);
+      window.removeEventListener('album_updated', onUpdate);
+    };
+  }, []);
+
+  const handleStartSingleAnalysis = async (
+    filePath: string,
+    onSuccess?: () => void,
+    onError?: (err: string) => void
+  ) => {
+    try {
+      const res = await fetch(`/api/analyze-file?file=${encodeURIComponent(filePath)}`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (onSuccess) onSuccess();
+        setTimeout(refreshData, 3000);
+      } else {
+        if (onError) onError(data.message || data.detail || 'Не удалось запустить анализ');
+      }
+    } catch (e: any) {
+      if (onError) onError(e.message || 'Ошибка сети при запуске анализа');
+    }
+  };
 
   // Sync album metadata if album param is set
   useEffect(() => {
@@ -424,6 +465,13 @@ export default function GalleryPage() {
           }}
           hasPrev={filteredFiles.indexOf(selectedFile) > 0}
           hasNext={filteredFiles.indexOf(selectedFile) < filteredFiles.length - 1}
+          onRefresh={refreshData}
+          onStartSingleAnalysis={handleStartSingleAnalysis}
+          onMediaUpdated={(updated) => {
+            setSelectedFile(updated);
+            mediaCacheService.upsert(updated);
+            setMediaFiles(mediaCacheService.getAll());
+          }}
         />
       )}
     </div>

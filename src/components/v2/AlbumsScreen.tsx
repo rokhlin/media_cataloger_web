@@ -45,6 +45,7 @@ export const AlbumsScreen: React.FC = () => {
   const [addSearch, setAddSearch] = useState('');
   const [photosToAdd, setPhotosToAdd] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
 
   const loadAllAlbums = async () => {
     setLoading(true);
@@ -64,20 +65,24 @@ export const AlbumsScreen: React.FC = () => {
 
   useEffect(() => {
     loadAllAlbums();
+    ensureAvailablePhotosLoaded();
   }, []);
 
   const ensureAvailablePhotosLoaded = async (): Promise<GalleryMediaFile[]> => {
     let all = mediaCacheService.getAll();
     if (all.length === 0) {
+      setLoadingPhotos(true);
       try {
         await mediaCacheService.init();
         all = mediaCacheService.getAll();
         if (all.length === 0) {
-          const chunk = await mediaCacheService.fetchChunk({ offset: 0, limit: 200 });
+          const chunk = await mediaCacheService.fetchChunk({ offset: 0, limit: 1000 });
           all = chunk.files || [];
         }
       } catch (err) {
         console.warn('Failed to prefetch media for albums:', err);
+      } finally {
+        setLoadingPhotos(false);
       }
     }
     setAvailablePhotos(all);
@@ -295,7 +300,7 @@ export const AlbumsScreen: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                 {virtualAlbums.map((album) => {
                   const cover = album.filePaths[0];
-                  const coverUrl = cover ? `/api/media/image?path=${encodeURIComponent(cover)}` : null;
+                  const coverUrl = cover ? `/api/media/thumbnail?path=${encodeURIComponent(cover)}&size=400` : null;
 
                   return (
                     <div
@@ -515,44 +520,84 @@ export const AlbumsScreen: React.FC = () => {
                   type="text"
                   value={createSearch}
                   onChange={(e) => setCreateSearch(e.target.value)}
-                  placeholder="Поиск по имени файла..."
+                  placeholder="Поиск по имени файла или пути..."
                   className="w-full pl-8 pr-3 py-1.5 bg-muted/30 border border-border/60 rounded-lg text-xs outline-none focus:border-primary"
                 />
               </div>
 
-              <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/20 min-h-[160px] max-h-[260px]">
-                {availablePhotos
-                  .filter((p) => !createSearch || (p.filename || '').toLowerCase().includes(createSearch.toLowerCase()))
-                  .map((photo) => {
-                    const path = photo.file_path || photo.filename;
-                    const isSelected = selectedPhotoPaths.includes(path);
-                    const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+              <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2.5 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 bg-muted/20 min-h-[160px] max-h-[280px]">
+                {loadingPhotos ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <RefreshCw className="h-6 w-6 animate-spin mb-2 text-primary" />
+                    <span className="text-xs">Загрузка фотографий из медиатеки...</span>
+                  </div>
+                ) : availablePhotos.filter((p) => {
+                    if (!createSearch) return true;
+                    const q = createSearch.toLowerCase();
+                    return (p.filename || '').toLowerCase().includes(q) || (p.file_path || '').toLowerCase().includes(q);
+                  }).length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <ImageIcon size={28} className="opacity-30 mb-1" />
+                    <span className="text-xs">
+                      {createSearch ? `Ничего не найдено по запросу «${createSearch}»` : 'В медиатеке нет фотографий'}
+                    </span>
+                  </div>
+                ) : (
+                  availablePhotos
+                    .filter((p) => {
+                      if (!createSearch) return true;
+                      const q = createSearch.toLowerCase();
+                      return (p.filename || '').toLowerCase().includes(q) || (p.file_path || '').toLowerCase().includes(q);
+                    })
+                    .map((photo) => {
+                      const path = photo.file_path || photo.filename;
+                      const isSelected = selectedPhotoPaths.includes(path);
+                      const thumb = photo.thumbnail_url || `/api/media/thumbnail?path=${encodeURIComponent(path)}&size=300`;
+                      const name = photo.filename || path.split(/[\\/]/).pop() || 'photo';
 
-                    return (
-                      <div
-                        key={path}
-                        onClick={() => toggleSelectPhoto(path)}
-                        className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                          isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-transparent hover:border-border'
-                        }`}
-                      >
-                        <img
-                          src={thumb}
-                          alt={photo.filename}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        {isSelected && (
-                          <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
-                            <Check size={12} />
+                      return (
+                        <div
+                          key={path}
+                          onClick={() => toggleSelectPhoto(path)}
+                          title={`${name}\n${path}`}
+                          className={`group/picker relative flex flex-col rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-card ${
+                            isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-border/70 hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="relative aspect-square w-full bg-muted/50 overflow-hidden flex items-center justify-center">
+                            <img
+                              src={thumb}
+                              alt={name}
+                              className="w-full h-full object-cover transition-transform duration-200 group-hover/picker:scale-105"
+                              loading="lazy"
+                              onError={(e) => {
+                                const target = e.target as HTMLElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector('.photo-fallback');
+                                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }
+                              }}
+                            />
+                            <div className="photo-fallback hidden w-full h-full items-center justify-center bg-muted/60 text-muted-foreground">
+                              <ImageIcon size={20} className="opacity-40" />
+                            </div>
+
+                            {isSelected && (
+                              <div className="absolute top-1.5 right-1.5 bg-primary text-white p-1 rounded-full shadow-md z-10 animate-in zoom-in-50">
+                                <Check size={12} strokeWidth={3} />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+
+                          <div className="px-1.5 py-1 bg-card/95 border-t border-border/50 text-[10px] font-medium text-foreground/90 truncate text-center select-none" title={name}>
+                            {name}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
 
@@ -653,33 +698,48 @@ export const AlbumsScreen: React.FC = () => {
                   В этом альбоме пока нет фотографий. Нажмите «Добавить фото в альбом», чтобы внести файлы.
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/20 min-h-[120px] max-h-[220px]">
+                <div className="flex-1 overflow-y-auto border border-border/60 rounded-xl p-2.5 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 bg-muted/20 min-h-[120px] max-h-[220px]">
                   {editPhotoPaths.map((path) => {
-                    const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+                    const thumb = `/api/media/thumbnail?path=${encodeURIComponent(path)}&size=300`;
                     const filename = path.split(/[\\/]/).pop() || path;
 
                     return (
                       <div
                         key={path}
-                        className="group/item relative aspect-square rounded-lg overflow-hidden border border-border/60 bg-muted/40"
+                        title={`${filename}\n${path}`}
+                        className="group/item relative flex flex-col rounded-xl overflow-hidden border border-border/70 bg-card"
                       >
-                        <img
-                          src={thumb}
-                          alt={filename}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePhotoFromEditAlbum(path)}
-                          className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-full shadow-xs hover:bg-red-700 transition-colors opacity-80 group-hover/item:opacity-100"
-                          title="Удалить из альбома"
-                        >
-                          <X size={11} />
-                        </button>
+                        <div className="relative aspect-square w-full bg-muted/50 overflow-hidden flex items-center justify-center">
+                          <img
+                            src={thumb}
+                            alt={filename}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              const target = e.target as HTMLElement;
+                              target.style.display = 'none';
+                              const parent = target.parentElement;
+                              if (parent) {
+                                const fallback = parent.querySelector('.photo-fallback');
+                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                              }
+                            }}
+                          />
+                          <div className="photo-fallback hidden w-full h-full items-center justify-center bg-muted/60 text-muted-foreground">
+                            <ImageIcon size={20} className="opacity-40" />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhotoFromEditAlbum(path)}
+                            className="absolute top-1.5 right-1.5 bg-red-600/90 text-white p-1 rounded-full shadow-xs hover:bg-red-700 transition-colors opacity-80 group-hover/item:opacity-100 z-10"
+                            title="Удалить из альбома"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                        <div className="px-1.5 py-1 bg-card/95 border-t border-border/50 text-[10px] font-medium text-foreground/90 truncate text-center select-none" title={filename}>
+                          {filename}
+                        </div>
                       </div>
                     );
                   })}
@@ -711,45 +771,87 @@ export const AlbumsScreen: React.FC = () => {
                       type="text"
                       value={addSearch}
                       onChange={(e) => setAddSearch(e.target.value)}
-                      placeholder="Поиск по имени файла..."
+                      placeholder="Поиск по имени файла или пути..."
                       className="w-full pl-8 pr-3 py-1.5 bg-muted/30 border border-border/60 rounded-lg text-xs outline-none focus:border-primary"
                     />
                   </div>
 
-                  <div className="overflow-y-auto border border-border/60 rounded-xl p-2 grid grid-cols-4 sm:grid-cols-6 gap-2 bg-muted/30 max-h-[160px]">
-                    {availablePhotos
-                      .filter((photo) => !editPhotoPaths.includes(photo.file_path || photo.filename))
-                      .filter((photo) => !addSearch || (photo.filename || '').toLowerCase().includes(addSearch.toLowerCase()))
-                      .map((photo) => {
-                        const path = photo.file_path || photo.filename;
-                        const isSelected = photosToAdd.includes(path);
-                        const thumb = `/api/media/image?path=${encodeURIComponent(path)}`;
+                  <div className="overflow-y-auto border border-border/60 rounded-xl p-2.5 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 bg-muted/30 max-h-[180px]">
+                    {loadingPhotos ? (
+                      <div className="col-span-full flex flex-col items-center justify-center py-6 text-muted-foreground">
+                        <RefreshCw className="h-5 w-5 animate-spin mb-1 text-primary" />
+                        <span className="text-xs">Загрузка фотографий...</span>
+                      </div>
+                    ) : availablePhotos
+                        .filter((photo) => !editPhotoPaths.includes(photo.file_path || photo.filename))
+                        .filter((photo) => {
+                          if (!addSearch) return true;
+                          const q = addSearch.toLowerCase();
+                          return (photo.filename || '').toLowerCase().includes(q) || (photo.file_path || '').toLowerCase().includes(q);
+                        }).length === 0 ? (
+                      <div className="col-span-full flex flex-col items-center justify-center py-6 text-muted-foreground">
+                        <ImageIcon size={24} className="opacity-30 mb-1" />
+                        <span className="text-xs">
+                          {addSearch ? `Ничего не найдено по запросу «${addSearch}»` : 'Все доступные фотографии уже добавлены в альбом'}
+                        </span>
+                      </div>
+                    ) : (
+                      availablePhotos
+                        .filter((photo) => !editPhotoPaths.includes(photo.file_path || photo.filename))
+                        .filter((photo) => {
+                          if (!addSearch) return true;
+                          const q = addSearch.toLowerCase();
+                          return (photo.filename || '').toLowerCase().includes(q) || (photo.file_path || '').toLowerCase().includes(q);
+                        })
+                        .map((photo) => {
+                          const path = photo.file_path || photo.filename;
+                          const isSelected = photosToAdd.includes(path);
+                          const thumb = photo.thumbnail_url || `/api/media/thumbnail?path=${encodeURIComponent(path)}&size=300`;
+                          const name = photo.filename || path.split(/[\\/]/).pop() || 'photo';
 
-                        return (
-                          <div
-                            key={path}
-                            onClick={() => togglePhotoToAdd(path)}
-                            className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                              isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-transparent hover:border-border'
-                            }`}
-                          >
-                            <img
-                              src={thumb}
-                              alt={photo.filename}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                            {isSelected && (
-                              <div className="absolute top-1 right-1 bg-primary text-white p-0.5 rounded-full shadow-xs">
-                                <Check size={12} />
+                          return (
+                            <div
+                              key={path}
+                              onClick={() => togglePhotoToAdd(path)}
+                              title={`${name}\n${path}`}
+                              className={`group/picker relative flex flex-col rounded-xl overflow-hidden cursor-pointer border-2 transition-all bg-card ${
+                                isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-border/70 hover:border-primary/50'
+                              }`}
+                            >
+                              <div className="relative aspect-square w-full bg-muted/50 overflow-hidden flex items-center justify-center">
+                                <img
+                                  src={thumb}
+                                  alt={name}
+                                  className="w-full h-full object-cover transition-transform duration-200 group-hover/picker:scale-105"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      const fallback = parent.querySelector('.photo-fallback');
+                                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                                <div className="photo-fallback hidden w-full h-full items-center justify-center bg-muted/60 text-muted-foreground">
+                                  <ImageIcon size={20} className="opacity-40" />
+                                </div>
+
+                                {isSelected && (
+                                  <div className="absolute top-1.5 right-1.5 bg-primary text-white p-1 rounded-full shadow-md z-10 animate-in zoom-in-50">
+                                    <Check size={12} strokeWidth={3} />
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
+
+                              <div className="px-1.5 py-1 bg-card/95 border-t border-border/50 text-[10px] font-medium text-foreground/90 truncate text-center select-none" title={name}>
+                                {name}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
                   </div>
                 </div>
               )}
