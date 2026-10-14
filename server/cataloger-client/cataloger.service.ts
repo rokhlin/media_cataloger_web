@@ -33,7 +33,7 @@ export class CatalogerClientService {
     return url;
   }
 
-  async triggerRun(force: boolean = false, customPayload?: any): Promise<any> {
+  async triggerRun(force: boolean = false, customPayload?: any, userId?: string, rootPath?: string, userRole?: string): Promise<any> {
     const execConfig = this.config.getPipelineExecutionConfig();
     this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)})`);
 
@@ -72,6 +72,11 @@ export class CatalogerClientService {
       ...(customPayload || {}),
     };
 
+    const runHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) runHeaders['X-User-ID'] = userId;
+    if (rootPath) runHeaders['X-User-Root-Path'] = rootPath;
+    if (userRole) runHeaders['X-User-Role'] = userRole;
+
     try {
       this.logger.log(`Triggering BE run: ${files.length} file(s) across input sources -> ${execConfig.output_folder}`);
       this.logBuffer?.debug('Pipeline', `Sending payload to cataloger service at ${this.baseUrl}/api/run`, {
@@ -86,10 +91,11 @@ export class CatalogerClientService {
         ? `&modes=${encodeURIComponent(payload.modes.join(','))}`
         : '';
       const runUrl = `${this.baseUrl}/api/run?force=${Boolean(force)}${modesQuery}`;
+
       try {
         res = await axios.post(runUrl, payload, {
           timeout: 20000,
-          headers: { 'Content-Type': 'application/json' },
+          headers: runHeaders,
           httpAgent: noKeepAliveHttpAgent,
           httpsAgent: noKeepAliveHttpsAgent,
         });
@@ -98,7 +104,7 @@ export class CatalogerClientService {
           this.logger.warn(`Initial triggerRun request had socket hang up, retrying on fresh socket: ${postErr.message}`);
           res = await axios.post(runUrl, payload, {
             timeout: 20000,
-            headers: { 'Content-Type': 'application/json' },
+            headers: runHeaders,
             httpAgent: new http.Agent({ keepAlive: false }),
             httpsAgent: new https.Agent({ keepAlive: false }),
           });
@@ -133,7 +139,7 @@ export class CatalogerClientService {
     }
   }
 
-  async triggerAnalyzeFile(file: string, customPayload?: any): Promise<any> {
+  async triggerAnalyzeFile(file: string, customPayload?: any, userId?: string, rootPath?: string, userRole?: string): Promise<any> {
     if (!file || !file.trim()) {
       this.logBuffer?.warn('Pipeline', 'Single file analysis requested with empty file path');
       throw new BadRequestException('File parameter cannot be empty');
@@ -224,6 +230,10 @@ export class CatalogerClientService {
         this.logger.warn(`Could not load file buffer for direct upload, falling back to JSON payload: ${readErr.message}`);
       }
     }
+
+    if (userId) requestHeaders['X-User-ID'] = userId;
+    if (rootPath) requestHeaders['X-User-Root-Path'] = rootPath;
+    if (userRole) requestHeaders['X-User-Role'] = userRole;
 
     try {
       this.logger.log(`Triggering single file analysis on BE: ${resolvedPath}`);

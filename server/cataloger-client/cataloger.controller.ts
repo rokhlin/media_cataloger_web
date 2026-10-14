@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Query, Body, HttpException, HttpStatus, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Query, Body, Req, HttpException, HttpStatus, Inject, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { CatalogerClientService } from './cataloger.service.js';
 import { LogLevel } from '../logging/log-buffer.service.js';
@@ -19,6 +19,7 @@ export class CatalogerController {
   @ApiQuery({ name: 'mode', required: false, type: String, description: 'Single pipeline mode' })
   @ApiQuery({ name: 'modes', required: false, type: String, description: 'Comma-separated pipeline modes' })
   async triggerRun(
+    @Req() req: any,
     @Query('force') force?: string,
     @Query('mode') mode?: string,
     @Query('modes') modes?: string,
@@ -26,6 +27,11 @@ export class CatalogerController {
   ) {
     try {
       const forceBool = force === 'true' || force === '1';
+      const userId = req?.user?.sub;
+      const rootPath = req?.user?.root_folder_path;
+      const userRole = req?.user?.role === 'admin' || (Array.isArray(req?.user?.permissions) && req?.user?.permissions.includes('admin_panel'))
+        ? 'admin'
+        : (req?.user?.role || 'user');
       let resolvedModes: string[] | undefined = undefined;
       if (customPayload?.modes && Array.isArray(customPayload.modes)) {
         resolvedModes = customPayload.modes;
@@ -42,7 +48,7 @@ export class CatalogerController {
         ...(resolvedModes ? { modes: resolvedModes } : {}),
       };
 
-      return await this.catalogerService.triggerRun(forceBool, mergedPayload);
+      return await this.catalogerService.triggerRun(forceBool, mergedPayload, userId, rootPath, userRole);
     } catch (err: any) {
       if (err instanceof HttpException) {
         throw err;
@@ -55,13 +61,18 @@ export class CatalogerController {
   @RequirePermissions('admin_panel', 'edit_metadata')
   @ApiOperation({ summary: 'Analyze a single media file immediately' })
   @ApiQuery({ name: 'file', required: false, description: 'Filename or path to the media file' })
-  async triggerAnalyzeFile(@Query('file') file?: string, @Body() body?: any) {
+  async triggerAnalyzeFile(@Req() req: any, @Query('file') file?: string, @Body() body?: any) {
     const targetFile = file || body?.file;
     if (!targetFile || !String(targetFile).trim()) {
       throw new HttpException('File parameter cannot be empty.', HttpStatus.BAD_REQUEST);
     }
     try {
-      return await this.catalogerService.triggerAnalyzeFile(String(targetFile).trim(), body);
+      const userId = req?.user?.sub;
+      const rootPath = req?.user?.root_folder_path;
+      const userRole = req?.user?.role === 'admin' || (Array.isArray(req?.user?.permissions) && req?.user?.permissions.includes('admin_panel'))
+        ? 'admin'
+        : (req?.user?.role || 'user');
+      return await this.catalogerService.triggerAnalyzeFile(String(targetFile).trim(), body, userId, rootPath, userRole);
     } catch (err: any) {
       if (err instanceof HttpException) {
         throw err;
