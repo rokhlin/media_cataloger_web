@@ -15,7 +15,7 @@ interface AuthContextValue {
   hasRole: (role: UserRole | UserRole[]) => boolean;
   hasPermission: (permission: Permission | Permission[]) => boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (username: string, password: string, displayName?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, password: string, displayName?: string, role?: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
@@ -70,11 +70,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authFetch = useCallback(
     async (url: string, init: RequestInit = {}): Promise<Response> => {
       const headers = new Headers(init.headers || {});
-      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+      const activeToken = token || (typeof window !== 'undefined' ? (getSessionCookie() || localStorage.getItem(AUTH_TOKEN_KEY)) : null);
       if (activeToken) {
         headers.set('Authorization', `Bearer ${activeToken}`);
       }
       const response = await fetch(url, {
+        credentials: 'include',
         ...init,
         headers,
       });
@@ -162,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           res = await fetch('/api/auth/login', {
             method: 'POST',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
             },
@@ -230,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const register = useCallback(
-    async (username: string, password: string, displayName?: string): Promise<{ success: boolean; error?: string }> => {
+    async (username: string, password: string, displayName?: string, role: UserRole = 'admin'): Promise<{ success: boolean; error?: string }> => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -239,8 +241,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           res = await fetch('/api/auth/register', {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, displayName: displayName || username }),
+            body: JSON.stringify({ username, password, displayName: displayName || username, role }),
             signal: controller.signal,
           });
         } catch (fetchErr: any) {

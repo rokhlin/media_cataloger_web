@@ -154,4 +154,31 @@ describe('BUG-002: Multi-User Isolation, Cookie Sessions, Shared Albums & Search
     );
   });
 
+  it('10. Onboarding & Setup Wizard Authenticated Pipeline: components must use authFetch to prevent "Authentication credentials required"', () => {
+    const onboardingPath = path.join(webSrcDir, 'components', 'auth', 'OnboardingPage.tsx');
+    const onboardingContent = fs.readFileSync(onboardingPath, 'utf-8');
+    assert.ok(
+      onboardingContent.includes('authFetch'),
+      'OnboardingPage must use authFetch to attach authentication tokens and credentials'
+    );
+    assert.ok(
+      onboardingContent.includes("authFetch('/api/settings'") && onboardingContent.includes("authFetch('/api/run'"),
+      'OnboardingPage must invoke /api/settings and /api/run via authFetch'
+    );
+
+    const folderModalPath = path.join(webSrcDir, 'components', 'common', 'FolderConfigModal.tsx');
+    const folderModalContent = fs.readFileSync(folderModalPath, 'utf-8');
+    assert.ok(
+      folderModalContent.includes("authFetch('/api/settings'") && folderModalContent.includes("authFetch('/api/run'"),
+      'FolderConfigModal must invoke /api/settings and /api/run via authFetch'
+    );
+
+    const statusBarPath = path.join(webSrcDir, 'components', 'layout', 'StatusBar.tsx');
+    const statusBarContent = fs.readFileSync(statusBarPath, 'utf-8');
+    assert.ok(
+      statusBarContent.includes("authFetch('/api/run'"),
+      'StatusBar must invoke /api/run via authFetch'
+    );
+  });
+
 });

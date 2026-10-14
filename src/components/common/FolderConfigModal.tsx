@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Folder, HardDrive, Play, Save, X, Check, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/utils';
+import { useAuth } from '../../services/authContext';
 
 export interface FolderConfigModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export const FolderConfigModal: React.FC<FolderConfigModalProps> = ({
   onClose,
   onScanStarted,
 }) => {
+  const { authFetch } = useAuth();
   const [inputFolders, setInputFolders] = useState<string[]>(['']);
   const [outputFolder, setOutputFolder] = useState<string>('');
   const [modelProvider, setModelProvider] = useState<'local' | 'gemini'>('local');
@@ -26,7 +28,7 @@ export const FolderConfigModal: React.FC<FolderConfigModalProps> = ({
     const loadSettings = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch('/api/settings');
+        const res = await authFetch('/api/settings');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.input_folders) && data.input_folders.length > 0) {
@@ -91,7 +93,7 @@ export const FolderConfigModal: React.FC<FolderConfigModalProps> = ({
         payload.model_provider = modelProvider;
       }
 
-      const res = await fetch('/api/settings', {
+      const res = await authFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -104,14 +106,17 @@ export const FolderConfigModal: React.FC<FolderConfigModalProps> = ({
 
       if (andScan) {
         // Trigger pipeline run
-        const runRes = await fetch('/api/run', {
+        const runRes = await authFetch('/api/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
         if (!runRes.ok) {
           const runErr = await runRes.json().catch(() => ({}));
-          throw new Error(runErr.message || 'Не удалось запустить сканирование');
+          const msg = String(runErr.message || '');
+          if (!msg.toLowerCase().includes('already running')) {
+            throw new Error(msg || 'Не удалось запустить сканирование');
+          }
         }
 
         setStatusMessage({ type: 'success', text: 'Настройки сохранены, сканирование запущено!' });

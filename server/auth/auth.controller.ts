@@ -46,6 +46,26 @@ export class AuthController {
   }
 
   @Public()
+  @Post('register')
+  @ApiOperation({ summary: 'Register a new user account' })
+  @ApiResponse({ status: 201, description: 'User created and logged in with token' })
+  async register(@Body() dto: CreateUserDto, @Res({ passthrough: true }) res: any) {
+    const existingUsers = this.authService.listUsers();
+    const role = dto.role || (existingUsers.length === 0 ? 'admin' : 'editor');
+    const createdUser = this.authService.createUser({ ...dto, role });
+    const result = await this.authService.login(createdUser);
+    if (res && res.cookie) {
+      res.cookie('media_cataloger_session', result.token, {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'lax',
+        maxAge: 7 * 86400 * 1000,
+      });
+    }
+    return result;
+  }
+
+  @Public()
   @Post('logout')
   @ApiOperation({ summary: 'Log out current session' })
   async logout(@Res({ passthrough: true }) res: any) {

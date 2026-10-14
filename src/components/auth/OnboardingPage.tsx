@@ -25,7 +25,7 @@ import { cn } from '@/utils';
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { currentUser, login, register } = useAuth();
+  const { currentUser, login, register, authFetch, logout } = useAuth();
 
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
     const fetchInitialData = async () => {
       try {
         const [settingsRes, statusRes] = await Promise.all([
-          fetch('/api/settings').catch(() => null),
+          authFetch('/api/settings').catch(() => null),
           fetch('/api/status').catch(() => null),
         ]);
 
@@ -115,7 +115,7 @@ export default function OnboardingPage() {
           setIsSubmitting(false);
           return;
         }
-        const res = await register(username, password, displayName);
+        const res = await register(username, password, displayName, 'admin');
         if (res.success) {
           setSuccessMsg('Учетная запись успешно создана!');
           setTimeout(() => goToStep(2), 600);
@@ -186,7 +186,7 @@ export default function OnboardingPage() {
       }
 
       // 1. Save settings
-      const settingsRes = await fetch('/api/settings', {
+      const settingsRes = await authFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -198,14 +198,17 @@ export default function OnboardingPage() {
       }
 
       // 2. Trigger scan
-      const runRes = await fetch('/api/run', {
+      const runRes = await authFetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
 
       if (!runRes.ok) {
         const runErr = await runRes.json().catch(() => ({}));
-        throw new Error(runErr.message || 'Не удалось запустить сканирование');
+        const msg = String(runErr.message || '');
+        if (!msg.toLowerCase().includes('already running')) {
+          throw new Error(msg || 'Не удалось запустить сканирование');
+        }
       }
 
       // Mark setup completed
@@ -329,9 +332,8 @@ export default function OnboardingPage() {
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.removeItem('media_cataloger_jwt_token');
-                      localStorage.removeItem('media_cataloger_user_data');
+                    onClick={async () => {
+                      await logout();
                       window.location.reload();
                     }}
                     className="text-xs text-muted-foreground hover:text-[#e74040] underline font-medium"

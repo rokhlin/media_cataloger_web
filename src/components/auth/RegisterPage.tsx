@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { useAuth } from '../../services/authContext';
 
 export default function RegisterPage() {
+  const { register } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,20 +25,14 @@ export default function RegisterPage() {
     setIsLoading(true);
     
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+      const res = await register(username, password, username, 'admin');
       
-      if (res.ok) {
-        // Assume successful registration redirects to login or onboarding
-        navigate('/login');
+      if (res.success) {
+        navigate('/');
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.message || 'Ошибка регистрации');
+        setError(res.error || 'Ошибка регистрации');
       }
-    } catch (err) {
+    } catch {
       setError('Ошибка сети');
     } finally {
       setIsLoading(false);

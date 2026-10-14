@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder, Play } from 'lucide-react';
 import { cn } from '@/utils';
 import FolderConfigModal from '../common/FolderConfigModal';
+import { useAuth } from '../../services/authContext';
 
 export interface StatusBarProps {
   progress?: number; // 0 - 100
@@ -25,6 +26,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onConfigureFolders,
   className,
 }) => {
+  const { authFetch } = useAuth();
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -96,7 +98,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const handleStartScan = async () => {
     setIsTriggeringScan(true);
     try {
-      const res = await fetch('/api/run', {
+      const res = await authFetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
