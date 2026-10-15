@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Settings,
@@ -21,6 +21,8 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  RefreshCw,
+  Server,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 
@@ -46,6 +48,23 @@ export const UserSettingsScreen: React.FC = () => {
   const [aiOcrRecognition, setAiOcrRecognition] = useState(true);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
+
+  // LM Studio Local Models state
+  const [localModels, setLocalModels] = useState<Array<{
+    id: string;
+    name: string;
+    isVision: boolean;
+    isLoaded: boolean;
+    arch?: string;
+    size?: string;
+    params?: string;
+  }>>([]);
+  const [loadingLocalModels, setLoadingLocalModels] = useState(false);
+  const [localModelsError, setLocalModelsError] = useState<string | null>(null);
+  const [isLmStudioConnected, setIsLmStudioConnected] = useState<boolean | null>(null);
+  const [isCustomLocalModel, setIsCustomLocalModel] = useState(false);
+  const [loadingModelIntoRam, setLoadingModelIntoRam] = useState(false);
+  const [preloadStatus, setPreloadStatus] = useState<string | null>(null);
 
   // Password change state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('');
@@ -118,6 +137,75 @@ export const UserSettingsScreen: React.FC = () => {
       setFolderStatus('Каталоги сохранены локально');
     }
     setTimeout(() => setFolderStatus(null), 3000);
+  };
+
+  const fetchLocalModels = useCallback(async () => {
+    setLoadingLocalModels(true);
+    setLocalModelsError(null);
+    try {
+      const res = await fetch('/api/models/local', {
+        headers: localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsLmStudioConnected(Boolean(data?.connected));
+        if (data && Array.isArray(data.models)) {
+          setLocalModels(data.models);
+          // If active model is reported and current model is generic or empty, select active
+          if (data.activeModel && (!aiModel || aiModel === 'local-model')) {
+            setAiModel(data.activeModel);
+          } else if (data.models.length > 0 && (!aiModel || aiModel === 'local-model')) {
+            const loadedModel = data.models.find((m: any) => m.isLoaded);
+            setAiModel(loadedModel ? loadedModel.id : data.models[0].id);
+          }
+        } else {
+          setLocalModels([]);
+        }
+      } else {
+        setIsLmStudioConnected(false);
+        setLocalModelsError(`Не удалось получить список моделей LM Studio (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setIsLmStudioConnected(false);
+      setLocalModelsError(`LM Studio недоступен: ${err?.message || 'ошибка сети'}`);
+    } finally {
+      setLoadingLocalModels(false);
+    }
+  }, [aiModel]);
+
+  useEffect(() => {
+    if (aiProvider === 'local') {
+      fetchLocalModels();
+    }
+  }, [aiProvider, fetchLocalModels]);
+
+  const handleLoadModelIntoRam = async (modelIdToLoad?: string) => {
+    const targetId = (modelIdToLoad || aiModel || '').trim();
+    if (!targetId || targetId === 'custom' || targetId === '__custom__') return;
+    setLoadingModelIntoRam(true);
+    setPreloadStatus(null);
+    try {
+      const res = await fetch('/api/models/local/load', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+        },
+        body: JSON.stringify({ model_id: targetId, modelId: targetId, model: targetId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        setPreloadStatus(`Модель "${targetId}" успешно загружена в память LM Studio!`);
+        fetchLocalModels();
+      } else {
+        setPreloadStatus(`Ошибка загрузки: ${data?.message || data?.detail || 'Не удалось загрузить модель'}`);
+      }
+    } catch (err: any) {
+      setPreloadStatus(`Ошибка вызова LM Studio: ${err?.message || 'сеть недоступна'}`);
+    } finally {
+      setLoadingModelIntoRam(false);
+      setTimeout(() => setPreloadStatus(null), 5000);
+    }
   };
 
   const handleSaveAi = async () => {
@@ -439,33 +527,128 @@ export const UserSettingsScreen: React.FC = () => {
           {/* Model Selector */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Используемая модель
-              </label>
               {aiProvider === 'gemini' ? (
-                <select
-                  value={aiModel}
-                  onChange={(e) => setAiModel(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
-                >
-                  <option value="gemini-3.8-flash">gemini-3.8-flash (Быстрая, мультимодальная, рекомендуется)</option>
-                  <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Глубокий визуальный анализ)</option>
-                </select>
+                <>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                    Используемая модель
+                  </label>
+                  <select
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                  >
+                    <option value="gemini-3.8-flash">gemini-3.8-flash (Быстрая, мультимодальная, рекомендуется)</option>
+                    <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Глубокий визуальный анализ)</option>
+                  </select>
+                </>
               ) : (
-                <select
-                  value={aiModel}
-                  onChange={(e) => setAiModel(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
-                >
-                  <option value="local-model">local-model (Модель по умолчанию из LM Studio)</option>
-                  <option value="qwen2.5-coder-7b">qwen2.5-coder-7b (Локальная)</option>
-                  <option value="custom">Пользовательская локальная модель</option>
-                </select>
+                <>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-muted-foreground">
+                      Локальная модель LM Studio
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={fetchLocalModels}
+                        disabled={loadingLocalModels}
+                        className="flex items-center gap-1 text-[11px] text-primary hover:underline cursor-pointer disabled:opacity-50"
+                        title="Запросить установленные модели из LM Studio"
+                      >
+                        <RefreshCw size={11} className={loadingLocalModels ? 'animate-spin' : ''} />
+                        <span>{loadingLocalModels ? 'Запрос...' : 'Обновить'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomLocalModel(!isCustomLocalModel)}
+                        className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer underline"
+                      >
+                        {isCustomLocalModel ? 'Список' : 'Вручную'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isCustomLocalModel ? (
+                    <input
+                      type="text"
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      placeholder="например, qwen2.5-vl-7b-instruct"
+                      className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
+                    />
+                  ) : (
+                    <select
+                      value={aiModel}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setIsCustomLocalModel(true);
+                        } else {
+                          setAiModel(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                    >
+                      {loadingLocalModels ? (
+                        <option disabled>Загрузка моделей из LM Studio...</option>
+                      ) : localModels.length === 0 ? (
+                        <option value="">
+                          {isLmStudioConnected === false
+                            ? 'LM Studio недоступен (нажмите Обновить)'
+                            : 'Модели не найдены в LM Studio'}
+                        </option>
+                      ) : (
+                        <option value="">-- Выберите модель LM Studio --</option>
+                      )}
+                      {localModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.isVision ? '👁️ ' : '💬 '}
+                          {m.name || m.id}
+                          {m.isLoaded ? ' (● В памяти RAM)' : ''}
+                          {m.size ? ` [${m.size}]` : ''}
+                        </option>
+                      ))}
+                      {aiModel && !localModels.some((m) => m.id === aiModel) && (
+                        <option value={aiModel}>⚙️ {aiModel}</option>
+                      )}
+                      <option value="__custom__">✏️ Ввести ID модели вручную...</option>
+                    </select>
+                  )}
+
+                  {/* Status indicator under model dropdown */}
+                  <div className="mt-2 flex items-center justify-between text-[11px] min-h-[24px]">
+                    {(() => {
+                      const selectedModel = localModels.find((m) => m.id === aiModel);
+                      if (selectedModel?.isLoaded) {
+                        return (
+                          <span className="flex items-center gap-1.5 text-emerald-500 font-semibold">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Активна в оперативной памяти LM Studio
+                          </span>
+                        );
+                      }
+                      if (aiModel && aiModel !== 'custom' && aiModel !== '__custom__') {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleLoadModelIntoRam(aiModel)}
+                            disabled={loadingModelIntoRam}
+                            className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-lg font-medium cursor-pointer transition-colors disabled:opacity-50"
+                            title="Предварительно загрузить выбранную модель в память LM Studio"
+                          >
+                            <Cpu size={12} />
+                            <span>{loadingModelIntoRam ? 'Загрузка в память...' : '⚡ Загрузить в RAM LM Studio'}</span>
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </>
               )}
             </div>
 
-            {/* Gemini API Token */}
-            {aiProvider === 'gemini' && (
+            {/* Right Column: Gemini API Token or LM Studio Server Status */}
+            {aiProvider === 'gemini' ? (
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                   Токен / Ключ доступа Gemini API (gemini_api_key)
@@ -486,6 +669,46 @@ export const UserSettingsScreen: React.FC = () => {
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5 text-xs">
+                    <Server size={14} className="text-primary" />
+                    Подключение к LM Studio
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      isLmStudioConnected
+                        ? 'bg-emerald-500/15 text-emerald-500'
+                        : isLmStudioConnected === false
+                        ? 'bg-rose-500/15 text-rose-500'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {isLmStudioConnected
+                      ? 'В сети'
+                      : isLmStudioConnected === false
+                      ? 'Недоступен'
+                      : 'Проверка...'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {isLmStudioConnected
+                    ? `LM Studio подключен. Обнаружено моделей: ${localModels.length}. Доступно мгновенное переключение.`
+                    : 'Запустите LM Studio, откройте вкладку Developer / Local Server и убедитесь, что сервер включен (0.0.0.0 или 127.0.0.1:1234).'}
+                </p>
+                {preloadStatus && (
+                  <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[11px] flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="shrink-0" />
+                    <span>{preloadStatus}</span>
+                  </div>
+                )}
+                {localModelsError && (
+                  <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-[11px]">
+                    {localModelsError}
+                  </div>
+                )}
               </div>
             )}
           </div>
