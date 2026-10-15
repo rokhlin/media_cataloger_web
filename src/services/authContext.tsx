@@ -17,6 +17,8 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (username: string, password: string, displayName?: string, role?: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  forgotPassword: (username: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  resetPassword: (username: string, newPassword: string, recoveryKey?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   refreshProfile: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
 }
@@ -325,6 +327,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
+  const forgotPassword = useCallback(async (username: string): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return {
+          success: false,
+          error: data?.message || (res.status === 404 ? 'Пользователь не найден' : 'Ошибка при проверке восстановления пароля'),
+        };
+      }
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Сервер недоступен' };
+    }
+  }, []);
+
+  const resetPassword = useCallback(
+    async (username: string, newPassword: string, recoveryKey?: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), newPassword, recoveryKey: recoveryKey?.trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data?.message || 'Ошибка сброса пароля. Проверьте правильность ключа восстановления.',
+          };
+        }
+        return { success: true, message: data?.message || 'Пароль успешно обновлён' };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Сервер недоступен' };
+      }
+    },
+    []
+  );
+
   const hasRole = useCallback(
     (role: UserRole | UserRole[]): boolean => {
       if (!currentUser) return false;
@@ -384,6 +429,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
+      forgotPassword,
+      resetPassword,
       refreshProfile,
       authFetch,
     }),
@@ -401,6 +448,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
+      forgotPassword,
+      resetPassword,
       refreshProfile,
       authFetch,
     ]

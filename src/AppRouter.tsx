@@ -74,6 +74,11 @@ const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />
   },
   {
+    path: "/forgot-password",
+    element: <Suspense fallback={<LoadingFallback />}><LoginPage initialMode="recovery" /></Suspense>,
+    errorElement: <RouteErrorBoundary />
+  },
+  {
     path: "/register",
     element: <Suspense fallback={<LoadingFallback />}><RegisterPage /></Suspense>,
     errorElement: <RouteErrorBoundary />

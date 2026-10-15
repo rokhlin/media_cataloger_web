@@ -25,7 +25,7 @@ import {
 import { useAuth } from '../../services/authContext';
 
 export const UserSettingsScreen: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, authFetch } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('account');
   const [configuredFolders, setConfiguredFolders] = useState<string[]>([]);
   const [newFolderInput, setNewFolderInput] = useState('');
@@ -46,6 +46,13 @@ export const UserSettingsScreen: React.FC = () => {
   const [aiOcrRecognition, setAiOcrRecognition] = useState(true);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
+
+  // Password change state
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isPasswordUpdating, setIsPasswordUpdating] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -138,6 +145,52 @@ export const UserSettingsScreen: React.FC = () => {
       setAiStatus('Параметры AI сохранены локально');
     }
     setTimeout(() => setAiStatus(null), 3000);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordStatus(null);
+
+    if (!currentPasswordInput) {
+      setPasswordStatus({ type: 'error', message: 'Введите текущий пароль' });
+      return;
+    }
+    if (!newPasswordInput || newPasswordInput.length < 4) {
+      setPasswordStatus({ type: 'error', message: 'Новый пароль должен содержать минимум 4 символа' });
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setPasswordStatus({ type: 'error', message: 'Подтверждение нового пароля не совпадает' });
+      return;
+    }
+
+    setIsPasswordUpdating(true);
+    try {
+      const res = await authFetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: currentPasswordInput,
+          newPassword: newPasswordInput,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setPasswordStatus({ type: 'success', message: 'Пароль успешно обновлён!' });
+        setCurrentPasswordInput('');
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+      } else {
+        setPasswordStatus({
+          type: 'error',
+          message: data?.message || (res.status === 400 ? 'Текущий пароль неверен' : 'Ошибка при обновлении пароля'),
+        });
+      }
+    } catch {
+      setPasswordStatus({ type: 'error', message: 'Не удалось связаться с сервером' });
+    } finally {
+      setIsPasswordUpdating(false);
+    }
   };
 
   const sections = [
@@ -596,14 +649,33 @@ export const UserSettingsScreen: React.FC = () => {
       icon: ShieldCheck,
       renderContent: () => (
         <div className="space-y-4 pt-3">
-          <div className="max-w-md space-y-3">
+          {passwordStatus && (
+            <div
+              className={`flex items-center gap-2 p-2.5 rounded-xl text-xs ${
+                passwordStatus.type === 'success'
+                  ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'
+                  : 'bg-destructive/10 border border-destructive/20 text-destructive'
+              }`}
+            >
+              {passwordStatus.type === 'success' ? <CheckCircle2 size={15} /> : <span>⚠️</span>}
+              <span>{passwordStatus.message}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="max-w-md space-y-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Текущий пароль
               </label>
               <input
                 type="password"
-                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none"
+                value={currentPasswordInput}
+                onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                placeholder="••••••••"
+                required
+                disabled={isPasswordUpdating}
+                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+                id="input-current-password"
               />
             </div>
             <div>
@@ -612,16 +684,39 @@ export const UserSettingsScreen: React.FC = () => {
               </label>
               <input
                 type="password"
-                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                placeholder="Минимум 4 символа"
+                required
+                disabled={isPasswordUpdating}
+                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+                id="input-new-password"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                Подтверждение нового пароля
+              </label>
+              <input
+                type="password"
+                value={confirmPasswordInput}
+                onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                placeholder="Повторите новый пароль"
+                required
+                disabled={isPasswordUpdating}
+                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+                id="input-confirm-password"
               />
             </div>
             <button
-              type="button"
-              className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+              type="submit"
+              disabled={isPasswordUpdating}
+              className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              id="btn-submit-change-password"
             >
-              Обновить пароль
+              {isPasswordUpdating ? 'Сохранение...' : 'Обновить пароль'}
             </button>
-          </div>
+          </form>
         </div>
       ),
     },

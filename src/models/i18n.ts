@@ -498,6 +498,18 @@ export interface AuthAndVaultTranslations {
   authVerifyingPassword: string;
   authServerUnreachable: string;
   authTimeoutError: string;
+  authForgotPassword: string;
+  authRecoveryTitle: string;
+  authRecoverySubtitle: string;
+  authRecoveryKeyLabel: string;
+  authRecoveryKeyPlaceholder: string;
+  authRecoveryKeyHintAdmin: string;
+  authNewPasswordLabel: string;
+  authConfirmPasswordLabel: string;
+  authResetPasswordButton: string;
+  authResetSuccessMessage: string;
+  authBackToLogin: string;
+  authPasswordMismatch: string;
 
   navVault: string;
   navVaultTooltip: string;
