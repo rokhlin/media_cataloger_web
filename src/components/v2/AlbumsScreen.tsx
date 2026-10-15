@@ -5,6 +5,7 @@ import {
   MoreVertical,
   Image as ImageIcon,
   Folder,
+  FolderOpen,
   RefreshCw,
   BookOpen,
   Check,
@@ -13,17 +14,84 @@ import {
   Edit2,
   ExternalLink,
   Search,
+  ChevronRight,
+  ChevronDown,
+  ListTree,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getRealAlbums, type CatalogAlbum } from '../../services/albumService';
+import { getRealAlbums, getFolderTree, type CatalogAlbum, type FolderTreeNode } from '../../services/albumService';
 import { virtualAlbumService, type VirtualAlbum } from '../../services/virtualAlbumService';
 import { mediaCacheService } from '../../services/mediaCacheService';
+import { useAuth } from '../../services/authContext';
 import type { GalleryMediaFile } from '../../models';
 import FolderConfigModal from '../common/FolderConfigModal';
 
+interface FolderTreeItemProps {
+  node: FolderTreeNode;
+  depth?: number;
+}
+
+const FolderTreeItem: React.FC<FolderTreeItemProps> = ({ node, depth = 0 }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  const hasSubfolders = node.subfolders && node.subfolders.length > 0;
+
+  return (
+    <div className="flex flex-col select-none">
+      <div
+        className="flex items-center gap-1.5 py-1.5 px-2 rounded-xl text-xs hover:bg-muted/80 transition-colors group cursor-pointer"
+        style={{ paddingLeft: `${depth * 14 + 8}px` }}
+      >
+        {hasSubfolders ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground"
+            aria-label={isOpen ? 'Свернуть папку' : 'Развернуть папку'}
+          >
+            {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        ) : (
+          <span className="w-3.5 inline-block" />
+        )}
+
+        <Link
+          to={`/photos?folder=${encodeURIComponent(node.relativePath)}`}
+          className="flex items-center gap-2 flex-1 min-w-0"
+        >
+          {isOpen && hasSubfolders ? (
+            <FolderOpen size={15} className="text-primary shrink-0" />
+          ) : (
+            <Folder size={15} className="text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+          )}
+          <span className="truncate font-medium text-foreground group-hover:text-primary transition-colors">
+            {node.name}
+          </span>
+          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-mono">
+            {node.count}
+          </span>
+        </Link>
+      </div>
+
+      {hasSubfolders && isOpen && (
+        <div className="flex flex-col border-l border-border/40 ml-4 pl-1">
+          {node.subfolders.map((sub) => (
+            <FolderTreeItem key={sub.id} node={sub} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AlbumsScreen: React.FC = () => {
+  const { currentUser } = useAuth();
   const [folderAlbums, setFolderAlbums] = useState<CatalogAlbum[]>([]);
   const [virtualAlbums, setVirtualAlbums] = useState<VirtualAlbum[]>([]);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
+  const [showFolderTree, setShowFolderTree] = useState(true);
   const [loading, setLoading] = useState(true);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
 
@@ -50,12 +118,14 @@ export const AlbumsScreen: React.FC = () => {
   const loadAllAlbums = async () => {
     setLoading(true);
     try {
-      const [real, virtual] = await Promise.all([
+      const [real, virtual, tree] = await Promise.all([
         getRealAlbums().catch(() => []),
         virtualAlbumService.getAlbums().catch(() => []),
+        getFolderTree().catch(() => []),
       ]);
       setFolderAlbums(real);
       setVirtualAlbums(virtual);
+      setFolderTree(tree);
     } catch (e) {
       console.warn('Failed to load albums:', e);
     } finally {
@@ -64,9 +134,12 @@ export const AlbumsScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    if (currentUser?.username || currentUser?.id) {
+      virtualAlbumService.setUserId(currentUser.username || currentUser.id);
+    }
     loadAllAlbums();
     ensureAvailablePhotosLoaded();
-  }, []);
+  }, [currentUser]);
 
   const ensureAvailablePhotosLoaded = async (): Promise<GalleryMediaFile[]> => {
     let all = mediaCacheService.getAll();
@@ -219,6 +292,22 @@ export const AlbumsScreen: React.FC = () => {
             <span>Создать альбом</span>
           </button>
 
+          {folderTree.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowFolderTree(!showFolderTree)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                showFolderTree
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'bg-card text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted'
+              }`}
+              title="Переключить дерево каталогов"
+            >
+              <ListTree size={14} />
+              <span>Дерево каталогов</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setFolderModalOpen(true)}
@@ -266,7 +355,29 @@ export const AlbumsScreen: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* Collapsible Directory Tree Sidebar */}
+          {showFolderTree && folderTree.length > 0 && (
+            <div className="w-full lg:w-72 shrink-0 bg-card border border-border/70 rounded-2xl p-4 flex flex-col sticky top-20 shadow-xs">
+              <div className="flex items-center justify-between pb-3 mb-2 border-b border-border/50">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <ListTree size={14} className="text-primary" />
+                  <span>Каталоги диска</span>
+                </h3>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {folderTree.reduce((acc, n) => acc + n.count, 0)} файлов
+                </span>
+              </div>
+              <div className="space-y-0.5 overflow-y-auto max-h-[70vh] pr-1">
+                {folderTree.map((node) => (
+                  <FolderTreeItem key={node.id} node={node} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Main Albums & Folders Content */}
+          <div className="flex-1 min-w-0 space-y-8 w-full">
           {/* User Virtual Albums Section */}
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -452,6 +563,7 @@ export const AlbumsScreen: React.FC = () => {
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
 

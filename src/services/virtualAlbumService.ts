@@ -16,22 +16,43 @@ export interface VirtualAlbum {
 
 const STORAGE_PREFIX = 'media_catalog_virtual_albums';
 
-function getStorageKey(userId?: string): string {
-  return `${STORAGE_PREFIX}_${userId || 'default'}`;
-}
-
 export class VirtualAlbumService {
-  private activeUserId: string = 'default';
+  private activeUserId: string = '';
 
   public setUserId(userId?: string) {
-    this.activeUserId = userId || 'default';
+    this.activeUserId = userId || '';
+  }
+
+  public getActiveUserId(): string {
+    if (this.activeUserId) {
+      return this.activeUserId;
+    }
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem('media_cataloger_user_data');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.username) return parsed.username;
+          if (parsed?.id) return parsed.id;
+        }
+      }
+    } catch {}
+    return 'default';
+  }
+
+  private getStorageKey(userId?: string): string {
+    const id = userId || this.getActiveUserId();
+    return `${STORAGE_PREFIX}_${id}`;
   }
 
   private getStoredAlbums(): VirtualAlbum[] {
     try {
-      const raw = localStorage.getItem(getStorageKey(this.activeUserId));
+      const currentId = this.getActiveUserId();
+      const raw = localStorage.getItem(this.getStorageKey(currentId));
       if (!raw) return [];
-      return JSON.parse(raw);
+      const albums: VirtualAlbum[] = JSON.parse(raw);
+      // Strictly isolate albums: only return albums belonging to active user
+      return albums.filter((a) => !a.userId || a.userId === currentId);
     } catch {
       return [];
     }
@@ -39,7 +60,8 @@ export class VirtualAlbumService {
 
   private saveStoredAlbums(albums: VirtualAlbum[]): void {
     try {
-      localStorage.setItem(getStorageKey(this.activeUserId), JSON.stringify(albums));
+      const currentId = this.getActiveUserId();
+      localStorage.setItem(this.getStorageKey(currentId), JSON.stringify(albums));
     } catch (err) {
       console.warn('Failed to persist virtual albums to localStorage:', err);
     }
@@ -64,7 +86,7 @@ export class VirtualAlbumService {
     const albums = this.getStoredAlbums();
     const newAlbum: VirtualAlbum = {
       id: 'va_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      userId: this.activeUserId,
+      userId: this.getActiveUserId(),
       title: payload.title.trim() || 'Новый альбом',
       description: payload.description?.trim() || '',
       tags: payload.tags || [],

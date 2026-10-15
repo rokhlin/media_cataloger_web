@@ -1,14 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Settings,
   User,
   HardDrive,
-  Key,
-  Smartphone,
-  UploadCloud,
   Sparkles,
-  Bell,
   ShieldCheck,
   Lock,
   ChevronDown,
@@ -23,20 +18,48 @@ import {
   CheckCircle2,
   RefreshCw,
   Server,
+  Video,
+  Play,
+  Scissors,
+  RotateCcw,
+  Sliders,
+  Film,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 
+function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export const UserSettingsScreen: React.FC = () => {
-  const { currentUser, authFetch } = useAuth();
+  const { currentUser, authFetch, refreshProfile } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('account');
   const [configuredFolders, setConfiguredFolders] = useState<string[]>([]);
   const [newFolderInput, setNewFolderInput] = useState('');
 
-  // Account profile avatar
-  const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem('user_avatar_url') || '');
-  const [username, setUsername] = useState(() => currentUser?.username || 'Anton Rokhlin');
-  const [email, setEmail] = useState('user@example.local');
+  // Account profile state
+  const [username, setUsername] = useState(() => currentUser?.displayName || currentUser?.username || '');
+  const [email, setEmail] = useState(() => currentUser?.email || '');
+  const [avatarUrl, setAvatarUrl] = useState(() => currentUser?.avatarUrl || '');
+  const [avatarType, setAvatarType] = useState<'image' | 'video'>(() => currentUser?.avatarType || 'image');
+  const [avatarVideoUrl, setAvatarVideoUrl] = useState(() => currentUser?.avatarVideoUrl || '');
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [savingAccount, setSavingAccount] = useState(false);
+
+  // Video Avatar Trimming Modal State
+  const [trimModalOpen, setTrimModalOpen] = useState(false);
+  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
+  const [selectedVideoObjectUrl, setSelectedVideoObjectUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimDuration, setTrimDuration] = useState(4); // 3 to 10 seconds loop
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   // AI Configuration
   const [aiProvider, setAiProvider] = useState<'gemini' | 'local'>('gemini');
@@ -47,7 +70,24 @@ export const UserSettingsScreen: React.FC = () => {
   const [aiClipSearch, setAiClipSearch] = useState(true);
   const [aiOcrRecognition, setAiOcrRecognition] = useState(true);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const [maxWorkers, setMaxWorkers] = useState(3);
+  const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
+  const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
+
+  // Storage Telemetry State
+  const [storageTelemetry, setStorageTelemetry] = useState<{
+    totalDiskBytes: number;
+    freeDiskBytes: number;
+    usedDiskBytes: number;
+    photosBytes: number;
+    photosCount: number;
+    videosBytes: number;
+    videosCount: number;
+    databaseBytes: number;
+    cacheBytes: number;
+  } | null>(null);
+  const [loadingStorage, setLoadingStorage] = useState(false);
 
   // LM Studio Local Models state
   const [localModels, setLocalModels] = useState<Array<{
@@ -73,6 +113,18 @@ export const UserSettingsScreen: React.FC = () => {
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isPasswordUpdating, setIsPasswordUpdating] = useState(false);
 
+  // Sync profile when currentUser updates
+  useEffect(() => {
+    if (currentUser) {
+      setUsername(currentUser.displayName || currentUser.username || '');
+      setEmail(currentUser.email || '');
+      setAvatarUrl(currentUser.avatarUrl || '');
+      setAvatarType(currentUser.avatarType || 'image');
+      setAvatarVideoUrl(currentUser.avatarVideoUrl || '');
+    }
+  }, [currentUser]);
+
+  // Fetch settings & storage telemetry on mount
   useEffect(() => {
     fetch('/api/settings')
       .then((res) => (res.ok ? res.json() : null))
@@ -91,19 +143,160 @@ export const UserSettingsScreen: React.FC = () => {
         if (mod) {
           setAiModel(mod);
         }
+        if (data?.gemini_max_workers) {
+          setMaxWorkers(Number(data.gemini_max_workers));
+        }
+        if (data?.vision_prompt_template) {
+          setVisionPromptTemplate(data.vision_prompt_template);
+        }
+        if (data?.default_vision_prompt_template) {
+          setDefaultVisionPromptTemplate(data.default_vision_prompt_template);
+        }
       })
       .catch(() => {});
+
+    fetchStorageTelemetry();
   }, []);
+
+  const fetchStorageTelemetry = useCallback(async () => {
+    setLoadingStorage(true);
+    try {
+      const res = await authFetch('/api/storage/telemetry');
+      if (res.ok) {
+        const data = await res.json();
+        setStorageTelemetry(data);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch storage telemetry:', e);
+    } finally {
+      setLoadingStorage(false);
+    }
+  }, [authFetch]);
 
   const toggleSection = (id: string) => {
     setExpandedSection(expandedSection === id ? null : id);
+    if (id === 'storage' && !storageTelemetry) {
+      fetchStorageTelemetry();
+    }
   };
 
-  const handleSaveAccount = () => {
-    localStorage.setItem('user_avatar_url', avatarUrl.trim());
-    window.dispatchEvent(new CustomEvent('user_avatar_updated', { detail: { avatarUrl: avatarUrl.trim() } }));
-    setAccountStatus('Профиль успешно обновлён');
-    setTimeout(() => setAccountStatus(null), 3000);
+  const handleSaveAccount = async () => {
+    setSavingAccount(true);
+    setAccountStatus(null);
+    try {
+      const res = await authFetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayName: username.trim(),
+          email: email.trim(),
+          avatarUrl: avatarUrl.trim(),
+          avatarType,
+          avatarVideoUrl: avatarVideoUrl.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        await refreshProfile();
+        localStorage.setItem('user_avatar_url', avatarUrl.trim());
+        window.dispatchEvent(
+          new CustomEvent('user_avatar_updated', {
+            detail: {
+              avatarUrl: avatarUrl.trim(),
+              avatarType,
+              avatarVideoUrl: avatarVideoUrl.trim(),
+            },
+          })
+        );
+        setAccountStatus('Профиль и резервная почта успешно сохранены в базе данных');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setAccountStatus(`Ошибка сохранения: ${err.message || 'сервер отклонил запрос'}`);
+      }
+    } catch (err: any) {
+      setAccountStatus(`Ошибка сети: ${err.message || 'не удалось связаться с сервером'}`);
+    } finally {
+      setSavingAccount(false);
+      setTimeout(() => setAccountStatus(null), 4000);
+    }
+  };
+
+  const handleVideoFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      alert('Пожалуйста, выберите видеофайл (MP4, WebM, MOV)');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setSelectedVideoFile(file);
+    setSelectedVideoObjectUrl(url);
+    setTrimStart(0);
+    setTrimDuration(4);
+    setTrimModalOpen(true);
+  };
+
+  const handleConfirmTrimAndUpload = async () => {
+    if (!selectedVideoFile) return;
+    setIsUploadingVideo(true);
+    try {
+      const formData = new FormData();
+      formData.append('video', selectedVideoFile);
+      formData.append('startTime', String(trimStart));
+      formData.append('duration', String(trimDuration));
+
+      const res = await authFetch('/api/auth/avatar-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAvatarVideoUrl(data.videoUrl);
+        setAvatarType('video');
+        setTrimModalOpen(false);
+
+        // Auto-save to database profile
+        await authFetch('/api/auth/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            avatarType: 'video',
+            avatarVideoUrl: data.videoUrl,
+          }),
+        });
+
+        await refreshProfile();
+        window.dispatchEvent(
+          new CustomEvent('user_avatar_updated', {
+            detail: { avatarType: 'video', avatarVideoUrl: data.videoUrl },
+          })
+        );
+        setAccountStatus('Видео-аватар успешно загружен и зациклен!');
+        setTimeout(() => setAccountStatus(null), 4000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Ошибка загрузки: ${err.message || 'не удалось загрузить видео'}`);
+      }
+    } catch (err: any) {
+      alert(`Ошибка сети: ${err.message}`);
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
+
+  const handlePlayLoopPreview = () => {
+    if (!videoPreviewRef.current) return;
+    const vid = videoPreviewRef.current;
+    vid.currentTime = trimStart;
+    vid.play();
+
+    const checkTime = () => {
+      if (vid.currentTime >= trimStart + trimDuration) {
+        vid.currentTime = trimStart;
+      }
+    };
+    vid.ontimeupdate = checkTime;
   };
 
   const handleAddFolder = () => {
@@ -124,7 +317,9 @@ export const UserSettingsScreen: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+          ...(localStorage.getItem('media_cataloger_jwt_token')
+            ? { Authorization: `Bearer ${localStorage.getItem('media_cataloger_jwt_token')}` }
+            : {}),
         },
         body: JSON.stringify({ input_folders: configuredFolders }),
       });
@@ -144,54 +339,48 @@ export const UserSettingsScreen: React.FC = () => {
     setLocalModelsError(null);
     try {
       const res = await fetch('/api/models/local', {
-        headers: localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {},
+        headers: localStorage.getItem('media_cataloger_jwt_token')
+          ? { Authorization: `Bearer ${localStorage.getItem('media_cataloger_jwt_token')}` }
+          : {},
       });
       if (res.ok) {
         const data = await res.json();
         setIsLmStudioConnected(Boolean(data?.connected));
         if (data && Array.isArray(data.models)) {
           setLocalModels(data.models);
-          // If active model is reported and current model is generic or empty, select active
           if (data.activeModel && (!aiModel || aiModel === 'local-model')) {
             setAiModel(data.activeModel);
           } else if (data.models.length > 0 && (!aiModel || aiModel === 'local-model')) {
             const loadedModel = data.models.find((m: any) => m.isLoaded);
             setAiModel(loadedModel ? loadedModel.id : data.models[0].id);
           }
-        } else {
-          setLocalModels([]);
         }
       } else {
         setIsLmStudioConnected(false);
-        setLocalModelsError(`Не удалось получить список моделей LM Studio (HTTP ${res.status})`);
+        setLocalModelsError('LM Studio сервер не отвечает (проверьте порт :1234)');
       }
-    } catch (err: any) {
+    } catch {
       setIsLmStudioConnected(false);
-      setLocalModelsError(`LM Studio недоступен: ${err?.message || 'ошибка сети'}`);
+      setLocalModelsError('Не удалось подключиться к LM Studio. Убедитесь, что LM Studio запущен.');
     } finally {
       setLoadingLocalModels(false);
     }
   }, [aiModel]);
 
-  useEffect(() => {
-    if (aiProvider === 'local') {
-      fetchLocalModels();
-    }
-  }, [aiProvider, fetchLocalModels]);
-
-  const handleLoadModelIntoRam = async (modelIdToLoad?: string) => {
-    const targetId = (modelIdToLoad || aiModel || '').trim();
-    if (!targetId || targetId === 'custom' || targetId === '__custom__') return;
+  const handleLoadModelIntoRam = async (targetId: string) => {
+    if (!targetId || loadingModelIntoRam) return;
     setLoadingModelIntoRam(true);
-    setPreloadStatus(null);
+    setPreloadStatus(`Инициализация загрузки "${targetId}" в RAM LM Studio...`);
     try {
       const res = await fetch('/api/models/local/load', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+          ...(localStorage.getItem('media_cataloger_jwt_token')
+            ? { Authorization: `Bearer ${localStorage.getItem('media_cataloger_jwt_token')}` }
+            : {}),
         },
-        body: JSON.stringify({ model_id: targetId, modelId: targetId, model: targetId }),
+        body: JSON.stringify({ model_id: targetId }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.success) {
@@ -215,7 +404,9 @@ export const UserSettingsScreen: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+          ...(localStorage.getItem('media_cataloger_jwt_token')
+            ? { Authorization: `Bearer ${localStorage.getItem('media_cataloger_jwt_token')}` }
+            : {}),
         },
         body: JSON.stringify({
           gemini_api_key: geminiApiKey.trim(),
@@ -224,10 +415,12 @@ export const UserSettingsScreen: React.FC = () => {
           local_model_name: aiModel,
           ai_provider: aiProvider,
           ai_model: aiModel,
+          gemini_max_workers: maxWorkers,
+          vision_prompt_template: visionPromptTemplate.trim(),
         }),
       });
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
-      setAiStatus('Параметры AI успешно сохранены');
+      setAiStatus('Параметры AI, промпт и лимит параллельных потоков сохранены');
     } catch {
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
       setAiStatus('Параметры AI сохранены локально');
@@ -281,14 +474,18 @@ export const UserSettingsScreen: React.FC = () => {
     }
   };
 
+  const insertPromptPlaceholder = (token: string) => {
+    setVisionPromptTemplate((prev) => `${prev} ${token} `);
+  };
+
   const sections = [
     {
       id: 'account',
       title: 'Учётная запись и профиль',
-      subtitle: 'Имя пользователя, адрес электронной почты и аватар',
+      subtitle: 'Имя пользователя, резервная почта, фото или зацикленный видео-аватар',
       icon: User,
       renderContent: () => (
-        <div className="space-y-4 pt-3">
+        <div className="space-y-5 pt-3">
           {accountStatus && (
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
               <CheckCircle2 size={15} />
@@ -296,10 +493,19 @@ export const UserSettingsScreen: React.FC = () => {
             </div>
           )}
 
-          {/* Avatar Settings */}
-          <div className="flex items-center gap-4 pb-2 border-b border-border/50">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-xl flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative">
-              {avatarUrl ? (
+          {/* Avatar Settings & Preview */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 p-4 bg-muted/20 border border-border/70 rounded-2xl">
+            <div className="relative w-20 h-20 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-2xl flex items-center justify-center overflow-hidden shrink-0 shadow-md border-2 border-primary/30">
+              {avatarType === 'video' && avatarVideoUrl ? (
+                <video
+                  src={avatarVideoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={username}
@@ -308,32 +514,101 @@ export const UserSettingsScreen: React.FC = () => {
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
-              ) : null}
-              <span className="absolute inset-0 flex items-center justify-center">
-                {(username || 'U').charAt(0).toUpperCase()}
-              </span>
+              ) : (
+                <span>{(username || 'U').charAt(0).toUpperCase()}</span>
+              )}
+              {avatarType === 'video' && (
+                <span className="absolute bottom-1 right-1 bg-black/70 text-white p-1 rounded-full text-[9px] shadow-xs">
+                  <Film size={10} />
+                </span>
+              )}
             </div>
-            <div className="flex-1 space-y-1">
-              <label className="block text-xs font-semibold text-muted-foreground">
-                URL аватара пользователя
-              </label>
-              <input
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://example.com/avatar.jpg"
-                className="w-full px-3 py-1.5 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Укажите прямую ссылку на фото профиля для отображения в панели навигации.
-              </p>
+
+            <div className="flex-1 space-y-2.5 w-full">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-foreground">Формат аватара:</span>
+                <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/50 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setAvatarType('image')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                      avatarType === 'image'
+                        ? 'bg-primary text-white shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Фотография
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarType('video')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                      avatarType === 'video'
+                        ? 'bg-primary text-white shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Film size={12} />
+                    <span>Видео (Loop)</span>
+                  </button>
+                </div>
+              </div>
+
+              {avatarType === 'image' ? (
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-muted-foreground">
+                    URL фотографии аватара
+                  </label>
+                  <input
+                    type="text"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder="https://example.com/avatar.jpg"
+                    className="w-full px-3 py-1.5 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={videoInputRef}
+                      onChange={handleVideoFileSelected}
+                      accept="video/mp4,video/webm,video/quicktime,video/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs"
+                    >
+                      <Video size={14} />
+                      <span>Выбрать локальное видео для нарезки (3-10 сек)</span>
+                    </button>
+                    {avatarVideoUrl && (
+                      <span className="text-[11px] text-emerald-500 font-mono">
+                        ✓ Видео загружено
+                      </span>
+                    )}
+                  </div>
+                  {avatarVideoUrl && (
+                    <input
+                      type="text"
+                      value={avatarVideoUrl}
+                      onChange={(e) => setAvatarVideoUrl(e.target.value)}
+                      placeholder="/api/auth/avatar-video/..."
+                      className="w-full px-3 py-1 bg-muted/40 border border-border/70 rounded-xl text-[11px] text-muted-foreground font-mono outline-none"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Имя пользователя
+                Имя пользователя / Отображаемое имя
               </label>
               <input
                 type="text"
@@ -344,137 +619,63 @@ export const UserSettingsScreen: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Email
+                Резервный адрес электронной почты (Email)
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="user@example.com"
                 className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
               />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Используется для восстановления доступа и системных уведомлений.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={handleSaveAccount}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
+              disabled={savingAccount}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
             >
-              <Save size={14} />
-              <span>Сохранить изменения профиля</span>
+              <Save size={14} className={savingAccount ? 'animate-spin' : ''} />
+              <span>{savingAccount ? 'Сохранение...' : 'Сохранить изменения профиля'}</span>
             </button>
           </div>
 
           {/* Setup Wizard Relocated Card */}
           <div className="mt-6 pt-4 border-t border-border/50">
-            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
-              <Sparkles size={14} className="text-[#f3cd03]" />
-              <span>Мастер первоначальной настройки системы</span>
-            </h4>
-            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Пошаговый мастер настройки поможет сконфигурировать сканируемые директории, модули AI распознавания лиц и правила дубликатов.
-            </p>
-            <Link
-              to="/onboarding"
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border/80 text-xs font-semibold rounded-xl transition-colors"
-            >
-              <Sparkles size={13} className="text-[#f3cd03]" />
-              <span>Запустить мастер настройки</span>
-            </Link>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: 'folders',
-      title: 'Папки и источники медиатеки',
-      subtitle: 'Сканируемые директории и каталоги для каталогизации',
-      icon: Folder,
-      renderContent: () => (
-        <div className="space-y-4 pt-3">
-          {folderStatus && (
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
-              <CheckCircle2 size={15} />
-              <span>{folderStatus}</span>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Укажите директории на диске, в которых находятся ваши фото и видеоматериалы для автоматического сканирования и распознавания.
-          </p>
-
-          {/* List of configured folders */}
-          <div className="space-y-2">
-            {configuredFolders.length === 0 ? (
-              <div className="p-3 border border-dashed rounded-xl text-xs text-muted-foreground text-center">
-                Нет добавленных папок. Каталогизатор будет использовать директорию по умолчанию (media_input/).
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Sparkles size={16} className="text-primary" />
+                  <span>Мастер начальной настройки системы</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+                  Позволяет повторно пройти пошаговое подключение каталогов, выбор провайдера искусственного интеллекта и конфигурацию хранилища.
+                </p>
               </div>
-            ) : (
-              configuredFolders.map((folder) => (
-                <div
-                  key={folder}
-                  className="flex items-center justify-between p-2.5 bg-muted/30 border border-border/60 rounded-xl text-xs"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Folder size={14} className="text-primary shrink-0" />
-                    <span className="font-mono truncate">{folder}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFolder(folder)}
-                    className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
-                    title="Удалить папку из сканирования"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Add folder input */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newFolderInput}
-              onChange={(e) => setNewFolderInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddFolder();
-              }}
-              placeholder="C:\Photos или /media/external/photos"
-              className="flex-1 px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
-            />
-            <button
-              type="button"
-              onClick={handleAddFolder}
-              className="flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border/80 text-xs font-semibold rounded-xl transition-colors shrink-0"
-            >
-              <Plus size={14} />
-              <span>Добавить</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleSaveFolders}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
-            >
-              <Save size={14} />
-              <span>Сохранить каталоги</span>
-            </button>
+              <Link
+                to="/onboarding"
+                className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs shrink-0"
+              >
+                Запустить мастер настройки
+              </Link>
+            </div>
           </div>
         </div>
       ),
     },
     {
       id: 'ai-features',
-      title: 'Функции искусственного интеллекта и AI-ассистент',
-      subtitle: 'Выбор провайдера (Gemini / Local LLM), модели и токена API',
+      title: 'Искусственный интеллект и распознавание',
+      subtitle: 'Провайдеры Gemini и LM Studio, промпт анализа и параллельные воркеры',
       icon: Sparkles,
       renderContent: () => (
-        <div className="space-y-4 pt-3 text-xs">
+        <div className="space-y-5 pt-3">
           {aiStatus && (
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
               <CheckCircle2 size={15} />
@@ -482,17 +683,17 @@ export const UserSettingsScreen: React.FC = () => {
             </div>
           )}
 
-          {/* AI Provider Selector */}
+          {/* Provider Selection */}
           <div>
-            <label className="block text-xs font-bold text-foreground mb-2">
-              Провайдер искусственного интеллекта
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">
+              Основной движок анализа изображений
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div
                 onClick={() => setAiProvider('gemini')}
-                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                   aiProvider === 'gemini'
-                    ? 'border-primary bg-primary/10 text-foreground'
+                    ? 'border-primary bg-primary/10 text-foreground shadow-xs'
                     : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
                 }`}
               >
@@ -501,30 +702,30 @@ export const UserSettingsScreen: React.FC = () => {
                   <span>Google Gemini API (Облачный SOTA)</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Продвинутый мультимодальный анализ, мгновенное описание сцен и распознавание лиц через модели gemini-3.8-flash и gemini-3.1-pro-preview.
+                  Продвинутый мультимодальный анализ через gemini-3.8-flash и gemini-3.1-pro-preview.
                 </p>
               </div>
 
               <div
                 onClick={() => setAiProvider('local')}
-                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                   aiProvider === 'local'
-                    ? 'border-primary bg-primary/10 text-foreground'
+                    ? 'border-primary bg-primary/10 text-foreground shadow-xs'
                     : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
                 }`}
               >
                 <div className="flex items-center gap-2 font-bold text-sm text-foreground">
                   <Cpu size={16} className="text-[#f3cd03]" />
-                  <span>Локальная нейросеть (Local LLM / LM Studio)</span>
+                  <span>Локальная нейросеть (LM Studio)</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Локальная обработка на вашем оборудовании без отправки данных во внешние сети через LM Studio или Ollama.
+                  Локальная обработка на вашем GPU без отправки данных во внешние сети через LM Studio.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Model Selector */}
+          {/* Model Selector & Credentials */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               {aiProvider === 'gemini' ? (
@@ -553,7 +754,6 @@ export const UserSettingsScreen: React.FC = () => {
                         onClick={fetchLocalModels}
                         disabled={loadingLocalModels}
                         className="flex items-center gap-1 text-[11px] text-primary hover:underline cursor-pointer disabled:opacity-50"
-                        title="Запросить установленные модели из LM Studio"
                       >
                         <RefreshCw size={11} className={loadingLocalModels ? 'animate-spin' : ''} />
                         <span>{loadingLocalModels ? 'Запрос...' : 'Обновить'}</span>
@@ -604,7 +804,6 @@ export const UserSettingsScreen: React.FC = () => {
                           {m.isVision ? '👁️ ' : '💬 '}
                           {m.name || m.id}
                           {m.isLoaded ? ' (● В памяти RAM)' : ''}
-                          {m.size ? ` [${m.size}]` : ''}
                         </option>
                       ))}
                       {aiModel && !localModels.some((m) => m.id === aiModel) && (
@@ -614,7 +813,6 @@ export const UserSettingsScreen: React.FC = () => {
                     </select>
                   )}
 
-                  {/* Status indicator under model dropdown */}
                   <div className="mt-2 flex items-center justify-between text-[11px] min-h-[24px]">
                     {(() => {
                       const selectedModel = localModels.find((m) => m.id === aiModel);
@@ -633,7 +831,6 @@ export const UserSettingsScreen: React.FC = () => {
                             onClick={() => handleLoadModelIntoRam(aiModel)}
                             disabled={loadingModelIntoRam}
                             className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-lg font-medium cursor-pointer transition-colors disabled:opacity-50"
-                            title="Предварительно загрузить выбранную модель в память LM Studio"
                           >
                             <Cpu size={12} />
                             <span>{loadingModelIntoRam ? 'Загрузка в память...' : '⚡ Загрузить в RAM LM Studio'}</span>
@@ -647,7 +844,6 @@ export const UserSettingsScreen: React.FC = () => {
               )}
             </div>
 
-            {/* Right Column: Gemini API Token or LM Studio Server Status */}
             {aiProvider === 'gemini' ? (
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -686,17 +882,13 @@ export const UserSettingsScreen: React.FC = () => {
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {isLmStudioConnected
-                      ? 'В сети'
-                      : isLmStudioConnected === false
-                      ? 'Недоступен'
-                      : 'Проверка...'}
+                    {isLmStudioConnected ? 'В сети' : isLmStudioConnected === false ? 'Недоступен' : 'Проверка...'}
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   {isLmStudioConnected
-                    ? `LM Studio подключен. Обнаружено моделей: ${localModels.length}. Доступно мгновенное переключение.`
-                    : 'Запустите LM Studio, откройте вкладку Developer / Local Server и убедитесь, что сервер включен (0.0.0.0 или 127.0.0.1:1234).'}
+                    ? `LM Studio подключен. Обнаружено моделей: ${localModels.length}.`
+                    : 'Запустите LM Studio и включите Local Server на порту 1234.'}
                 </p>
                 {preloadStatus && (
                   <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[11px] flex items-center gap-1.5">
@@ -713,6 +905,79 @@ export const UserSettingsScreen: React.FC = () => {
             )}
           </div>
 
+          {/* Parallel Concurrent Workers Slider */}
+          <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-foreground flex items-center gap-1.5">
+                <Sliders size={14} className="text-primary" />
+                <span>Параллельные воркеры анализа (Parallel Concurrent Workers)</span>
+              </span>
+              <span className="font-mono text-primary font-bold px-2 py-0.5 bg-primary/10 rounded-lg">
+                {maxWorkers} {maxWorkers === 1 ? 'поток' : maxWorkers < 5 ? 'потока' : 'потоков'}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={10}
+              value={maxWorkers}
+              onChange={(e) => setMaxWorkers(Number(e.target.value))}
+              className="w-full accent-primary cursor-pointer"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Определяет количество одновременных запросов к модели при массовом анализе каталога (рекомендуется 2-4 для соблюдения лимитов).
+            </p>
+          </div>
+
+          {/* Vision Prompt Template Card */}
+          <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Sparkles size={14} className="text-primary" />
+                <span>Шаблон промпта визуального анализа (Vision Prompt Template)</span>
+              </label>
+              {defaultVisionPromptTemplate && (
+                <button
+                  type="button"
+                  onClick={() => setVisionPromptTemplate(defaultVisionPromptTemplate)}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                  title="Восстановить заводской шаблон"
+                >
+                  <RotateCcw size={11} />
+                  <span>Сбросить по умолчанию</span>
+                </button>
+              )}
+            </div>
+
+            <textarea
+              rows={4}
+              value={visionPromptTemplate}
+              onChange={(e) => setVisionPromptTemplate(e.target.value)}
+              placeholder="Опишите детально сцену, объекты, настроение и людей..."
+              className="w-full p-3 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono outline-none focus:border-primary resize-y leading-relaxed"
+            />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-muted-foreground font-semibold">Вставить переменные:</span>
+              {[
+                { token: '{media_type}', label: '{media_type}' },
+                { token: '{people}', label: '{people}' },
+                { token: '{faces_count}', label: '{faces_count}' },
+                { token: '{date}', label: '{date}' },
+                { token: '{location}', label: '{location}' },
+              ].map((item) => (
+                <button
+                  key={item.token}
+                  type="button"
+                  onClick={() => insertPromptPlaceholder(item.token)}
+                  className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-[11px] font-mono transition-colors cursor-pointer"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* AI Feature Toggles */}
           <div className="pt-2 border-t border-border/50 space-y-2.5">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -722,7 +987,7 @@ export const UserSettingsScreen: React.FC = () => {
                 onChange={(e) => setAiFaceClustering(e.target.checked)}
                 className="rounded text-primary focus:ring-primary"
               />
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-medium text-xs">
                 Кластеризация лиц и распознавание людей на фото и видео
               </span>
             </label>
@@ -733,7 +998,7 @@ export const UserSettingsScreen: React.FC = () => {
                 onChange={(e) => setAiClipSearch(e.target.checked)}
                 className="rounded text-primary focus:ring-primary"
               />
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-medium text-xs">
                 Семантический поиск по описаниям сцен (CLIP)
               </span>
             </label>
@@ -744,7 +1009,7 @@ export const UserSettingsScreen: React.FC = () => {
                 onChange={(e) => setAiOcrRecognition(e.target.checked)}
                 className="rounded text-primary focus:ring-primary"
               />
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-medium text-xs">
                 OCR распознавание текста и надписей на изображениях
               </span>
             </label>
@@ -757,7 +1022,7 @@ export const UserSettingsScreen: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
             >
               <Save size={14} />
-              <span>Сохранить параметры AI</span>
+              <span>Сохранить параметры AI и промпт</span>
             </button>
           </div>
         </div>
@@ -766,254 +1031,300 @@ export const UserSettingsScreen: React.FC = () => {
     {
       id: 'storage',
       title: 'Квота дискового хранилища',
-      subtitle: 'Использование пространства, управление кэшем и лимиты',
+      subtitle: 'Реальная телеметрия ОС, занятое место и детализация по типам файлов',
       icon: HardDrive,
-      renderContent: () => (
-        <div className="space-y-4 pt-3">
-          <div className="p-4 bg-muted/30 border border-border/60 rounded-xl space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="font-semibold text-foreground">Занято 25.5 GiB из 100 GiB</span>
-              <span className="font-mono text-muted-foreground">25.5%</span>
+      renderContent: () => {
+        const total = storageTelemetry?.totalDiskBytes || 1;
+        const used = storageTelemetry?.usedDiskBytes || 0;
+        const free = storageTelemetry?.freeDiskBytes || 0;
+        const percentUsed = Math.min(100, Math.max(0, Math.round((used / total) * 100)));
+
+        return (
+          <div className="space-y-5 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">
+                Фактическое состояние хост-накопителя
+              </span>
+              <button
+                type="button"
+                onClick={fetchStorageTelemetry}
+                className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              >
+                <RefreshCw size={12} className={loadingStorage ? 'animate-spin' : ''} />
+                <span>{loadingStorage ? 'Обновление...' : 'Обновить телеметрию'}</span>
+              </button>
             </div>
-            <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden flex">
-              <div className="h-full bg-[#23a6f0]" style={{ width: '20%' }} />
-              <div className="h-full bg-[#f3cd03]" style={{ width: '5.5%' }} />
+
+            {/* Storage Meter Bar */}
+            <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-foreground">
+                  Занято {formatBytes(used)} из {formatBytes(total)}
+                </span>
+                <span className="font-mono text-primary font-bold">{percentUsed}%</span>
+              </div>
+
+              <div className="w-full h-3 bg-muted/60 rounded-full overflow-hidden flex shadow-inner">
+                <div
+                  className="h-full bg-[#23a6f0] transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(2, (storageTelemetry?.photosBytes || 0) / total * 100))}%` }}
+                  title={`Фотографии: ${formatBytes(storageTelemetry?.photosBytes)}`}
+                />
+                <div
+                  className="h-full bg-[#f3cd03] transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(1, (storageTelemetry?.videosBytes || 0) / total * 100))}%` }}
+                  title={`Видеозаписи: ${formatBytes(storageTelemetry?.videosBytes)}`}
+                />
+                <div
+                  className="h-full bg-[#10b981] transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(1, (storageTelemetry?.databaseBytes || 0) / total * 100))}%` }}
+                  title={`База данных SQLite: ${formatBytes(storageTelemetry?.databaseBytes)}`}
+                />
+                <div
+                  className="h-full bg-[#a855f7] transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(1, (storageTelemetry?.cacheBytes || 0) / total * 100))}%` }}
+                  title={`Кэш миниатюр: ${formatBytes(storageTelemetry?.cacheBytes)}`}
+                />
+              </div>
+
+              <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Свободно на диске: <strong className="text-foreground">{formatBytes(free)}</strong></span>
+                <span className="text-[10px] text-muted-foreground/80">Метрика fs.statfs</span>
+              </div>
+            </div>
+
+            {/* Breakdown Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#23a6f0]" />
+                  <span>Фотографии</span>
+                </div>
+                <div className="text-base font-extrabold text-foreground font-mono">
+                  {formatBytes(storageTelemetry?.photosBytes)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {storageTelemetry?.photosCount ?? 0} файлов
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#f3cd03]" />
+                  <span>Видеозаписи</span>
+                </div>
+                <div className="text-base font-extrabold text-foreground font-mono">
+                  {formatBytes(storageTelemetry?.videosBytes)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {storageTelemetry?.videosCount ?? 0} роликов
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]" />
+                  <span>База данных</span>
+                </div>
+                <div className="text-base font-extrabold text-foreground font-mono">
+                  {formatBytes(storageTelemetry?.databaseBytes)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  .db, WAL и SHM файлы
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]" />
+                  <span>Кэш миниатюр</span>
+                </div>
+                <div className="text-base font-extrabold text-foreground font-mono">
+                  {formatBytes(storageTelemetry?.cacheBytes)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Оптимизированные превью
+                </p>
+              </div>
             </div>
           </div>
+        );
+      },
+    },
+    {
+      id: 'sources',
+      title: 'Папки и источники медиа',
+      subtitle: 'Подключенные локальные и сетевые папки',
+      icon: Folder,
+      renderContent: () => (
+        <div className="space-y-4 pt-3">
+          {folderStatus && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs">
+              <CheckCircle2 size={15} />
+              <span>{folderStatus}</span>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newFolderInput}
+              onChange={(e) => setNewFolderInput(e.target.value)}
+              placeholder="C:\Users\Username\Pictures\Photos или /media/nas"
+              className="flex-1 px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
+            />
+            <button
+              type="button"
+              onClick={handleAddFolder}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+            >
+              <Plus size={14} />
+              <span>Добавить</span>
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {configuredFolders.map((folder) => (
+              <div
+                key={folder}
+                className="flex items-center justify-between p-3 bg-muted/30 border border-border/60 rounded-xl text-xs"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Folder size={16} className="text-primary shrink-0" />
+                  <span className="font-mono text-foreground truncate">{folder}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFolder(folder)}
+                  className="p-1 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-muted transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+
           <button
             type="button"
-            className="px-3.5 py-2 text-xs font-semibold border border-border/80 rounded-xl hover:bg-muted text-foreground transition-colors"
+            onClick={handleSaveFolders}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
           >
-            Очистить локальный кэш миниатюр (340 МБ)
+            <Save size={14} />
+            <span>Сохранить список каталогов</span>
           </button>
         </div>
       ),
     },
     {
-      id: 'api-keys',
-      title: 'API ключи и токены доступа',
-      subtitle: 'Токены для интеграции с мобильными приложениями и CLI',
-      icon: Key,
-      renderContent: () => (
-        <div className="space-y-4 pt-3">
-          <p className="text-xs text-muted-foreground">
-            Создавайте персональные ключи API для загрузки медиа через скрипты или фоновую синхронизацию.
-          </p>
-          <button
-            type="button"
-            className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
-          >
-            Сгенерировать новый API ключ
-          </button>
-        </div>
-      ),
-    },
-    {
-      id: 'devices',
-      title: 'Авторизованные устройства и сессии',
-      subtitle: 'Управление подключенными браузерами и приложениями',
-      icon: Smartphone,
-      renderContent: () => (
-        <div className="space-y-3 pt-3 text-xs">
-          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border border-border/50">
-            <div>
-              <p className="font-semibold text-foreground">Chrome на Windows 11 (Текущая сессия)</p>
-              <p className="text-muted-foreground text-[11px]">IP: 127.0.0.1 • Активно сейчас</p>
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-[#2dc071]/15 text-[#2dc071] font-semibold text-[10px]">
-              Онлайн
-            </span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: 'upload',
-      title: 'Параметры загрузки и оптимизации',
-      subtitle: 'Конвертация HEIC, генерация миниатюр, авто-ротация EXIF',
-      icon: UploadCloud,
-      renderContent: () => (
-        <div className="space-y-3 pt-3 text-xs">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-            <span className="text-foreground font-medium">
-              Автоматически конвертировать HEIC / HEIF файлы в JPEG
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-            <span className="text-foreground font-medium">
-              Извлекать геолокационные метки и координаты из EXIF
-            </span>
-          </label>
-        </div>
-      ),
-    },
-    {
-      id: 'notifications',
-      title: 'Уведомления',
-      subtitle: 'Оповещения об окончании сканирования и системных событиях',
-      icon: Bell,
-      renderContent: () => (
-        <div className="space-y-3 pt-3 text-xs">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-            <span className="text-foreground font-medium">
-              Оповещения в браузере при обнаружении дубликатов
-            </span>
-          </label>
-        </div>
-      ),
-    },
-    {
-      id: 'security',
+      id: 'password',
       title: 'Безопасность и смена пароля',
-      subtitle: 'Обновление пароля учётной записи и двухфакторная аутентификация',
-      icon: ShieldCheck,
+      subtitle: 'Изменение текущего пароля учётной записи',
+      icon: Lock,
       renderContent: () => (
-        <div className="space-y-4 pt-3">
+        <form onSubmit={handleChangePassword} className="space-y-4 pt-3 max-w-md">
           {passwordStatus && (
             <div
-              className={`flex items-center gap-2 p-2.5 rounded-xl text-xs ${
+              className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
                 passwordStatus.type === 'success'
-                  ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'
-                  : 'bg-destructive/10 border border-destructive/20 text-destructive'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
               }`}
             >
-              {passwordStatus.type === 'success' ? <CheckCircle2 size={15} /> : <span>⚠️</span>}
+              {passwordStatus.type === 'success' ? <CheckCircle2 size={16} /> : <ShieldCheck size={16} />}
               <span>{passwordStatus.message}</span>
             </div>
           )}
 
-          <form onSubmit={handleChangePassword} className="max-w-md space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Текущий пароль
-              </label>
-              <input
-                type="password"
-                value={currentPasswordInput}
-                onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                placeholder="••••••••"
-                required
-                disabled={isPasswordUpdating}
-                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
-                id="input-current-password"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Новый пароль
-              </label>
-              <input
-                type="password"
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="Минимум 4 символа"
-                required
-                disabled={isPasswordUpdating}
-                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
-                id="input-new-password"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Подтверждение нового пароля
-              </label>
-              <input
-                type="password"
-                value={confirmPasswordInput}
-                onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                placeholder="Повторите новый пароль"
-                required
-                disabled={isPasswordUpdating}
-                className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
-                id="input-confirm-password"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isPasswordUpdating}
-              className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-              id="btn-submit-change-password"
-            >
-              {isPasswordUpdating ? 'Сохранение...' : 'Обновить пароль'}
-            </button>
-          </form>
-        </div>
-      ),
-    },
-    {
-      id: 'vault-pin',
-      title: 'ПИН-код личной защищённой папки',
-      subtitle: 'Настройка 6-значного мастер-PIN для шифрованного хранилища',
-      icon: Lock,
-      renderContent: () => (
-        <div className="space-y-4 pt-3">
-          <p className="text-xs text-muted-foreground">
-            Текущий PIN активен. Вы можете изменить 6-значный код доступа в любое время.
-          </p>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              Текущий пароль
+            </label>
+            <input
+              type="password"
+              value={currentPasswordInput}
+              onChange={(e) => setCurrentPasswordInput(e.target.value)}
+              className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              Новый пароль
+            </label>
+            <input
+              type="password"
+              value={newPasswordInput}
+              onChange={(e) => setNewPasswordInput(e.target.value)}
+              className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              Подтверждение нового пароля
+            </label>
+            <input
+              type="password"
+              value={confirmPasswordInput}
+              onChange={(e) => setConfirmPasswordInput(e.target.value)}
+              className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm outline-none focus:border-primary"
+            />
+          </div>
+
           <button
-            type="button"
-            className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+            type="submit"
+            id="btn-submit-change-password"
+            disabled={isPasswordUpdating}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs disabled:opacity-50"
           >
-            Изменить 6-значный PIN
+            <Lock size={14} />
+            <span>{isPasswordUpdating ? 'Обновление...' : 'Обновить пароль'}</span>
           </button>
-        </div>
+        </form>
       ),
     },
   ];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
-      {/* Top Header */}
-      <div className="pb-4 border-b border-border/60">
-        <div className="flex items-center gap-2.5">
-          <Settings className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-extrabold text-foreground">Настройки учётной записи</h1>
-        </div>
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Настройки пользователя и системы</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Конфигурация профиля, папок медиатеки, параметров AI-ассистента и безопасности.
+          Конфигурация учётной записи, AI-движков, хранилища и параметров приватности.
         </p>
       </div>
 
-      {/* Accordion Settings Cards */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         {sections.map((section) => {
-          const isExpanded = expandedSection === section.id;
           const Icon = section.icon;
+          const isExpanded = expandedSection === section.id;
 
           return (
             <div
               key={section.id}
-              className="bg-card border border-border/70 rounded-2xl overflow-hidden shadow-xs transition-colors hover:border-primary/40"
+              className="bg-card border border-border/70 rounded-2xl overflow-hidden shadow-xs transition-all"
             >
               <button
                 type="button"
                 onClick={() => toggleSection(section.id)}
-                className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors hover:bg-muted/30"
+                className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-muted/30 transition-colors"
               >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <Icon size={20} />
                   </div>
-                  <div className="truncate">
-                    <h3 className="font-bold text-sm sm:text-base text-foreground truncate">
-                      {section.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {section.subtitle}
-                    </p>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">{section.title}</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">{section.subtitle}</p>
                   </div>
                 </div>
-
-                <div className="p-1 rounded-lg text-muted-foreground hover:text-foreground shrink-0 ml-3">
-                  {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                <div className="text-muted-foreground">
+                  {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </div>
               </button>
 
               {isExpanded && (
-                <div className="px-5 pb-5 pt-1 border-t border-border/40 animate-in fade-in duration-150">
+                <div className="px-4 pb-5 sm:px-5 sm:pb-6 border-t border-border/50">
                   {section.renderContent()}
                 </div>
               )}
@@ -1021,6 +1332,109 @@ export const UserSettingsScreen: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Video Avatar Interactive Trimming Modal */}
+      {trimModalOpen && selectedVideoObjectUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-card border border-border/80 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Scissors className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-bold text-foreground">
+                  Нарезка видео-аватара (Loop 3-10 сек)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTrimModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="aspect-square max-h-64 w-full bg-black rounded-xl overflow-hidden relative flex items-center justify-center">
+              <video
+                ref={videoPreviewRef}
+                src={selectedVideoObjectUrl}
+                onLoadedMetadata={(e) => {
+                  const dur = (e.target as HTMLVideoElement).duration || 10;
+                  setVideoDuration(dur);
+                }}
+                className="w-full h-full object-cover"
+                playsInline
+                muted
+              />
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex justify-between mb-1 text-muted-foreground">
+                  <span>Начало фрагмента: <strong>{trimStart.toFixed(1)}s</strong></span>
+                  <span>Длительность: <strong>{trimDuration.toFixed(1)}s</strong></span>
+                </div>
+                <label className="block text-[11px] text-muted-foreground mb-1">
+                  Смещение старта (сек):
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, videoDuration - 3)}
+                  step={0.5}
+                  value={trimStart}
+                  onChange={(e) => setTrimStart(Number(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-muted-foreground mb-1">
+                  Длина зацикленного фрагмента (3 — 10 сек):
+                </label>
+                <input
+                  type="range"
+                  min={3}
+                  max={Math.min(10, Math.max(3, videoDuration - trimStart))}
+                  step={0.5}
+                  value={trimDuration}
+                  onChange={(e) => setTrimDuration(Number(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handlePlayLoopPreview}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/80 hover:bg-muted text-foreground font-semibold"
+                >
+                  <Play size={13} />
+                  <span>Предпросмотр лупа</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTrimModalOpen(false)}
+                    className="px-3 py-1.5 rounded-xl border border-border/80 text-muted-foreground hover:bg-muted font-medium"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmTrimAndUpload}
+                    disabled={isUploadingVideo}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 shadow-xs disabled:opacity-50"
+                  >
+                    <Save size={13} />
+                    <span>{isUploadingVideo ? 'Сохранение...' : 'Применить видео-аватар'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -49,7 +49,27 @@ export default function HeaderProfile({ onOpenLogin }: HeaderProfileProps) {
         id="btn-user-profile"
         style={{ padding: '0.5rem 0.9rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
       >
-        <span>👤</span>
+        {currentUser.avatarType === 'video' && currentUser.avatarVideoUrl ? (
+          <video
+            src={currentUser.avatarVideoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+          />
+        ) : currentUser.avatarUrl ? (
+          <img
+            src={currentUser.avatarUrl}
+            alt={currentUser.username}
+            style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <span>👤</span>
+        )}
         <span style={{ fontWeight: 600, maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {currentUser.displayName || currentUser.username}
         </span>
@@ -78,10 +98,44 @@ export default function HeaderProfile({ onOpenLogin }: HeaderProfileProps) {
       </button>
 
       {isUserMenuOpen && (
-        <div className="theme-dropdown-menu" style={{ width: '220px' }}>
-          <div className="theme-dropdown-header">
-            <strong>{currentUser.displayName || currentUser.username}</strong>
-            <div style={{ fontSize: '0.78rem', color: '#9aa0a6' }}>@{currentUser.username}</div>
+        <div className="theme-dropdown-menu" style={{ width: '240px' }}>
+          <div className="theme-dropdown-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#23a6f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {currentUser.avatarType === 'video' && currentUser.avatarVideoUrl ? (
+                <video
+                  src={currentUser.avatarVideoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : currentUser.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.username}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <span style={{ color: '#fff', fontWeight: 'bold' }}>
+                  {(currentUser.displayName || currentUser.username || 'U').charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <strong style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {currentUser.displayName || currentUser.username}
+              </strong>
+              <div style={{ fontSize: '0.75rem', color: '#9aa0a6' }}>@{currentUser.username}</div>
+              {currentUser.email && (
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {currentUser.email}
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: '#cbd5e1', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <div>Role: <strong style={{ textTransform: 'capitalize' }}>{currentUser.role}</strong></div>

@@ -12,6 +12,10 @@ export interface User {
   id: string;
   username: string;
   displayName: string;
+  email?: string;
+  avatarUrl?: string;
+  avatarType?: 'image' | 'video';
+  avatarVideoUrl?: string;
   role: UserRole;
   permissions: Permission[];
   createdAt?: string;
