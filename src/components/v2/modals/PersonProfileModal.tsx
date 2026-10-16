@@ -345,10 +345,9 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
-                ) : null}
-                <span className="absolute inset-0 flex items-center justify-center -z-0">
-                  {person.initials || '👤'}
-                </span>
+                ) : (
+                  <span>{person.initials || '👤'}</span>
+                )}
               </div>
               <button
                 type="button"

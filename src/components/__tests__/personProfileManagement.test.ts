@@ -76,11 +76,26 @@ describe('FEAT-026: Person Profile Management & Family Tree Integration', () => 
     assert.strictEqual(fs.existsSync(modalFilePath), true, 'PersonProfileModal.tsx must exist');
     const content = fs.readFileSync(modalFilePath, 'utf-8');
 
-    // Check handleApplyTreeData implementation
     assert.match(content, /handleApplyTreeData/, 'Must implement handleApplyTreeData function');
     assert.match(content, /Использовать данные из Древа|Populate from Tree/, 'Must have populate from tree button in main tab');
     assert.match(content, /Заполнить анкету из Древа|Populate profile from Tree/, 'Must have populate button in tree tab');
     assert.match(content, /importSuccessMessage/, 'Must support import confirmation toast/notification');
+  });
+
+  it('Requirement 7: PeopleFacesScreen and PersonProfileModal must not render person.initials when avatar is present', () => {
+    const screenContent = fs.readFileSync(screenFilePath, 'utf-8');
+    assert.match(
+      screenContent,
+      /person\.avatarUrl\s*\?\s*\(\s*<img[\s\S]*?\/>\s*\)\s*:\s*\(\s*<span>\{\s*person\.initials/,
+      'PeopleFacesScreen must render initials only as a fallback when person.avatarUrl is absent'
+    );
+
+    const modalContent = fs.readFileSync(modalFilePath, 'utf-8');
+    assert.match(
+      modalContent,
+      /person\.avatarUrl\s*\?\s*\(\s*<img[\s\S]*?\/>\s*\)\s*:\s*\(\s*<span>\{\s*person\.initials/,
+      'PersonProfileModal must render initials only as a fallback when no avatar is present'
+    );
   });
 });
 
