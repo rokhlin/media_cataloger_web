@@ -514,6 +514,23 @@ export default function MediaViewerModal({
             setAnalysisError(errMsg);
           }
         );
+      } else {
+        const fetchFn = authFetch || fetch;
+        const res = await fetchFn('/api/analyze-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: filePath }),
+        });
+        if (res.ok) {
+          setAnalysisSuccess(true);
+          setTimeout(() => setAnalysisSuccess(false), 5000);
+          fetchCurrentMediaDetails(filePath);
+          if (onRefresh) onRefresh();
+          if (onReloadFaces) onReloadFaces();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setAnalysisError(errData.message || 'Analysis failed');
+        }
       }
     } catch (err: any) {
       setAnalysisError(err.message || 'Analysis failed');

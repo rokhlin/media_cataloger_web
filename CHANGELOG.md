@@ -6,9 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.15.0] - Unreleased
+## [2.0.0] - 2026-10-16
 
 ### Added
+- **Media Cataloger V2 Design System & Core Web Redesign**:
+  - Engineered modern layout foundation: adaptive left navigation drawer (`LeftNavSidebar`), persistent top app bar (`TopNavBar`), right-hand timeline scrubber (`TimelineScrubber`), and responsive global status progress bar (`StatusBar`).
+  - Integrated Essential UI Kit tokens and dual Light/Dark theming (`ThemeManager`) with zero-flash persistence and curated modern color palette.
+  - High-performance Justified Masonry photo grid (`GalleryPage`) with virtualization, aspect ratio preservation, sticky date headers, and infinite scrolling.
+  - Distraction-free true-black Fullscreen Media Lightbox Viewer (`MediaViewerModal`) with zoom/pan, EXIF inspection drawer, face tag highlights, and keyboard navigation.
+  - Interactive Exploration & Search Hub (`SearchHubScreen`) featuring face reels, places photo cards, "On this day" memories, and instant metadata filtering.
+  - Interactive Vector Tile Map (`GeoMapScreen`) with cluster pins and synchronized right-hand photo drawer.
+  - Albums Hub (`AlbumsScreen`) and virtual collections with batch actions (share, slideshow, download).
+  - People & Face Management Grid (`PeopleFacesScreen`) with inline naming, merge tools, and avatar cropping.
+  - FEAT-026 Person Profile Management: tabbed editor for Demographics (first/middle/last name, dates, notes), master avatar selection, and bidirectional Family Tree integration.
+  - Personal Folder / Secret Vault (`LockedFolderScreen`): ambient pastel gradient 6-digit PIN gate, isolated metadata DB, and email recovery.
+  - Side-by-side Duplicate Manager (`DuplicatesManagerTab`) with file size/resolution highlighting and bulk cleanup.
+  - Expandable Settings Hub (`UserSettingsScreen`) across 9 modular configuration cards.
+  - Comprehensive bilingual internationalization (English 🇬🇧 / Russian 🇷🇺) across all navigation, controls, cards, and metadata.
+  - Dynamic LM Studio local model querying, selection, and memory preloading in Settings.
+
 - **AI Tag Recognition & Structured Tagging Pipeline (`server/cataloger-client/`, `server/database/`, `src/models/settings.ts`)**:
   - Added `analyzeWithTags` method to `CatalogerClientService` to execute single-file media analysis with configurable `target_tags` and `tag_format` (`categorized`, `flat`, `prefixed`).
   - Added `media_tags` table schema in `DatabaseService` (`better-sqlite3`) and implemented `saveMediaTags(filePathOrMediaId, tags)` with normalization support.

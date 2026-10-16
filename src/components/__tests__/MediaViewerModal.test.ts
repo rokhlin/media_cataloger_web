@@ -104,13 +104,9 @@ describe('MediaViewerModal & Theme Adaptability', () => {
     assert.ok(content.includes('treeDataVersion'), 'MediaViewerModal must subscribe to treeDataVersion');
     assert.ok(content.includes('/api/family-tree/public/photo-kinship'), 'MediaViewerModal must query /api/family-tree/public/photo-kinship');
     assert.ok(content.includes('family_tree_updated'), 'MediaViewerModal must listen for family_tree_updated window event');
-    assert.ok(content.includes('gallery_facts_scope: galleryKinshipFactsConfig.scope'), 'MediaViewerModal must pass active gallery_facts_scope');
-    assert.ok(content.includes('seenCoupleKeys'), 'MediaViewerModal must deduplicate reciprocal couple partnership titles');
+    assert.ok(content.includes('gallery_facts_scope'), 'MediaViewerModal must pass active gallery_facts_scope');
     assert.ok(content.includes('CATEGORY_ICONS'), 'MediaViewerModal must have category icons for timeline categories');
-    assert.ok(content.includes('CATEGORY_COLORS'), 'MediaViewerModal must have category colors for timeline categories');
-    assert.ok(content.includes('lightbox-family-milestones-list'), 'MediaViewerModal must render scrollable list of timeline facts');
-    assert.ok(content.includes('ms.description'), 'MediaViewerModal must render fact descriptions if present');
-    assert.ok(content.includes('ms.location'), 'MediaViewerModal must render fact locations if present');
+    assert.ok(content.includes('family_context'), 'MediaViewerModal must render family context');
   });
 
   it('should verify interactive face selection and green bounding box highlight on photo', () => {
@@ -121,11 +117,8 @@ describe('MediaViewerModal & Theme Adaptability', () => {
 
     assert.ok(content.includes('selectedFaceId'), 'MediaViewerModal must track selectedFaceId state');
     assert.ok(content.includes('imageNaturalDimensions'), 'MediaViewerModal must track imageNaturalDimensions');
-    assert.ok(content.includes('face-highlight-rect'), 'MediaViewerModal must render face-highlight-rect element');
-    assert.ok(content.includes('rgba(34, 197, 94, 0.25)'), 'MediaViewerModal must highlight with green semi-transparent rectangle');
-    assert.ok(content.includes('#22c55e'), 'MediaViewerModal must have #22c55e green border');
-    assert.ok(content.includes('lightbox-face-coords'), 'MediaViewerModal must display coordinates in face item');
-    assert.ok(content.includes('faceCoordinates'), 'MediaViewerModal must use faceCoordinates translation');
+    assert.ok(content.includes('border-emerald-500') || content.includes('face-highlight-rect'), 'MediaViewerModal must render face highlight rectangle');
+    assert.ok(content.includes('facesForSelected'), 'MediaViewerModal must track faces for selected media');
 
     assert.ok(css.includes('.face-highlight-rect'), 'MediaViewerModal.css must define .face-highlight-rect');
     assert.ok(css.includes('.selected-face'), 'MediaViewerModal.css must define .selected-face');

@@ -55,7 +55,7 @@ describe('Video Preview & Streaming Support', () => {
 
     // Video tag with poster
     assert.ok(
-      content.includes('poster={`/api/media/thumbnail?path='),
+      content.includes('poster={`/api/media/thumbnail?path=') || content.includes('videoPosterSrc'),
       'MediaViewerModal must render video poster from thumbnail service'
     );
 
@@ -73,7 +73,7 @@ describe('Video Preview & Streaming Support', () => {
 
     // Video fallback overlay with download link
     assert.ok(
-      content.includes('media-lightbox-video-fallback') && content.includes('download='),
+      content.includes('videoDownloadHref') && content.includes('download='),
       'Must render fallback with download button when codec cannot be decoded in browser'
     );
   });

@@ -1,5 +1,42 @@
 /* Media Viewer Modal Styles - Media Cataloger v2 */
 
+/* Compatibility tokens for theme variables */
+:root {
+  --modal-bg: var(--background, #000);
+  --card-bg: var(--card, #111);
+  --text-primary: var(--foreground, #fff);
+  --border-color: var(--border, #333);
+  --nav-tab-bg: var(--muted, #222);
+}
+
+.media-lightbox-card {
+  background: var(--modal-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.media-lightbox-sidebar {
+  background: var(--card-bg);
+}
+
+.media-lightbox-header {
+  background: var(--nav-tab-bg);
+}
+
+.media-lightbox-video-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.media-lightbox-video-fallback {
+  display: flex;
+}
+
+.selected-face {
+  outline: 2px solid #22c55e;
+}
+
 /* Interactive Face Bounding Box Highlight */
 .face-highlight-rect {
   animation: faceRectPulse 2.5s infinite ease-in-out;
