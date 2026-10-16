@@ -72,7 +72,7 @@ export interface MediaViewerModalProps {
   ) => Promise<boolean | void> | void;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
   persons?: PersonItem[];
-  knownPersonOptions?: { name: string; avatarUrl?: string | null; count: number }[];
+  knownPersonOptions?: { name: string; display_name?: string; avatarUrl?: string | null; count: number }[];
   disabled?: boolean;
   isEngineConnected?: boolean;
   onMediaUpdated?: (updated: GalleryMediaFile) => void;
@@ -150,7 +150,7 @@ export default function MediaViewerModal({
   const [lightboxLang, setLightboxLang] = useState<'ru' | 'en'>(language === 'ru' ? 'ru' : 'en');
   const activeDetailLang = lightboxLang || (language === 'ru' ? 'ru' : 'en');
 
-  const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; avatarUrl?: string | null; count: number }[]>([]);
+  const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; display_name?: string; avatarUrl?: string | null; count: number }[]>([]);
 
   // Effective vault token: prop token takes priority, then fallback to context token
   const effectiveVaultToken = propVaultToken || contextVaultToken || undefined;
@@ -171,6 +171,7 @@ export default function MediaViewerModal({
           if (Array.isArray(data)) {
             const mapped = data.map((p: any) => ({
               name: p.name,
+              display_name: p.display_name || (p.last_name && p.first_name ? `${p.last_name} ${p.first_name}` : p.name),
               count: p.media_count || p.count || 1,
               avatarUrl: p.representative_face_id ? `/api/faces/image/${p.representative_face_id}` : null,
             }));
@@ -186,11 +187,17 @@ export default function MediaViewerModal({
   }, [authFetch]);
 
   const effectiveKnownPersons = useMemo(() => {
-    const list = knownPersonOptions && knownPersonOptions.length > 0 ? [...knownPersonOptions] : [...internalKnownPersons];
+    const list: Array<{ name: string; display_name?: string; avatarUrl?: string | null; count: number }> =
+      knownPersonOptions && knownPersonOptions.length > 0 ? [...knownPersonOptions] : [...internalKnownPersons];
     if (persons && persons.length > 0) {
       for (const p of persons) {
         if (p.name && !list.some((existing) => existing.name.toLowerCase() === p.name.toLowerCase())) {
-          list.push({ name: p.name, count: 1, avatarUrl: null });
+          list.push({
+            name: p.name,
+            display_name: p.display_name || (p.last_name && p.first_name ? `${p.last_name} ${p.first_name}` : p.name),
+            count: 1,
+            avatarUrl: null,
+          });
         }
       }
     }
@@ -1222,7 +1229,7 @@ export default function MediaViewerModal({
                       <option value="">Выберите персону...</option>
                       {effectiveKnownPersons.map((p) => (
                         <option key={p.name} value={p.name}>
-                          {p.name} ({p.count})
+                          {p.display_name || p.name} ({p.count})
                         </option>
                       ))}
                       <option value="__custom__">+ Новое имя...</option>
@@ -1401,7 +1408,7 @@ export default function MediaViewerModal({
                                 <option value="">Выберите персону...</option>
                                 {effectiveKnownPersons.map((p) => (
                                   <option key={p.name} value={p.name}>
-                                    {p.name}
+                                    {p.display_name || p.name}
                                   </option>
                                 ))}
                                 <option value="__custom__">+ Новое имя...</option>

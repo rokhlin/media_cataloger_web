@@ -36,6 +36,24 @@ export interface FaceItem {
 
 export interface PersonItem {
   name: string;
+  display_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  last_name?: string;
+  maiden_name?: string;
+  nickname?: string;
+  gender?: string;
+  is_living?: boolean;
+  birth_date?: string;
+  birth_place?: string;
+  death_date?: string;
+  death_place?: string;
+  category?: string;
+  profession?: string;
+  notes?: string;
+  bio?: string;
+  primary_face_id?: string;
+  is_hidden?: boolean;
   person_id?: string;
   count?: number;
   face_count?: number;

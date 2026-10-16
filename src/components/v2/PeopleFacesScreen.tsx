@@ -1,18 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink, Camera, X } from 'lucide-react';
+import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink, Camera, X, TreePine } from 'lucide-react';
 import { cn } from '@/utils';
 import { Link, useNavigate } from 'react-router-dom';
-
-interface PersonDisplay {
-  id: string | number;
-  name: string;
-  count: number;
-  isHidden: boolean;
-  avatarUrl?: string | null;
-  avatarColor?: string;
-  initials?: string;
-  availableFaces?: Array<{ face_id: string; image_path?: string }>;
-}
+import { PersonProfileModal, type PersonDisplay } from './modals/PersonProfileModal';
 
 export const PeopleFacesScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +13,7 @@ export const PeopleFacesScreen: React.FC = () => {
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editName, setEditName] = useState('');
   const [choosingCoverPerson, setChoosingCoverPerson] = useState<PersonDisplay | null>(null);
+  const [selectedPersonForProfile, setSelectedPersonForProfile] = useState<PersonDisplay | null>(null);
 
   const loadFaces = async () => {
     setLoading(true);
@@ -70,6 +61,23 @@ export const PeopleFacesScreen: React.FC = () => {
             return {
               id: item.person_id || item.id || name,
               name,
+              display_name: item.display_name || (item.last_name && item.first_name ? `${item.last_name} ${item.first_name}` : name),
+              first_name: item.first_name,
+              middle_name: item.middle_name,
+              last_name: item.last_name,
+              maiden_name: item.maiden_name,
+              nickname: item.nickname,
+              gender: item.gender,
+              is_living: item.is_living,
+              birth_date: item.birth_date,
+              birth_place: item.birth_place,
+              death_date: item.death_date,
+              death_place: item.death_place,
+              category: item.category,
+              profession: item.profession,
+              notes: item.notes,
+              bio: item.bio,
+              family_tree: item.family_tree,
               count,
               isHidden: Boolean(item.is_hidden),
               avatarUrl,
@@ -251,14 +259,14 @@ export const PeopleFacesScreen: React.FC = () => {
               <div
                 key={person.id}
                 onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('button, input')) return;
-                  navigate(`/photos?person=${encodeURIComponent(person.name)}`);
+                  if ((e.target as HTMLElement).closest('button, input, a, .photo-count-badge')) return;
+                  setSelectedPersonForProfile(person);
                 }}
                 className={cn(
                   'group bg-card border rounded-2xl p-4 flex flex-col items-center text-center transition-all duration-200 relative shadow-xs hover:shadow-md hover:border-primary/50 cursor-pointer',
                   person.isHidden ? 'opacity-60 border-dashed border-border' : 'border-border/70'
                 )}
-                title={`Нажмите, чтобы просмотреть все фото с ${person.name}`}
+                title={`Нажмите для просмотра и редактирования профиля ${person.display_name || person.name}`}
               >
                 {/* Hide / Show Hover Button */}
                 <button
@@ -336,8 +344,13 @@ export const PeopleFacesScreen: React.FC = () => {
                   </div>
                 ) : (
                   <div className="w-full flex items-center justify-center gap-1.5 group/name">
-                    <span className="font-bold text-sm text-foreground truncate max-w-[110px]">
-                      {person.name}
+                    {person.family_tree?.is_in_tree && (
+                      <span title="В Семейном Древе" className="shrink-0 inline-flex items-center">
+                        <TreePine size={13} className="text-emerald-500" />
+                      </span>
+                    )}
+                    <span className="font-bold text-sm text-foreground truncate max-w-[110px]" title={person.display_name || person.name}>
+                      {person.display_name || person.name}
                     </span>
                     <button
                       type="button"
@@ -346,18 +359,26 @@ export const PeopleFacesScreen: React.FC = () => {
                         handleStartEdit(person.id, person.name);
                       }}
                       className="p-0.5 text-muted-foreground hover:text-primary opacity-0 group-hover/name:opacity-100 transition-opacity"
-                      title="Изменить имя"
+                      title="Быстро переименовать"
                     >
                       <Edit2 size={12} />
                     </button>
                   </div>
                 )}
 
-                {/* Photo Count Badge & Link */}
-                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                {/* Photo Count Badge & Link - Retains filtering navigation */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/photos?person=${encodeURIComponent(person.name)}`);
+                  }}
+                  className="photo-count-badge flex items-center gap-1 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer px-2 py-0.5 rounded-lg hover:bg-primary/10"
+                  title={`Просмотреть все фото с ${person.name}`}
+                >
                   <span>{photoLabel}</span>
-                  <ExternalLink size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
+                  <ExternalLink size={11} className="opacity-70 group-hover:opacity-100 transition-opacity" />
+                </button>
               </div>
             );
           })}
@@ -438,6 +459,19 @@ export const PeopleFacesScreen: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Person Profile Modal */}
+      {selectedPersonForProfile && (
+        <PersonProfileModal
+          isOpen={Boolean(selectedPersonForProfile)}
+          onClose={() => setSelectedPersonForProfile(null)}
+          person={selectedPersonForProfile}
+          onSaveSuccess={(updated) => {
+            setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            setSelectedPersonForProfile(null);
+          }}
+        />
       )}
     </div>
   );
