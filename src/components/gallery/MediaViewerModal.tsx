@@ -1272,28 +1272,60 @@ export default function MediaViewerModal({
                       const isSelected = selectedFaceId === f.face_id;
                       const isEditing = reassigningFaceId === f.face_id;
 
+                      const isManual = !f.face_id || f.face_id.startsWith('manual_') || f.face_id.startsWith('face_manual_');
+                      const cropUrl = !isManual
+                        ? (f.image_path
+                          ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
+                          : f.face_id
+                            ? `/api/faces/image/${encodeURIComponent(f.face_id)}`
+                            : null)
+                        : null;
+                      const personMeta = effectiveKnownPersons.find(
+                        (kp) => (f.name && kp.name.toLowerCase() === f.name.toLowerCase()) ||
+                                (f.person_id && (kp as any).person_id === f.person_id)
+                      );
+                      const displayAvatarUrl = cropUrl || personMeta?.avatarUrl || null;
+
                       return (
                         <div
                           key={f.face_id}
                           className={cn(
                             'p-2 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer',
                             isSelected
-                              ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
-                              : 'border-border/60 bg-muted/20 hover:border-primary/40'
+                              ? 'border-emerald-500 bg-emerald-500/15 shadow-xs ring-1 ring-emerald-500/30'
+                              : 'border-border/60 bg-muted/20 hover:border-primary/40 hover:bg-muted/40'
                           )}
                           onClick={() => setSelectedFaceId(isSelected ? null : f.face_id)}
+                          onMouseEnter={() => {
+                            if (!selectedFaceId) setSelectedFaceId(f.face_id);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedFaceId === f.face_id) setSelectedFaceId(null);
+                          }}
+                          title={f.name ? `Лицо: ${f.name} (нажмите, чтобы выделить на фото)` : 'Нажмите, чтобы выделить на фото'}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              {f.image_path ? (
-                                <img
-                                  src={`/api/media/thumbnail?path=${encodeURIComponent(f.image_path)}&size=80${vaultTokenQuery}`}
-                                  alt={f.name || 'Face'}
-                                  className="w-8 h-8 rounded-lg object-cover border border-border/80 shrink-0"
-                                />
+                              {displayAvatarUrl ? (
+                                <div className="relative w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-border/80 bg-muted/40 flex items-center justify-center">
+                                  <img
+                                    src={displayAvatarUrl}
+                                    alt={f.name || 'Face'}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      target.style.display = 'none';
+                                      const fallback = target.nextElementSibling as HTMLElement;
+                                      if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div className="hidden w-full h-full items-center justify-center bg-primary/10 text-primary font-bold text-xs">
+                                    {f.name ? f.name.charAt(0).toUpperCase() : <User size={16} />}
+                                  </div>
+                                </div>
                               ) : (
-                                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0">
-                                  <User size={14} />
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary border border-border/80 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {f.name ? f.name.charAt(0).toUpperCase() : <User size={16} />}
                                 </div>
                               )}
 
@@ -1301,11 +1333,20 @@ export default function MediaViewerModal({
                                 <p className="text-xs font-semibold text-foreground truncate">
                                   {f.name || 'Неопознанное лицо'}
                                 </p>
-                                {f.confidence && (
-                                  <p className="text-[10px] text-muted-foreground">
-                                    {Math.round(f.confidence * 100)}% совпадение
-                                  </p>
-                                )}
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                  {isManual ? (
+                                    <span className="text-amber-400 font-medium">Вручную</span>
+                                  ) : (
+                                    <span>
+                                      {f.confidence ? `${Math.round(f.confidence * 100)}% совпадение` : 'Распознано'}
+                                    </span>
+                                  )}
+                                  {Boolean((f as any).occurrencesCount && (f as any).occurrencesCount > 1) && (
+                                    <span className="text-primary font-mono">
+                                      • {(f as any).occurrencesCount} кадров
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
