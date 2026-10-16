@@ -1122,44 +1122,44 @@ export default function MediaViewerModal({
                 (selectedMedia.family_context?.relationships && selectedMedia.family_context.relationships.length > 0) ||
                 (selectedMedia.family_context?.milestones && selectedMedia.family_context.milestones.length > 0)
               ) && (
-                <div className="p-4 space-y-2.5 bg-primary/5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wider">
-                    <TreePine size={13} />
-                    <span>Семейный контекст</span>
+                  <div className="p-4 space-y-2.5 bg-primary/5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wider">
+                      <TreePine size={13} />
+                      <span>Семейный контекст</span>
+                    </div>
+
+                    {selectedMedia.family_context?.suggested_caption && (
+                      <p className="text-xs font-medium text-foreground leading-relaxed italic">
+                        «{selectedMedia.family_context.suggested_caption}»
+                      </p>
+                    )}
+
+                    {selectedMedia.family_context?.relationships && selectedMedia.family_context.relationships.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        {selectedMedia.family_context.relationships.map((rel, idx) => (
+                          <div key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                            <span>💞</span>
+                            <span className="font-semibold text-foreground">{rel.person1}</span>
+                            <span>&</span>
+                            <span className="font-semibold text-foreground">{rel.person2}</span>:
+                            <span className="text-primary font-medium">{rel.relationship}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {selectedMedia.family_context?.milestones && selectedMedia.family_context.milestones.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-border/40">
+                        {selectedMedia.family_context.milestones.slice(0, 3).map((ms, idx) => (
+                          <div key={idx} className="text-[11px] text-amber-400/90 flex items-center gap-1.5">
+                            <span>{CATEGORY_ICONS[ms.type || ''] || '⭐'}</span>
+                            <span className="font-medium truncate">{ms.title || ms.date}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-
-                  {selectedMedia.family_context?.suggested_caption && (
-                    <p className="text-xs font-medium text-foreground leading-relaxed italic">
-                      «{selectedMedia.family_context.suggested_caption}»
-                    </p>
-                  )}
-
-                  {selectedMedia.family_context?.relationships && selectedMedia.family_context.relationships.length > 0 && (
-                    <div className="space-y-1 pt-1">
-                      {selectedMedia.family_context.relationships.map((rel, idx) => (
-                        <div key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                          <span>💞</span>
-                          <span className="font-semibold text-foreground">{rel.person1}</span>
-                          <span>&</span>
-                          <span className="font-semibold text-foreground">{rel.person2}</span>:
-                          <span className="text-primary font-medium">{rel.relationship}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedMedia.family_context?.milestones && selectedMedia.family_context.milestones.length > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-border/40">
-                      {selectedMedia.family_context.milestones.slice(0, 3).map((ms, idx) => (
-                        <div key={idx} className="text-[11px] text-amber-400/90 flex items-center gap-1.5">
-                          <span>{CATEGORY_ICONS[ms.type || ''] || '⭐'}</span>
-                          <span className="font-medium truncate">{ms.title || ms.date}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
 
               {/* AI Description & Summary */}
               {(selectedMedia.description || selectedMedia.description_ru || selectedMedia.summary || selectedMedia.summary_ru) && (
@@ -1289,7 +1289,7 @@ export default function MediaViewerModal({
                         : null;
                       const personMeta = effectiveKnownPersons.find(
                         (kp) => (f.name && kp.name.toLowerCase() === f.name.toLowerCase()) ||
-                                (f.person_id && (kp as any).person_id === f.person_id)
+                          (f.person_id && (kp as any).person_id === f.person_id)
                       );
                       const displayAvatarUrl = cropUrl || personMeta?.avatarUrl || null;
 
