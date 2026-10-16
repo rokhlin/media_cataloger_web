@@ -72,6 +72,7 @@ export interface MediaViewerModalProps {
   disabled?: boolean;
   isEngineConnected?: boolean;
   onMediaUpdated?: (updated: GalleryMediaFile) => void;
+  vaultToken?: string | null;
 }
 
 export default function MediaViewerModal({
@@ -94,10 +95,11 @@ export default function MediaViewerModal({
   disabled = false,
   isEngineConnected = true,
   onMediaUpdated,
+  vaultToken: _vaultToken,
 }: MediaViewerModalProps) {
   const { t, language } = useLanguage();
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
-  const { addVaultItem, removeVaultItem } = useVault();
+  const { addVaultItem, removeVaultItem, unlockVault } = useVault();
   const { galleryKinshipFactsConfig, treeDataVersion } = useFamilyTreeStore();
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -119,6 +121,14 @@ export default function MediaViewerModal({
   const [analysisSuccess, setAnalysisSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
+
+  // Vault PIN confirmation state (shown when user clicks 'Move to vault' for a non-vault item)
+  const [showVaultPinModal, setShowVaultPinModal] = useState(false);
+  const [vaultPinInput, setVaultPinInput] = useState('');
+  const [vaultPinError, setVaultPinError] = useState<string | null>(null);
+  const [vaultPinLoading, setVaultPinLoading] = useState(false);
+  const [pendingVaultFilePath, setPendingVaultFilePath] = useState<string | null>(null);
+
 
   const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; avatarUrl?: string | null; count: number }[]>([]);
 
@@ -1962,25 +1972,26 @@ export default function MediaViewerModal({
                     onClick={async () => {
                       const filePath = selectedMedia.file_path || selectedMedia.filename;
                       if (selectedMedia.is_vault) {
+                        // Restore from vault — no PIN needed (vault is already unlocked to view this)
                         await removeVaultItem(filePath);
                         const updated = { ...selectedMedia, is_vault: false };
                         setSelectedMedia(updated);
                         if (onMediaUpdated) onMediaUpdated(updated);
                         window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
+                        if (onRefresh) onRefresh();
                       } else {
-                        await addVaultItem(filePath);
-                        const updated = { ...selectedMedia, is_vault: true };
-                        setSelectedMedia(updated);
-                        if (onMediaUpdated) onMediaUpdated(updated);
-                        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: true } }));
+                        // Move to vault — require PIN confirmation first
+                        setPendingVaultFilePath(filePath);
+                        setVaultPinInput('');
+                        setVaultPinError(null);
+                        setShowVaultPinModal(true);
                       }
-                      if (onRefresh) onRefresh();
                     }}
                     type="button"
                   >
                     {selectedMedia.is_vault
-                      ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Убрать из личной папки'}`
-                      : `🔒 ${t('vaultAddToVault' as any) || 'Переместить в личную папку'}`}
+                      ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Восстановить / Удалить из защищённого хранилища'}`
+                      : `🔒 ${t('vaultAddToVault' as any) || 'Переместить в защищённую/личную папку'}`}
                   </button>
                 )}
 
@@ -2149,6 +2160,96 @@ export default function MediaViewerModal({
             if (onRefresh) onRefresh();
           }}
         />
+      )}
+
+      {/* Vault PIN Confirmation Modal — shown before moving a file into the vault */}
+      {showVaultPinModal && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowVaultPinModal(false); }}
+        >
+          <div className="w-full max-w-sm bg-card border border-border/80 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-lg">🔒</div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Подтверждение PIN-кода</h3>
+                <p className="text-[11px] text-muted-foreground">Для перемещения файла в личную папку введите PIN-код</p>
+              </div>
+            </div>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              autoFocus
+              value={vaultPinInput}
+              onChange={(e) => { setVaultPinInput(e.target.value.replace(/\D/g, '')); setVaultPinError(null); }}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && vaultPinInput.length >= 4) {
+                  // Trigger confirm on Enter
+                  e.preventDefault();
+                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit?.();
+                }
+              }}
+              placeholder="••••••"
+              className="w-full px-4 py-3 rounded-xl border border-border/80 bg-muted/30 text-foreground text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+
+            {vaultPinError && (
+              <div className="flex items-center gap-2 text-xs text-destructive font-semibold animate-in fade-in">
+                <span>⚠️ {vaultPinError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowVaultPinModal(false); setVaultPinInput(''); setVaultPinError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-border/80 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={vaultPinLoading || vaultPinInput.length < 4}
+                onClick={async () => {
+                  if (!pendingVaultFilePath) return;
+                  setVaultPinLoading(true);
+                  setVaultPinError(null);
+
+                  // Try to unlock/verify vault with provided PIN
+                  // If already unlocked with a valid session, we still re-verify PIN for security
+                  const res = await unlockVault(vaultPinInput);
+                  if (!res.success) {
+                    setVaultPinError(res.error || 'Неверный PIN-код');
+                    setVaultPinLoading(false);
+                    return;
+                  }
+
+                  // PIN verified — move file to vault
+                  await addVaultItem(pendingVaultFilePath);
+                  const updated = { ...selectedMedia!, is_vault: true };
+                  setSelectedMedia(updated);
+                  if (onMediaUpdated) onMediaUpdated(updated);
+                  window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: pendingVaultFilePath, is_vault: true } }));
+                  if (onRefresh) onRefresh();
+
+                  setVaultPinLoading(false);
+                  setShowVaultPinModal(false);
+                  setVaultPinInput('');
+                  setPendingVaultFilePath(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {vaultPinLoading ? (
+                  <><span className="animate-spin">⟳</span><span>Проверка...</span></>
+                ) : (
+                  <span>Переместить</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

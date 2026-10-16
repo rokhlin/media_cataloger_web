@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useVault } from '@/services/vaultContext';
+import { useAuth } from '@/services/authContext';
 import MediaViewerModal from '@/components/gallery/MediaViewerModal';
 import type { GalleryMediaFile } from '@/models';
 
@@ -30,6 +31,7 @@ export const LockedFolderScreen: React.FC = () => {
     remainingSeconds,
     vaultMediaFiles,
     loadingVaultFiles,
+    vaultToken,
     setupVault,
     unlockVault,
     lockVault,
@@ -37,6 +39,10 @@ export const LockedFolderScreen: React.FC = () => {
     resetPinWithRecovery,
     fetchVaultMediaItems,
   } = useVault();
+
+  const { currentUser } = useAuth();
+  // Recovery email is bound to the logged-in user's profile email
+  const userEmail = currentUser?.email?.trim() || null;
 
   // Unlock state
   const [pinDigits, setPinDigits] = useState(['', '', '', '', '', '']);
@@ -56,7 +62,6 @@ export const LockedFolderScreen: React.FC = () => {
   // Recovery modal state
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryStep, setRecoveryStep] = useState<'email' | 'code'>('email');
-  const [recoveryEmailInput, setRecoveryEmailInput] = useState('');
   const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
   const [recoveryNewPin, setRecoveryNewPin] = useState('');
   const [recoveryConfirmPin, setRecoveryConfirmPin] = useState('');
@@ -151,15 +156,15 @@ export const LockedFolderScreen: React.FC = () => {
 
   const handleRequestRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recoveryEmailInput.trim()) {
-      setRecoveryMsg({ text: 'Укажите e-mail адрес', isError: true });
+    if (!userEmail) {
+      setRecoveryMsg({ text: 'E-mail не привязан к профилю пользователя. Восстановление недоступно.', isError: true });
       return;
     }
 
     setRecoveryLoading(true);
     setRecoveryMsg(null);
 
-    const res = await requestPinRecovery(recoveryEmailInput.trim());
+    const res = await requestPinRecovery(userEmail);
     setRecoveryLoading(false);
 
     if (res.success) {
@@ -191,7 +196,7 @@ export const LockedFolderScreen: React.FC = () => {
     setRecoveryLoading(true);
     setRecoveryMsg(null);
 
-    const res = await resetPinWithRecovery(recoveryEmailInput.trim(), recoveryCodeInput.trim(), recoveryNewPin);
+    const res = await resetPinWithRecovery(userEmail || '', recoveryCodeInput.trim(), recoveryNewPin);
     setRecoveryLoading(false);
 
     if (res.success) {
@@ -466,7 +471,7 @@ export const LockedFolderScreen: React.FC = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {formattedVaultFiles.map((file, idx) => {
-              const thumbUrl = `/api/media/thumbnail?file=${encodeURIComponent(file.file_path || file.filename)}`;
+              const thumbUrl = `/api/media/thumbnail?file=${encodeURIComponent(file.file_path || file.filename)}${vaultToken ? `&vault_token=${encodeURIComponent(vaultToken)}` : ''}`;
 
               return (
                 <div
@@ -528,6 +533,7 @@ export const LockedFolderScreen: React.FC = () => {
             hasPrev={formattedVaultFiles.indexOf(selectedFile) > 0}
             hasNext={formattedVaultFiles.indexOf(selectedFile) < formattedVaultFiles.length - 1}
             onRefresh={fetchVaultMediaItems}
+            vaultToken={vaultToken}
             onMediaUpdated={(updated: any) => {
               if (updated && !updated.is_vault) {
                 // Was removed from vault
@@ -654,22 +660,20 @@ export const LockedFolderScreen: React.FC = () => {
             {recoveryStep === 'email' ? (
               <form onSubmit={handleRequestRecovery} className="space-y-3.5 mt-4">
                 <p className="text-xs text-muted-foreground">
-                  Введите e-mail адрес, указанный при настройке личной папки. Мы отправим одноразовый проверочный код.
+                  Код восстановления будет отправлен на e-mail, привязанный к вашему профилю.
                 </p>
 
-                <div>
-                  <label className="text-[11px] font-semibold text-foreground block mb-1">
-                    E-mail адрес
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={recoveryEmailInput}
-                    onChange={(e) => setRecoveryEmailInput(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full px-3 py-2 rounded-xl border border-border/80 bg-muted/30 text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
+                {userEmail ? (
+                  <div className="flex items-center gap-2.5 p-3 rounded-xl border border-border/80 bg-muted/30">
+                    <Mail size={14} className="text-primary shrink-0" />
+                    <span className="text-xs font-mono text-foreground truncate">{userEmail}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-xs">
+                    <AlertCircle size={14} />
+                    <span>E-mail не привязан к профилю пользователя. Восстановление через e-mail недоступно.</span>
+                  </div>
+                )}
 
                 {recoveryMsg && (
                   <div
@@ -695,8 +699,8 @@ export const LockedFolderScreen: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={recoveryLoading}
-                    className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-1.5"
+                    disabled={recoveryLoading || !userEmail}
+                    className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {recoveryLoading ? <RefreshCw className="animate-spin" size={13} /> : null}
                     <span>Отправить код</span>
