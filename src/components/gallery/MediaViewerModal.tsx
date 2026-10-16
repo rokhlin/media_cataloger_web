@@ -13,7 +13,27 @@ import MetadataEditorModal from './MetadataEditorModal';
 import ModuleStatusBadges from './ModuleStatusBadges';
 import AddToAlbumModal from './AddToAlbumModal';
 import { useFavorites } from '../../services/favoritesService';
-import { FolderPlus, Loader2 } from 'lucide-react';
+import {
+  FolderPlus,
+  Loader2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  Edit3,
+  Lock,
+  Unlock,
+  Trash2,
+  Sparkles,
+  User,
+  UserPlus,
+  TreePine,
+  AlertCircle,
+  Download,
+  Film,
+  Image as ImageIcon,
+} from 'lucide-react';
+import { cn } from '../../utils';
 import './MediaViewerModal.css';
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -30,22 +50,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   MILITARY: '🎖️',
   CUSTOM: '📝',
   ANNIVERSARY: '🥂',
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  BIRTH: '#10b981',
-  DEATH: '#94a3b8',
-  MARRIAGE: '#ec4899',
-  DIVORCE: '#f43f5e',
-  RELATIONSHIP: '#f43f5e',
-  CHILD_BORN: '#38bdf8',
-  GRADUATION: '#f59e0b',
-  RELOCATION: '#8b5cf6',
-  TRAVEL: '#06b6d4',
-  CAREER: '#6366f1',
-  MILITARY: '#14b8a6',
-  CUSTOM: '#a855f7',
-  ANNIVERSARY: '#eab308',
 };
 
 export interface MediaViewerModalProps {
@@ -95,15 +99,15 @@ export default function MediaViewerModal({
   disabled = false,
   isEngineConnected = true,
   onMediaUpdated,
-  vaultToken: _vaultToken,
+  vaultToken: propVaultToken,
 }: MediaViewerModalProps) {
   const { t, language } = useLanguage();
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
-  const { addVaultItem, removeVaultItem, unlockVault } = useVault();
+  const { addVaultItem, removeVaultItem, unlockVault, vaultToken: contextVaultToken } = useVault();
   const { galleryKinshipFactsConfig, treeDataVersion } = useFamilyTreeStore();
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  // Selected media state (can be updated locally on tagging/vault actions)
+  // Selected media state
   const [selectedMedia, setSelectedMedia] = useState<GalleryMediaFile | null>(() => {
     if (!mediaFile) return null;
     return {
@@ -112,6 +116,7 @@ export default function MediaViewerModal({
       similar_files_count: mediaFile.similar_files_count || seriesGroupFiles?.length,
     };
   });
+
   const [facesForSelected, setFacesForSelected] = useState<DetectedFaceRecord[]>([]);
   const [selectedFaceId, setSelectedFaceId] = useState<string | null>(null);
   const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -121,16 +126,38 @@ export default function MediaViewerModal({
   const [analysisSuccess, setAnalysisSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [videoPlaybackError, setVideoPlaybackError] = useState(false);
 
-  // Vault PIN confirmation state (shown when user clicks 'Move to vault' for a non-vault item)
+  // Vault PIN confirmation state
   const [showVaultPinModal, setShowVaultPinModal] = useState(false);
   const [vaultPinInput, setVaultPinInput] = useState('');
   const [vaultPinError, setVaultPinError] = useState<string | null>(null);
   const [vaultPinLoading, setVaultPinLoading] = useState(false);
   const [pendingVaultFilePath, setPendingVaultFilePath] = useState<string | null>(null);
 
+  // Face tagging & reassignment state
+  const [isAddingPerson, setIsAddingPerson] = useState(false);
+  const [selectedPersonToTag, setSelectedPersonToTag] = useState('');
+  const [customPersonName, setCustomPersonName] = useState('');
+  const [isTagging, setIsTagging] = useState(false);
+  const [reassigningFaceId, setReassigningFaceId] = useState<string | null>(null);
+  const [reassignTargetPerson, setReassignTargetPerson] = useState('');
+  const [reassignCustomName, setReassignCustomName] = useState('');
+  const [isReassigning, setIsReassigning] = useState(false);
+
+  // Language preview toggle inside lightbox
+  const [lightboxLang, setLightboxLang] = useState<'ru' | 'en'>(language === 'ru' ? 'ru' : 'en');
+  const activeDetailLang = lightboxLang || (language === 'ru' ? 'ru' : 'en');
 
   const [internalKnownPersons, setInternalKnownPersons] = useState<{ name: string; avatarUrl?: string | null; count: number }[]>([]);
+
+  // Effective vault token: prop token takes priority, then fallback to context token
+  const effectiveVaultToken = propVaultToken || contextVaultToken || undefined;
+  const isVaultItem = Boolean(selectedMedia?.is_vault);
+  const vaultTokenQuery = (isVaultItem || effectiveVaultToken) && effectiveVaultToken
+    ? `&vault_token=${encodeURIComponent(effectiveVaultToken)}`
+    : '';
 
   // Dynamically load known persons if not provided via props
   useEffect(() => {
@@ -183,11 +210,7 @@ export default function MediaViewerModal({
     }>();
 
     for (const f of facesForSelected) {
-      const name = (f.name || '').trim();
-      const isNamed = name && !name.toLowerCase().startsWith('face_') && !name.toLowerCase().startsWith('person_') && !['unknown', 'unnamed'].includes(name.toLowerCase());
-      
-      const key = isNamed ? `named:${name.toLowerCase()}` : (f.person_id ? `person:${f.person_id}` : 'unassigned_video_subject');
-
+      const key = (f.name || f.person_id || f.face_id || 'unknown').toLowerCase().trim();
       if (!clusters.has(key)) {
         clusters.set(key, {
           repFace: f,
@@ -211,7 +234,6 @@ export default function MediaViewerModal({
     }));
   }, [facesForSelected, selectedMedia?.is_video]);
 
-
   // Sync prop changes while preserving series group files
   useEffect(() => {
     if (mediaFile) {
@@ -229,7 +251,6 @@ export default function MediaViewerModal({
     }
   }, [mediaFile, seriesGroupFiles]);
 
-  const [videoPlaybackError, setVideoPlaybackError] = useState(false);
   useEffect(() => {
     setVideoPlaybackError(false);
     setSelectedFaceId(null);
@@ -251,7 +272,7 @@ export default function MediaViewerModal({
     setEngineOnline(isEngineConnected);
   }, [isEngineConnected]);
 
-  // Dynamically poll status to track AI engine availability in real-time
+  // Poll status to track AI engine availability in real-time
   useEffect(() => {
     if (!isOpen) return;
     let isMounted = true;
@@ -265,27 +286,25 @@ export default function MediaViewerModal({
           setEngineOnline(false);
         }
       } catch {
-        if (isMounted) {
-          setEngineOnline(false);
-        }
+        if (isMounted) setEngineOnline(false);
       }
     };
 
     verifyConnection();
-    const interval = setInterval(verifyConnection, 2500);
+    const interval = setInterval(verifyConnection, 3000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [isOpen]);
 
-  // Fetch the absolute freshest media details and sidecar analysis for the current file
+  // Fetch freshest media details including faces and AI summary
   const fetchCurrentMediaDetails = async (filePathTarget?: string) => {
     const target = filePathTarget || selectedMedia?.file_path || selectedMedia?.filename;
     if (!target) return;
     try {
       const fetchFn = authFetch || fetch;
-      const res = await fetchFn(`/api/media/file-info?file=${encodeURIComponent(target)}`);
+      const res = await fetchFn(`/api/media/file-info?file=${encodeURIComponent(target)}${vaultTokenQuery}`);
       if (res.ok) {
         const freshData: GalleryMediaFile = await res.json();
         if (freshData) {
@@ -294,18 +313,18 @@ export default function MediaViewerModal({
             return {
               ...prev,
               ...freshData,
-              // preserve client-side series grouping context
               similar_group_files: prev.similar_group_files || seriesGroupFiles,
               similar_files_count: prev.similar_files_count || seriesGroupFiles?.length,
               similarity_group_id: prev.similarity_group_id,
-              // ensure we don't accidentally wipe faces if backend returns empty during transit
               faces: (freshData.faces && freshData.faces.length > 0) ? freshData.faces : prev.faces,
               face_names: (freshData.face_names && freshData.face_names.length > 0) ? freshData.face_names : prev.face_names,
             };
           });
           if (onMediaUpdated) onMediaUpdated(freshData);
           if (Array.isArray(freshData.faces) && freshData.faces.length > 0) {
-            const validFaces = (freshData.faces as DetectedFaceRecord[]).filter((f) => Boolean(f && f.face_id));
+            const validFaces = (freshData.faces as DetectedFaceRecord[]).filter(
+              (f): f is DetectedFaceRecord => Boolean(f && typeof f.face_id === 'string')
+            );
             const uniqueFaces = Array.from(new Map(validFaces.map((f) => [f.face_id, f])).values());
             setFacesForSelected(uniqueFaces);
           }
@@ -316,194 +335,65 @@ export default function MediaViewerModal({
     }
   };
 
-  const handleAnalyzeClick = async () => {
-    if (!selectedMedia) return;
-
-    if (!isEngineConnected && !engineOnline) {
-      setAnalysisError(t('aiEngineErrorDescription') || t('aiEngineOfflineTooltip') || 'AI Engine is offline');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    setAnalysisSuccess(false);
-    setAnalysisError(null);
-    try {
-      const filePath = selectedMedia.file_path || selectedMedia.filename;
-      if (onStartSingleAnalysis) {
-        await onStartSingleAnalysis(
-          filePath,
-          () => {
-            setAnalysisSuccess(true);
-            setTimeout(() => setAnalysisSuccess(false), 5000);
-            fetchCurrentMediaDetails(filePath);
-            if (onRefresh) onRefresh();
-            if (onReloadFaces) onReloadFaces();
-
-            // Periodically re-fetch details in case AI semantics arrive a few seconds later
-            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 2000);
-            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 5000);
-            setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 10000);
-          },
-          (errMsg) => {
-            setAnalysisError(errMsg || t('aiEngineErrorDescription') || 'Analysis failed');
-          }
-        );
-      } else {
-        // Direct self-contained fallback calling backend cataloger service
-        const fetchFn = authFetch || fetch;
-        const res = await fetchFn(`/api/analyze-file?file=${encodeURIComponent(filePath)}`, {
-          method: 'POST',
-        });
-        const result = await res.json().catch(() => ({}));
-        if (res.ok) {
-          setAnalysisSuccess(true);
-          setTimeout(() => setAnalysisSuccess(false), 5000);
-          fetchCurrentMediaDetails(filePath);
-          if (onRefresh) onRefresh();
-          if (onReloadFaces) onReloadFaces();
-          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath } }));
-
-          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 2000);
-          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 5000);
-          setTimeout(() => { fetchCurrentMediaDetails(filePath); if (onRefresh) onRefresh(); }, 10000);
-        } else {
-          const errMsg = result.message || result.detail || result.error || 'Failed to start file analysis';
-          setAnalysisError(errMsg);
-        }
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : (t('aiEngineErrorDescription') || 'Analysis failed');
-      setAnalysisError(msg);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-  const [lightboxLang, setLightboxLang] = useState<'active' | 'ru' | 'en'>('active');
-
-  // Person tagging & reassignment state in Lightbox
-  const [isAddingPerson, setIsAddingPerson] = useState(false);
-  const [selectedPersonToTag, setSelectedPersonToTag] = useState('');
-  const [customPersonName, setCustomPersonName] = useState('');
-  const [isTagging, setIsTagging] = useState(false);
-
-  const [reassigningFaceId, setReassigningFaceId] = useState<string | null>(null);
-  const [reassignTargetPerson, setReassignTargetPerson] = useState('');
-  const [reassignCustomName, setReassignCustomName] = useState('');
-  const [isReassigning, setIsReassigning] = useState(false);
-  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
-
-  // Reset lightbox local UI state when media changes or modal opens
-  useEffect(() => {
-    if (selectedMedia) {
-      setLightboxLang('active');
-      setIsAddingPerson(false);
-      setIsEditingMetadata(false);
-      setSelectedPersonToTag('');
-      setCustomPersonName('');
-      setReassigningFaceId(null);
-      setReassignTargetPerson('');
-      setReassignCustomName('');
-    }
-  }, [selectedMedia?.file_path, selectedMedia?.filename]);
-
-  // Effective language for AI descriptions & EXIF
-  const activeDetailLang = lightboxLang === 'active' ? language : lightboxLang;
-
-  // Format file size
-  const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  // Format timestamp
-  const formatDate = (mtime?: number) => {
-    if (!mtime) return '';
-    try {
-      const d = new Date(mtime * 1000);
-      const loc = language === 'ru' ? 'ru-RU' : 'en-US';
-      return d.toLocaleDateString(loc) + ' ' + d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return '';
-    }
-  };
-
-  // Keyboard navigation for Lightbox
-  useEffect(() => {
-    if (!isOpen || !selectedMedia) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      } else if (e.key === 'ArrowLeft' && onPrev && (hasPrev ?? currentIndex > 0)) {
-        onPrev();
-      } else if (e.key === 'ArrowRight' && onNext && (hasNext ?? (currentIndex >= 0 && currentIndex < totalFiles - 1))) {
-        onNext();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, selectedMedia, onPrev, onNext, hasPrev, hasNext, currentIndex, totalFiles, onClose]);
-
-  // Fetch faces detected in the selected media file
+  // Fetch detected faces for current file
   useEffect(() => {
     if (!isOpen || !selectedMedia) {
       setFacesForSelected([]);
       return;
     }
 
+    if (selectedMedia.faces && selectedMedia.faces.length > 0) {
+      const validFaces = (selectedMedia.faces as DetectedFaceRecord[]).filter(
+        (f): f is DetectedFaceRecord => Boolean(f && typeof f.face_id === 'string')
+      );
+      const uniqueFaces = Array.from(new Map(validFaces.map((f) => [f.face_id, f])).values());
+      setFacesForSelected(uniqueFaces);
+      return;
+    }
+
     let isMounted = true;
     setLoadingFaces(true);
+
     const fetchFaces = async () => {
       try {
+        const filePath = selectedMedia.file_path || selectedMedia.filename;
         const fetchFn = authFetch || fetch;
-        const res = await fetchFn(
-          `/api/media/faces-for-file?file=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
-        );
+        const res = await fetchFn(`/api/faces/detect?file=${encodeURIComponent(filePath)}${vaultTokenQuery}`);
         if (res.ok && isMounted) {
           const data = await res.json();
-          const uniqueFaces = Array.isArray(data)
-            ? Array.from(new Map(data.map((f: DetectedFaceRecord) => [f.face_id, f])).values())
-            : [];
+          const rawFaces: DetectedFaceRecord[] = Array.isArray(data) ? data : (data?.faces || []);
+          const validFaces = rawFaces.filter(
+            (f): f is DetectedFaceRecord => Boolean(f && typeof f.face_id === 'string')
+          );
+          const uniqueFaces = Array.from(new Map(validFaces.map((f) => [f.face_id, f])).values());
           setFacesForSelected(uniqueFaces);
         }
       } catch (err) {
-        console.error('Failed to load faces for file:', err);
+        console.warn('Could not fetch faces for media:', err);
       } finally {
         if (isMounted) setLoadingFaces(false);
       }
     };
 
     fetchFaces();
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename, authFetch]);
+    return () => { isMounted = false; };
+  }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename, vaultTokenQuery, authFetch]);
 
-  // Dynamically analyze & refresh photo kinship and contextual milestones
+  // Family tree kinship context fetching
   useEffect(() => {
     if (!isOpen || !selectedMedia) return;
-    const filePath = selectedMedia.file_path || selectedMedia.filename;
-    if (!filePath) return;
-
     let isMounted = true;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
 
-    // Collect all known names and face IDs for the current file
     const namesSet = new Set<string>();
-    if (Array.isArray(selectedMedia.face_names)) {
+    if (selectedMedia.face_names) {
       selectedMedia.face_names.forEach((n) => {
         if (n && typeof n === 'string' && n.trim()) namesSet.add(n.trim());
       });
     }
-    if (Array.isArray(facesForSelected)) {
+    if (facesForSelected) {
       facesForSelected.forEach((f) => {
         if (f.name && typeof f.name === 'string' && f.name.trim()) namesSet.add(f.name.trim());
-      });
-    }
-    if (selectedMedia.family_context?.identified_members) {
-      selectedMedia.family_context.identified_members.forEach((m) => {
-        if (m.name && typeof m.name === 'string' && m.name.trim()) namesSet.add(m.name.trim());
       });
     }
 
@@ -516,7 +406,6 @@ export default function MediaViewerModal({
     );
     const personNames = Array.from(namesSet);
 
-    // If there are no person names or faces, and no existing family context, skip
     if (personNames.length === 0 && faceIds.length === 0 && !selectedMedia.family_context) {
       return;
     }
@@ -531,22 +420,11 @@ export default function MediaViewerModal({
             face_ids: faceIds.length > 0 ? faceIds : undefined,
             person_names: personNames.length > 0 ? personNames : undefined,
             media_file_path: filePath,
-            media_date:
-              selectedMedia.media_date ||
-              selectedMedia.capture_date ||
-              (() => {
-                const name = selectedMedia.filename || selectedMedia.file_path || '';
-                const m = name.match(/(\d{4})[-_](\d{2})[-_](\d{2})/);
-                if (m) {
-                  return `${m[1]}-${m[2]}-${m[3]}`;
-                }
-                return selectedMedia.mtime ? new Date(selectedMedia.mtime * 1000).toISOString() : undefined;
-              })(),
-            gallery_facts_scope: galleryKinshipFactsConfig.scope,
-            only_close_events: galleryKinshipFactsConfig.onlyCloseEvents,
-            period_before_days: galleryKinshipFactsConfig.periodBeforeDays,
-            close_event_types: galleryKinshipFactsConfig.closeEventTypes,
-            enabled: galleryKinshipFactsConfig.enabled,
+            gallery_facts_scope: galleryKinshipFactsConfig?.scope,
+            only_close_events: galleryKinshipFactsConfig?.onlyCloseEvents,
+            period_before_days: galleryKinshipFactsConfig?.periodBeforeDays,
+            close_event_types: galleryKinshipFactsConfig?.closeEventTypes,
+            enabled: galleryKinshipFactsConfig?.enabled,
           }),
         });
 
@@ -586,12 +464,8 @@ export default function MediaViewerModal({
     };
 
     fetchKinship();
-
-    const handleTreeUpdated = () => {
-      if (isMounted) fetchKinship();
-    };
+    const handleTreeUpdated = () => { if (isMounted) fetchKinship(); };
     window.addEventListener('family_tree_updated', handleTreeUpdated);
-
     return () => {
       isMounted = false;
       window.removeEventListener('family_tree_updated', handleTreeUpdated);
@@ -606,7 +480,42 @@ export default function MediaViewerModal({
     authFetch,
   ]);
 
-  // Tag / Link a known or new Person to the selected media file
+  // AI single analysis click handler
+  const handleAnalyzeClick = async () => {
+    if (!selectedMedia) return;
+    if (!isEngineConnected && !engineOnline) {
+      setAnalysisError(t('aiEngineErrorDescription') || t('aiEngineOfflineTooltip') || 'AI Engine is offline');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisSuccess(false);
+    setAnalysisError(null);
+    try {
+      const filePath = selectedMedia.file_path || selectedMedia.filename;
+      if (onStartSingleAnalysis) {
+        await onStartSingleAnalysis(
+          filePath,
+          () => {
+            setAnalysisSuccess(true);
+            setTimeout(() => setAnalysisSuccess(false), 5000);
+            fetchCurrentMediaDetails(filePath);
+            if (onRefresh) onRefresh();
+            if (onReloadFaces) onReloadFaces();
+          },
+          (errMsg) => {
+            setAnalysisError(errMsg);
+          }
+        );
+      }
+    } catch (err: any) {
+      setAnalysisError(err.message || 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Tag person handler
   const handleTagPerson = async () => {
     if (!selectedMedia) return;
     const targetName = selectedPersonToTag === '__custom__' ? customPersonName.trim() : selectedPersonToTag.trim();
@@ -644,18 +553,11 @@ export default function MediaViewerModal({
         };
         setSelectedMedia(updated);
         if (onMediaUpdated) onMediaUpdated(updated);
-        setInternalKnownPersons((prev) => {
-          if (prev.some((p) => p.name.toLowerCase() === targetName.toLowerCase())) return prev;
-          return [...prev, { name: targetName, count: 1, avatarUrl: null }];
-        });
         setSelectedPersonToTag('');
         setCustomPersonName('');
         setIsAddingPerson(false);
         if (onRefresh) onRefresh();
         if (onReloadFaces) onReloadFaces();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || err.message || 'Failed to tag person');
       }
     } catch (err) {
       console.error('Failed to tag person:', err);
@@ -664,7 +566,7 @@ export default function MediaViewerModal({
     }
   };
 
-  // Remove or unlink a face / person from the selected media file
+  // Remove face handler
   const handleRemoveFace = async (faceIdOrIds: string | string[]) => {
     if (!selectedMedia) return;
     const ids = Array.isArray(faceIdOrIds) ? faceIdOrIds : [faceIdOrIds];
@@ -698,7 +600,7 @@ export default function MediaViewerModal({
     }
   };
 
-  // Reassign a detected face to a known or new Person
+  // Reassign face handler
   const handleReassignFace = async (faceIdOrIds: string | string[], targetName: string) => {
     if (!selectedMedia || !targetName.trim()) return;
     const trimmed = targetName.trim();
@@ -729,10 +631,6 @@ export default function MediaViewerModal({
         faces: updatedFaces,
       };
       setSelectedMedia(updated);
-      setInternalKnownPersons((prev) => {
-        if (prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) return prev;
-        return [...prev, { name: trimmed, count: 1, avatarUrl: null }];
-      });
       if (onMediaUpdated) onMediaUpdated(updated);
       setReassigningFaceId(null);
       setReassignTargetPerson('');
@@ -752,331 +650,351 @@ export default function MediaViewerModal({
     if (onRefresh) onRefresh();
   };
 
+  // Keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showVaultPinModal || isAddingPerson || reassigningFaceId || isEditingMetadata || isAddToAlbumOpen) {
+        return;
+      }
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'ArrowLeft' && onPrev && hasPrev) {
+        onPrev();
+      } else if (e.key === 'ArrowRight' && onNext && hasNext) {
+        onNext();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, onPrev, onNext, hasPrev, hasNext, showVaultPinModal, isAddingPerson, reassigningFaceId, isEditingMetadata, isAddToAlbumOpen]);
+
   if (!isOpen || !selectedMedia) {
     return null;
   }
 
+  const formatBytes = (bytes?: number) => {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (timestamp?: number | string) => {
+    if (!timestamp) return '—';
+    const d = typeof timestamp === 'number' ? new Date(timestamp * 1000) : new Date(timestamp);
+    if (isNaN(d.getTime())) return String(timestamp);
+    return d.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const isPrevDisabled = hasPrev !== undefined ? !hasPrev : currentIndex <= 0;
   const isNextDisabled = hasNext !== undefined ? !hasNext : currentIndex < 0 || currentIndex >= totalFiles - 1;
 
+  // Media source URLs with vault authorization parameter attached
+  const fileTarget = selectedMedia.file_path || selectedMedia.filename;
+  const isHeic = /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '');
+  const mainImageSrc = isHeic
+    ? `/api/media/thumbnail?path=${encodeURIComponent(fileTarget)}&size=1920${vaultTokenQuery}`
+    : `/api/media/file?path=${encodeURIComponent(fileTarget)}${vaultTokenQuery}`;
+
+  const videoStreamSrc = `/api/media/file?path=${encodeURIComponent(fileTarget)}${vaultTokenQuery}`;
+  const videoPosterSrc = `/api/media/thumbnail?path=${encodeURIComponent(fileTarget)}&size=1920${vaultTokenQuery}`;
+  const videoDownloadHref = `/api/media/file?path=${encodeURIComponent(fileTarget)}&download=true${vaultTokenQuery}`;
+
   return (
     <>
-      <div className="modal-overlay active" onClick={onClose}>
+      <div
+        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200"
+        onClick={onClose}
+      >
         <div
-          className="modal-card media-lightbox-card"
+          className="relative w-full max-w-7xl h-[94vh] bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-foreground backdrop-blur-2xl"
           onClick={(e) => e.stopPropagation()}
-          style={{ maxWidth: '1120px', width: '92vw', padding: 0 }}
         >
-          {/* Lightbox Header */}
-          <div className="media-lightbox-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', minWidth: 0 }}>
-              <span style={{ fontSize: '1.2rem' }}>{selectedMedia.is_video ? '🎥' : '📷'}</span>
-              <div style={{ minWidth: 0 }}>
-                <h3 className="media-lightbox-title" title={selectedMedia.filename}>
-                  {selectedMedia.filename}
-                </h3>
-                <span className="media-lightbox-subtitle">
+          {/* Header */}
+          <header className="flex items-center justify-between px-5 py-3 border-b border-border/80 bg-muted/20 shrink-0">
+            <div className="flex items-center gap-3 min-w-0 pr-4">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                {selectedMedia.is_video ? <Film size={18} /> : <ImageIcon size={18} />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-foreground truncate max-w-xs sm:max-w-md md:max-w-lg" title={selectedMedia.filename}>
+                    {selectedMedia.filename}
+                  </h3>
+                  {selectedMedia.is_vault && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold flex items-center gap-1">
+                      <Lock size={10} />
+                      <span>Личная папка</span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">
                   {formatBytes(selectedMedia.file_size)} • {formatDate(selectedMedia.mtime)}
-                </span>
+                </p>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {/* Language View Switcher inside Lightbox */}
-              <div
-                className="lang-switcher-wrap"
-                style={{ marginRight: '0.5rem' }}
-                title={t('langPreviewToggle')}
-              >
+            {/* Controls */}
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              {/* Language switcher */}
+              <div className="flex items-center rounded-xl bg-muted/40 p-0.5 border border-border/60 text-xs mr-1 sm:mr-2">
                 <button
                   type="button"
-                  className={`lang-btn ${activeDetailLang === 'ru' ? 'active' : ''}`}
                   onClick={() => setLightboxLang('ru')}
-                  title="Русский"
+                  className={cn(
+                    'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
+                    activeDetailLang === 'ru'
+                      ? 'bg-card text-primary shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
                 >
-                  🇷🇺 RU
+                  RU
                 </button>
                 <button
                   type="button"
-                  className={`lang-btn ${activeDetailLang === 'en' ? 'active' : ''}`}
                   onClick={() => setLightboxLang('en')}
-                  title="English"
+                  className={cn(
+                    'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
+                    activeDetailLang === 'en'
+                      ? 'bg-card text-primary shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
                 >
-                  🇬🇧 EN
+                  EN
                 </button>
               </div>
 
+              {/* Prev / Next navigation */}
               {onPrev && (
                 <button
-                  className="btn-icon"
+                  type="button"
                   onClick={onPrev}
                   disabled={isPrevDisabled}
-                  title={t('prevImageTooltip')}
-                  type="button"
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title={t('prevImageTooltip') || 'Предыдущее'}
                 >
-                  ◀
+                  <ChevronLeft size={16} />
                 </button>
               )}
 
               {totalFiles > 0 && currentIndex >= 0 && (
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0 0.3rem' }}>
+                <span className="text-[11px] font-mono font-medium text-muted-foreground px-1">
                   {currentIndex + 1} / {totalFiles}
                 </span>
               )}
 
               {onNext && (
                 <button
-                  className="btn-icon"
+                  type="button"
                   onClick={onNext}
                   disabled={isNextDisabled}
-                  title={t('nextImageTooltip')}
-                  type="button"
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title={t('nextImageTooltip') || 'Следующее'}
                 >
-                  ▶
+                  <ChevronRight size={16} />
                 </button>
               )}
 
+              {/* Favorite toggle */}
               <button
-                className="btn-icon favorite-toggle-btn"
+                type="button"
                 onClick={() => {
-                  const target = selectedMedia?.file_path || selectedMedia?.filename;
+                  const target = selectedMedia.file_path || selectedMedia.filename;
                   if (target) toggleFavorite(target);
                 }}
-                title={isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? 'Удалить из избранного' : 'Добавить в избранное'}
-                aria-label="Избранное"
-                type="button"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.05rem',
-                  padding: '0 0.35rem',
-                  color: isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? '#e74040' : 'var(--text-secondary)',
-                }}
+                className={cn(
+                  'w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center transition-colors',
+                  isFavorite(selectedMedia.file_path || selectedMedia.filename)
+                    ? 'text-rose-500 bg-rose-500/10 border-rose-500/30'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                )}
+                title={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'Удалить из избранного' : 'Добавить в избранное'}
               >
-                {isFavorite(selectedMedia?.file_path || selectedMedia?.filename) ? '❤️' : '🤍'}
+                <Heart size={16} fill={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'currentColor' : 'none'} />
               </button>
 
+              {/* Add to album */}
               <button
-                className="btn-icon add-to-album-btn"
+                type="button"
                 onClick={() => setIsAddToAlbumOpen(true)}
+                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
                 title="Добавить в альбом"
-                aria-label="Добавить в альбом"
-                type="button"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '0 0.35rem',
-                  color: 'var(--text-secondary)',
-                }}
               >
-                <FolderPlus size={18} />
+                <FolderPlus size={16} />
               </button>
 
+              {/* Close */}
               <button
-                className="close-btn"
-                onClick={onClose}
                 type="button"
-                title={t('closeTooltip')}
-                style={{ marginLeft: '0.5rem' }}
+                onClick={onClose}
+                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition-colors ml-1"
+                title={t('closeTooltip') || 'Закрыть'}
               >
-                &times;
+                <X size={16} />
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* Lightbox Main Content Grid */}
-          <div className="media-lightbox-body">
-            {/* Media Preview Viewport */}
-            <div className="media-lightbox-preview">
-              <div className="media-preview-content">
+          {/* Main Body Grid */}
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+            {/* Viewport */}
+            <div className="flex-1 bg-black/70 relative flex flex-col items-center justify-center min-h-0 min-w-0 p-3 overflow-hidden group">
+              {/* Media Container */}
+              <div className="flex-1 w-full h-full flex items-center justify-center relative min-h-0 overflow-hidden">
                 {selectedMedia.is_video ? (
-                  <div className="media-lightbox-video-wrap">
+                  <div className="w-full h-full flex items-center justify-center relative">
                     {!videoPlaybackError ? (
                       <video
                         key={selectedMedia.file_path || selectedMedia.filename}
-                        src={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                        poster={`/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`}
+                        src={videoStreamSrc}
+                        poster={videoPosterSrc}
                         controls
                         autoPlay
                         playsInline
                         preload="metadata"
-                        className="media-lightbox-video"
+                        className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
                         onError={() => setVideoPlaybackError(true)}
                       />
                     ) : (
-                      <div className="media-lightbox-video-fallback">
-                        <img
-                          src={`/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`}
-                          alt="Video thumbnail preview"
-                          className="media-lightbox-video-fallback-img"
-                        />
-                        <div className="media-lightbox-video-fallback-overlay">
-                          <span style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎥</span>
-                          <p style={{ margin: '0 0 0.4rem', fontWeight: 600, color: '#f8fafc', fontSize: '1rem' }}>
-                            {selectedMedia.filename}
-                          </p>
-                          <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: '#94a3b8', maxWidth: '420px', lineHeight: 1.4 }}>
-                            {t('videoCodecNotice' as any) ||
-                              'This video format (.MOV / HEVC) cannot be played directly by the browser. You can download or play it with your local media player.'}
-                          </p>
-                          <a
-                            href={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&download=true`}
-                            download={selectedMedia.filename}
-                            className="btn btn-primary"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}
-                          >
-                            ⬇️ {t('downloadVideo' as any) || 'Download Original Video'}
-                          </a>
+                      <div className="flex flex-col items-center justify-center text-center p-6 bg-card/60 border border-border/80 rounded-3xl max-w-md shadow-2xl backdrop-blur-md">
+                        <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+                          <Film size={32} />
                         </div>
+                        <h4 className="text-sm font-bold text-foreground mb-1">{selectedMedia.filename}</h4>
+                        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                          {t('videoCodecNotice' as any) ||
+                            'Этот формат видео (.MOV / HEVC) не воспроизводится встроенным проигрывателем браузера. Вы можете скачать исходный файл.'}
+                        </p>
+                        <a
+                          href={videoDownloadHref}
+                          download={selectedMedia.filename}
+                          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center gap-2 shadow-xs transition-colors"
+                        >
+                          <Download size={14} />
+                          <span>{t('downloadVideo' as any) || 'Скачать видео'}</span>
+                        </a>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <>
-                    <div
-                      className="media-lightbox-image-wrapper"
-                      style={{
-                        position: 'relative',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        maxWidth: '100%',
-                        maxHeight: '100%',
+                  <div className="relative inline-flex items-center justify-center max-w-full max-h-full">
+                    <img
+                      src={mainImageSrc}
+                      alt={selectedMedia.filename}
+                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl transition-all"
+                      onLoad={(e) => {
+                        const target = e.currentTarget;
+                        setImageNaturalDimensions({
+                          width: target.naturalWidth,
+                          height: target.naturalHeight,
+                        });
                       }}
-                    >
-                      <img
-                        src={
-                          /\.(heic|heif)$/i.test(selectedMedia.filename || selectedMedia.file_path || '')
-                            ? `/api/media/thumbnail?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}&size=1920`
-                            : `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`
-                        }
-                        alt={selectedMedia.filename}
-                        className="media-lightbox-image"
-                        onLoad={(e) => {
-                          const target = e.currentTarget;
-                          setImageNaturalDimensions({
-                            width: target.naturalWidth,
-                            height: target.naturalHeight,
-                          });
-                        }}
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const fallback = target.closest('.media-preview-content')?.querySelector('.media-lightbox-fallback') as HTMLElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.parentElement?.querySelector('.image-fallback-view') as HTMLElement;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
 
-                      {/* Green semi-transparent highlight rectangle for selected face/person */}
-                      {(() => {
-                        if (!selectedFaceId || !imageNaturalDimensions || !imageNaturalDimensions.width || !imageNaturalDimensions.height) {
-                          return null;
-                        }
-                        const face = facesForSelected.find((f) => f.face_id === selectedFaceId);
-                        if (!face) return null;
-                        const rawBbox = face.bbox || (face as any).bounding_box;
-                        let bbox: number[] | null = null;
-                        if (Array.isArray(rawBbox)) {
-                          bbox = rawBbox;
-                        } else if (typeof rawBbox === 'string') {
-                          try {
-                            bbox = JSON.parse(rawBbox);
-                          } catch {
-                            bbox = null;
-                          }
-                        }
-                        if (!bbox || bbox.length < 4) return null;
+                    {/* Interactive green highlight for selected face */}
+                    {(() => {
+                      if (!selectedFaceId || !imageNaturalDimensions?.width || !imageNaturalDimensions?.height) {
+                        return null;
+                      }
+                      const face = facesForSelected.find((f) => f.face_id === selectedFaceId);
+                      if (!face) return null;
+                      const rawBbox = face.bbox || (face as any).bounding_box;
+                      let bbox: number[] | null = null;
+                      if (Array.isArray(rawBbox)) {
+                        bbox = rawBbox;
+                      } else if (typeof rawBbox === 'string') {
+                        try { bbox = JSON.parse(rawBbox); } catch { bbox = null; }
+                      }
+                      if (!bbox || bbox.length < 4) return null;
 
-                        const [x1, y1, x2, y2] = bbox;
-                        const nw = imageNaturalDimensions.width;
-                        const nh = imageNaturalDimensions.height;
-                        const leftPct = Math.max(0, Math.min(100, (x1 / nw) * 100));
-                        const topPct = Math.max(0, Math.min(100, (y1 / nh) * 100));
-                        const widthPct = Math.max(0, Math.min(100 - leftPct, ((x2 - x1) / nw) * 100));
-                        const heightPct = Math.max(0, Math.min(100 - topPct, ((y2 - y1) / nh) * 100));
+                      const [x1, y1, x2, y2] = bbox;
+                      const nw = imageNaturalDimensions.width;
+                      const nh = imageNaturalDimensions.height;
+                      const leftPct = Math.max(0, Math.min(100, (x1 / nw) * 100));
+                      const topPct = Math.max(0, Math.min(100, (y1 / nh) * 100));
+                      const widthPct = Math.max(0, Math.min(100 - leftPct, ((x2 - x1) / nw) * 100));
+                      const heightPct = Math.max(0, Math.min(100 - topPct, ((y2 - y1) / nh) * 100));
 
-                        return (
-                          <div
-                            className="face-highlight-rect"
-                            style={{
-                              position: 'absolute',
-                              left: `${leftPct}%`,
-                              top: `${topPct}%`,
-                              width: `${widthPct}%`,
-                              height: `${heightPct}%`,
-                              backgroundColor: 'rgba(34, 197, 94, 0.25)',
-                              border: '2px solid #22c55e',
-                              borderRadius: '4px',
-                              boxShadow: '0 0 14px rgba(34, 197, 94, 0.6), inset 0 0 8px rgba(34, 197, 94, 0.2)',
-                              pointerEvents: 'none',
-                              zIndex: 10,
-                              transition: 'all 0.15s ease-out',
-                            }}
-                          >
-                            <div
-                              className="face-highlight-label"
-                              style={{
-                                position: 'absolute',
-                                bottom: '100%',
-                                left: '0',
-                                marginBottom: '4px',
-                                background: 'rgba(20, 83, 45, 0.95)',
-                                border: '1px solid #22c55e',
-                                color: '#f0fdf4',
-                                fontSize: '0.72rem',
-                                fontWeight: 600,
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                whiteSpace: 'nowrap',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                              }}
-                            >
-                              <span>{face.name || face.face_id}</span>
-                              <span style={{ opacity: 0.85, fontSize: '0.68rem', fontFamily: 'monospace' }}>
-                                [{x1}, {y1}, {x2}, {y2}]
-                              </span>
-                            </div>
+                      return (
+                        <div
+                          className="absolute border-2 border-emerald-500 bg-emerald-500/20 rounded-lg pointer-events-none z-20 shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all"
+                          style={{
+                            left: `${leftPct}%`,
+                            top: `${topPct}%`,
+                            width: `${widthPct}%`,
+                            height: `${heightPct}%`,
+                          }}
+                        >
+                          <div className="absolute bottom-full left-0 mb-1.5 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500 text-emerald-200 text-[11px] font-semibold whitespace-nowrap flex items-center gap-1.5 shadow-lg">
+                            <span>{face.name || face.face_id}</span>
                           </div>
-                        );
-                      })()}
-                    </div>
+                        </div>
+                      );
+                    })()}
 
-                    <div className="media-lightbox-fallback">
-                      <span style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>📷</span>
-                      <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {selectedMedia.filename}
-                      </p>
-                      <span style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                        {selectedMedia.file_path}
-                      </span>
+                    {/* Image loading/error fallback */}
+                    <div className="image-fallback-view hidden flex-col items-center justify-center p-8 bg-card/40 border border-border/80 rounded-3xl text-center">
+                      <ImageIcon size={48} className="text-muted-foreground/60 mb-2" />
+                      <p className="text-sm font-semibold text-foreground">{selectedMedia.filename}</p>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm truncate">{selectedMedia.file_path}</p>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
+              {/* Navigation overlays */}
+              {onPrev && hasPrev && (
+                <button
+                  type="button"
+                  onClick={onPrev}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg"
+                  title="Предыдущее (Стрелка влево)"
+                >
+                  <ChevronLeft size={22} />
+                </button>
+              )}
+              {onNext && hasNext && (
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg"
+                  title="Следующее (Стрелка вправо)"
+                >
+                  <ChevronRight size={22} />
+                </button>
+              )}
+
               {/* Similar & Burst Series Minimap Filmstrip */}
               {effectiveGroupFiles && effectiveGroupFiles.length > 1 && (
-                <div className="media-viewer-similarity-strip">
-                  <div className="similarity-strip-title">
-                    <span>{t('similarPhotosInGroup')} ({effectiveGroupFiles.length})</span>
+                <div className="w-full max-w-xl mx-auto mt-2 p-2 rounded-2xl bg-card/80 border border-border/80 backdrop-blur-md shadow-xl flex flex-col gap-1.5 shrink-0 z-10">
+                  <div className="flex items-center justify-between text-[11px] px-1 font-semibold text-primary">
+                    <span>{t('similarPhotosInGroup') || 'Серия похожих снимков'} ({effectiveGroupFiles.length})</span>
                   </div>
-                  <div className="similarity-strip-thumbs">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                     {effectiveGroupFiles.map((simFile: GalleryMediaFile, idx: number) => {
                       const isCurrent =
                         (simFile.file_path && simFile.file_path === selectedMedia?.file_path) ||
                         (simFile.filename && simFile.filename === selectedMedia?.filename);
-                      const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(simFile.file_path || simFile.filename)}&size=150`;
+                      const thumbUrl = `/api/media/thumbnail?path=${encodeURIComponent(simFile.file_path || simFile.filename)}&size=150${vaultTokenQuery}`;
 
                       return (
                         <button
                           key={simFile.file_path || simFile.filename || idx}
                           type="button"
-                          className={`similarity-strip-thumb ${isCurrent ? 'active' : ''}`}
                           onClick={() => {
                             const updatedSimFile = {
                               ...simFile,
@@ -1088,40 +1006,23 @@ export default function MediaViewerModal({
                             fetchCurrentMediaDetails(updatedSimFile.file_path || updatedSimFile.filename);
                             if (onMediaUpdated) onMediaUpdated(updatedSimFile);
                           }}
+                          className={cn(
+                            'relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer',
+                            isCurrent
+                              ? 'border-primary ring-2 ring-primary/40 scale-105'
+                              : 'border-transparent hover:border-border'
+                          )}
                           title={`${simFile.filename} (#${idx + 1})`}
                         >
                           <img
                             src={thumbUrl}
                             alt={simFile.filename}
                             loading="lazy"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const fallback = target.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
+                            className="w-full h-full object-cover"
                           />
-                          <div
-                            className="similarity-thumb-fallback"
-                            style={{
-                              display: 'none',
-                              width: '100%',
-                              height: '100%',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              background: '#1e1b4b',
-                              fontSize: '1rem',
-                            }}
-                          >
-                            {simFile.is_video ? '🎥' : '📷'}
-                          </div>
-                          <span className="strip-index-badge">#{idx + 1}</span>
-                          {simFile.is_video && (
-                            <span className="strip-video-indicator" title="Video">▶</span>
-                          )}
-                          {simFile.is_primary_in_group && (
-                            <span className="strip-primary-badge" title="Representative Primary">★</span>
-                          )}
+                          <span className="absolute bottom-0.5 left-0.5 px-1 py-0.2 bg-black/75 rounded text-[9px] font-mono font-bold text-white leading-none">
+                            #{idx + 1}
+                          </span>
                         </button>
                       );
                     })}
@@ -1130,817 +1031,371 @@ export default function MediaViewerModal({
               )}
             </div>
 
-            {/* Media Sidebar / Details Panel */}
-            <div className="media-lightbox-sidebar">
-              {/* File Details Section */}
-              <div className="lightbox-section">
-                <div className="btn-edit-metadata-button" style={{ display: 'flex', justifyContent: 'left', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  {isAdmin && (
+            {/* Sidebar / Info Panel */}
+            <div className="w-full md:w-80 lg:w-96 border-t md:border-t-0 md:border-l border-border/80 bg-card/60 backdrop-blur-md flex flex-col overflow-y-auto text-xs divide-y divide-border/60 shrink-0">
+              {/* File details card */}
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    {t('fileDetails') || 'Сведения о файле'}
+                  </h4>
+                  {canEdit && selectedMedia.status === 'PROCESSED' && (
                     <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem'}}
-                      onClick={async () => {
-                        const filePath = selectedMedia.file_path || selectedMedia.filename;
-                        if (selectedMedia.is_vault) {
-                          await removeVaultItem(filePath);
-                          const updated = { ...selectedMedia, is_vault: false };
-                          setSelectedMedia(updated);
-                          if (onMediaUpdated) onMediaUpdated(updated);
-                          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
-                        } else {
-                          await addVaultItem(filePath);
-                          const updated = { ...selectedMedia, is_vault: true };
-                          setSelectedMedia(updated);
-                          if (onMediaUpdated) onMediaUpdated(updated);
-                          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: true } }));
-                        }
-                        if (onRefresh) onRefresh();
-                      }}
                       type="button"
-                      title={selectedMedia.is_vault
-                        ? `🔒 ${t('vaultRemoveFromVault' as any) || 'Убрать из личной папки'}`
-                        : `🔓 ${t('vaultAddToVault' as any) || 'Переместить в личную папку'}`}
+                      onClick={() => setIsEditingMetadata(true)}
+                      className="px-2 py-1 rounded-lg border border-border/80 hover:bg-muted text-[11px] font-semibold text-primary transition-colors flex items-center gap-1"
                     >
-                      {selectedMedia.is_vault
-                        ? `🔒`
-                        : `🔓`}
+                      <Edit3 size={11} />
+                      <span>{t('btnEditMetadata') || 'Изменить'}</span>
                     </button>
                   )}
-                  <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <h4 className="lightbox-section-title" style={{ margin: 0 }}>{t('fileDetails')}</h4>
-                    {canEdit && selectedMedia.status === 'PROCESSED' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                        onClick={() => setIsEditingMetadata(true)}
-                        title={t('btnEditMetadata')}
-                      >
-                        {t('btnEditMetadata')}
-                      </button>
-                    )}
-                  </div>
                 </div>
-                <div className="lightbox-detail-row">
-                  <span className="lightbox-label">{t('fullPath')}:</span>
-                  <span className="lightbox-value" title={selectedMedia.file_path || selectedMedia.filename}>
-                    {selectedMedia.file_path || selectedMedia.filename}
-                  </span>
-                </div>
-                <div className="lightbox-detail-row" style={{ alignItems: 'flex-start' }}>
-                  <span className="lightbox-label">{t('status')}:</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1 }}>
-                    <span
-                      className={`badge-pill ${selectedMedia.status === 'PROCESSED'
-                        ? 'badge-pill-success'
-                        : selectedMedia.status === 'PENDING'
-                          ? 'badge-pill-warning'
-                          : 'badge-pill-secondary'
-                        }`}
-                      style={{ alignSelf: 'flex-start' }}
-                    >
-                      {selectedMedia.status || 'UNPROCESSED'}
+
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">{t('fullPath') || 'Путь'}:</span>
+                    <span className="font-mono text-[11px] text-foreground text-right break-all truncate max-w-[200px]" title={selectedMedia.file_path || selectedMedia.filename}>
+                      {selectedMedia.file_path || selectedMedia.filename}
                     </span>
-                    <ModuleStatusBadges media={selectedMedia} variant="chips" />
                   </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">{t('status') || 'Статус'}:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          'px-2 py-0.5 rounded-md text-[10px] font-bold uppercase',
+                          selectedMedia.status === 'PROCESSED'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : selectedMedia.status === 'PENDING'
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {selectedMedia.status || 'UNPROCESSED'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedMedia.media_date && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Дата съёмки:</span>
+                      <span className="font-medium text-foreground">{selectedMedia.media_date}</span>
+                    </div>
+                  )}
+
+                  {selectedMedia.location_name && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Место:</span>
+                      <span className="font-medium text-foreground truncate max-w-[180px]" title={selectedMedia.location_name}>
+                        {selectedMedia.location_name}
+                      </span>
+                    </div>
+                  )}
+
+                  {Boolean(selectedMedia.camera_make || selectedMedia.camera_model) && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Камера:</span>
+                      <span className="font-medium text-foreground truncate max-w-[180px]">
+                        {[selectedMedia.camera_make, selectedMedia.camera_model].filter(Boolean).join(' ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-1">
+                  <ModuleStatusBadges media={selectedMedia} variant="chips" />
                 </div>
               </div>
 
-              {/* Family Tree Kinship & Context Section */}
+              {/* Family Context & Kinship */}
               {Boolean(
                 selectedMedia.family_context?.suggested_caption ||
-                (selectedMedia.family_context?.identified_members &&
-                  selectedMedia.family_context.identified_members.length > 0) ||
-                (selectedMedia.family_context?.milestones &&
-                  selectedMedia.family_context.milestones.length > 0)
+                (selectedMedia.family_context?.identified_members && selectedMedia.family_context.identified_members.length > 0) ||
+                (selectedMedia.family_context?.relationships && selectedMedia.family_context.relationships.length > 0) ||
+                (selectedMedia.family_context?.milestones && selectedMedia.family_context.milestones.length > 0)
               ) && (
-                  <div className="lightbox-section lightbox-family-context">
-                    {selectedMedia.family_context?.relationships &&
-                      selectedMedia.family_context.relationships.length > 0 && (
-                        <div className="lightbox-family-relationships">
-                          {selectedMedia.family_context.relationships.map((rel, idx) => {
-                            const p1 = rel.person1 || (rel as any).personA || (rel as any).person_a;
-                            const p2 = rel.person2 || (rel as any).personB || (rel as any).person_b;
-                            const r = rel.relationship || (rel as any).kinshipAtoB || (rel as any).kinship;
-                            return (
-                              <div key={idx}>
-                                💞 <strong style={{ color: 'var(--text-primary)' }}>{p1}</strong> &amp;{' '}
-                                <strong style={{ color: 'var(--text-primary)' }}>{p2}</strong>: {r}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                    {(() => {
-                      const rawMilestones = selectedMedia.family_context?.milestones;
-                      if (!rawMilestones || rawMilestones.length === 0) return null;
-
-                      const uniqueMilestones: typeof rawMilestones = [];
-                      const seenCoupleKeys = new Set<string>();
-                      const seenSharedKeys = new Set<string>();
-
-                      for (const ms of rawMilestones) {
-                        const pName = (ms.personName || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-                        const title = (ms.title || '').trim();
-                        const titleLower = title.toLowerCase();
-                        const date = (ms.date || '').trim();
-
-                        // Reciprocal couple duplicate check (e.g. "Partnership with Oxana Wagner" on Anton and "Partnership with Anton Rokhlin" on Oxana)
-                        const partnerMatch = titleLower
-                          .replace(/^(partnership with|married to|married|divorced from|divorced|separated from|брак с|партнерство с|развод с)\s+/i, '')
-                          .trim();
-                        if (partnerMatch && partnerMatch !== titleLower) {
-                          const coupleKey = [pName, partnerMatch].sort().join('___') + '_' + date;
-                          if (seenCoupleKeys.has(coupleKey)) continue;
-                          seenCoupleKeys.add(coupleKey);
-                        }
-
-                        // Exact same title & date across different relatives
-                        const sharedKey = `${titleLower}_${date}`;
-                        if (seenSharedKeys.has(sharedKey)) continue;
-                        seenSharedKeys.add(sharedKey);
-
-                        uniqueMilestones.push(ms);
-                      }
-
-                      if (uniqueMilestones.length === 0) return null;
-
-                      return (
-                        <div className="lightbox-family-milestones" style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))', paddingTop: '0.5rem' }}>
-                          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                            <span className="lightbox-family-caption">
-                              ✨ Important facts for You
-                            </span>
-                            {selectedMedia.family_context?.identified_members &&
-                              selectedMedia.family_context.identified_members.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                                  {selectedMedia.family_context.identified_members.map((m) => {
-                                    return (
-                                      <button
-                                        key={m.name}
-                                        type="button"
-                                        className="badge-pill"
-                                        style={{
-                                          background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.25))',
-                                          border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.5))',
-                                          color: 'var(--text-primary)',
-                                          cursor: onViewInFamilyTree ? 'pointer' : 'default',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '0.25rem',
-                                        }}
-                                        onClick={() => {
-                                          if (onViewInFamilyTree) {
-                                            onClose();
-                                            onViewInFamilyTree(m.name);
-                                          }
-                                        }}
-                                        title={onViewInFamilyTree ? t('viewInFamilyTree', { name: m.name }) : m.name}
-                                      >
-                                        <span className="lightbox-badge-pill-text-variant-1">👤 {m.name}</span>
-                                        <span className="lightbox-badge-pill-text-variant-2" style={{ color: 'var(--primary-color)', fontWeight: 700 }}>Me In Family Tree</span>
-
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                          </div>
-                          <div
-                            className="lightbox-family-milestones-list"
-                            style={{
-                              maxHeight: 280,
-                              overflowY: 'auto',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '0.4rem',
-                              paddingRight: '4px',
-                            }}
-                          >
-                            {uniqueMilestones.map((ms, idx) => {
-                              const cat = (ms.eventType || ms.type || ms.category || 'CUSTOM').toUpperCase();
-                              const icon = CATEGORY_ICONS[cat] || '⭐';
-                              const color = CATEGORY_COLORS[cat] || '#6366f1';
-                              const approxPrefix = ms.date_is_approximate ? (language === 'ru' ? 'ок. ' : 'circa ') : '';
-                              const dateDisplay = ms.date
-                                ? `${approxPrefix}${ms.date}${ms.end_date ? ` – ${ms.end_date}` : ''}`
-                                : null;
-
-                              return (
-                                <div
-                                  key={idx}
-                                  style={{
-                                    background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
-                                    border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
-                                    borderRadius: 8,
-                                    padding: '6px 10px',
-                                    fontSize: '0.75rem',
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '2px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                      <span
-                                        style={{
-                                          background: `${color}25`,
-                                          color: color,
-                                          border: `1px solid ${color}40`,
-                                          borderRadius: 4,
-                                          padding: '1px 6px',
-                                          fontSize: '0.65rem',
-                                          fontWeight: 700,
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '3px',
-                                        }}
-                                      >
-                                        <span>{icon}</span>
-                                        <span>{cat}</span>
-                                      </span>
-                                      {ms.personName && (
-                                        <span
-                                          style={{
-                                            color: 'var(--text-primary)',
-                                            fontWeight: 600,
-                                            fontSize: '0.72rem',
-                                          }}
-                                        >
-                                          👤 {ms.personName}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {dateDisplay && (
-                                      <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 500 }}>
-                                        📅 {dateDisplay}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', lineHeight: 1.3 }}>
-                                    {ms.title}
-                                  </div>
-                                  {ms.description && (
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.35 }}>
-                                      {ms.description}
-                                    </div>
-                                  )}
-                                  {ms.location && (
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '3px' }}>
-                                      <span>📍</span>
-                                      <span>{ms.location}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
+                <div className="p-4 space-y-2.5 bg-primary/5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wider">
+                    <TreePine size={13} />
+                    <span>Семейный контекст</span>
                   </div>
-                )}
 
-              {/* AI Semantic Description & Attributes Section */}
-              {(selectedMedia.description_ru ||
-                selectedMedia.description ||
-                selectedMedia.summary_ru ||
-                selectedMedia.summary ||
-                selectedMedia.lighting ||
-                selectedMedia.weather ||
-                selectedMedia.time_of_day ||
-                selectedMedia.ocr_text ||
-                selectedMedia.exif_analysis ||
-                selectedMedia.transcription) && (
-                  <div className="lightbox-section">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h4 className="lightbox-section-title">{t('aiDescription')}</h4>
+                  {selectedMedia.family_context?.suggested_caption && (
+                    <p className="text-xs font-medium text-foreground leading-relaxed italic">
+                      «{selectedMedia.family_context.suggested_caption}»
+                    </p>
+                  )}
+
+                  {selectedMedia.family_context?.relationships && selectedMedia.family_context.relationships.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {selectedMedia.family_context.relationships.map((rel, idx) => (
+                        <div key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                          <span>💞</span>
+                          <span className="font-semibold text-foreground">{rel.person1}</span>
+                          <span>&</span>
+                          <span className="font-semibold text-foreground">{rel.person2}</span>:
+                          <span className="text-primary font-medium">{rel.relationship}</span>
+                        </div>
+                      ))}
                     </div>
+                  )}
 
-                    {/* Localized Description & Summary */}
-                    {activeDetailLang === 'ru' ? (
-                      <>
-                        {(selectedMedia.description_ru || selectedMedia.description) && (
-                          <div className="lightbox-desc-block">
-                            <p className="lightbox-desc-text">
-                              {selectedMedia.description_ru || selectedMedia.description}
-                            </p>
-                          </div>
-                        )}
-                        {(selectedMedia.summary_ru || selectedMedia.summary) && (
-                          <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
-                            <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
-                            <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
-                              {selectedMedia.summary_ru || selectedMedia.summary}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {(selectedMedia.description || selectedMedia.description_ru) && (
-                          <div className="lightbox-desc-block">
-                            <p className="lightbox-desc-text">
-                              {selectedMedia.description || selectedMedia.description_ru}
-                            </p>
-                          </div>
-                        )}
-                        {(selectedMedia.summary || selectedMedia.summary_ru) && (
-                          <div className="lightbox-desc-block" style={{ marginTop: '0.4rem' }}>
-                            <span className="lightbox-desc-lang-tag">{t('summaryBadge')}</span>
-                            <p className="lightbox-desc-text" style={{ fontSize: '0.82rem' }}>
-                              {selectedMedia.summary || selectedMedia.summary_ru}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* Rich Localized Semantic Badges/Details */}
-                    <div className="lightbox-meta-grid" style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {selectedMedia.environment && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('environment')}:</span>
-                          <span className="lightbox-value">
-                            {selectedMedia.environment === 'indoor'
-                              ? t('environmentIndoor')
-                              : selectedMedia.environment === 'outdoor'
-                                ? t('environmentOutdoor')
-                                : selectedMedia.environment}
-                          </span>
+                  {selectedMedia.family_context?.milestones && selectedMedia.family_context.milestones.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-border/40">
+                      {selectedMedia.family_context.milestones.slice(0, 3).map((ms, idx) => (
+                        <div key={idx} className="text-[11px] text-amber-400/90 flex items-center gap-1.5">
+                          <span>{CATEGORY_ICONS[ms.type || ''] || '⭐'}</span>
+                          <span className="font-medium truncate">{ms.title || ms.date}</span>
                         </div>
-                      )}
-
-                      {(selectedMedia.lighting_ru || selectedMedia.lighting) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('lighting')}:</span>
-                          <span className="lightbox-value">
-                            {activeDetailLang === 'ru'
-                              ? selectedMedia.lighting_ru || selectedMedia.lighting
-                              : selectedMedia.lighting || selectedMedia.lighting_ru}
-                          </span>
-                        </div>
-                      )}
-
-                      {(selectedMedia.weather_ru || selectedMedia.weather) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('weather')}:</span>
-                          <span className="lightbox-value">
-                            {activeDetailLang === 'ru'
-                              ? selectedMedia.weather_ru || selectedMedia.weather
-                              : selectedMedia.weather || selectedMedia.weather_ru}
-                          </span>
-                        </div>
-                      )}
-
-                      {(selectedMedia.time_of_day_ru || selectedMedia.time_of_day) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('timeOfDay')}:</span>
-                          <span className="lightbox-value">
-                            {activeDetailLang === 'ru'
-                              ? selectedMedia.time_of_day_ru || selectedMedia.time_of_day
-                              : selectedMedia.time_of_day || selectedMedia.time_of_day_ru}
-                          </span>
-                        </div>
-                      )}
-
-                      {(selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('exifAnalysis')}:</span>
-                          <span className="lightbox-value" style={{ fontSize: '0.78rem' }}>
-                            {activeDetailLang === 'ru'
-                              ? selectedMedia.exif_analysis_ru || selectedMedia.exif_analysis
-                              : selectedMedia.exif_analysis || selectedMedia.exif_analysis_ru}
-                          </span>
-                        </div>
-                      )}
-
-                      {selectedMedia.ocr_text && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('ocrText')}:</span>
-                          <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
-                            «{selectedMedia.ocr_text}»
-                          </span>
-                        </div>
-                      )}
-
-                      {(selectedMedia.transcription_ru || selectedMedia.transcription) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">{t('audioTranscription')}:</span>
-                          <span className="lightbox-value" style={{ fontStyle: 'italic' }}>
-                            {activeDetailLang === 'ru'
-                              ? selectedMedia.transcription_ru || selectedMedia.transcription
-                              : selectedMedia.transcription || selectedMedia.transcription_ru}
-                          </span>
-                        </div>
-                      )}
-
-                      {selectedMedia.location_name && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">📍 {t('editLocationName')}:</span>
-                          <span className="lightbox-value">{selectedMedia.location_name}</span>
-                        </div>
-                      )}
-
-                      {(selectedMedia.camera_make || selectedMedia.camera_model || selectedMedia.lens_model) && (
-                        <div className="lightbox-detail-row">
-                          <span className="lightbox-label">📷 {t('editCameraMake')}:</span>
-                          <span className="lightbox-value">
-                            {[selectedMedia.camera_make, selectedMedia.camera_model, selectedMedia.lens_model].filter(Boolean).join(' ')}
-                          </span>
-                        </div>
-                      )}
-
-                      {selectedMedia.tags && (Array.isArray(selectedMedia.tags) ? selectedMedia.tags.length > 0 : Boolean(selectedMedia.tags)) && (
-                        <div style={{ marginTop: '0.4rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                          {(Array.isArray(selectedMedia.tags)
-                            ? selectedMedia.tags
-                            : typeof selectedMedia.tags === 'string'
-                              ? (selectedMedia.tags as string).split(',').map((tagItem: string) => tagItem.trim()).filter(Boolean)
-                              : []
-                          ).map((tag: string) => (
-                            <span
-                              key={tag}
-                              className="badge-pill"
-                              style={{
-                                background: 'var(--nav-tab-active-bg, rgba(59, 130, 246, 0.18))',
-                                border: '1px solid var(--border-color-hover, rgba(59, 130, 246, 0.35))',
-                                color: 'var(--primary-color)',
-                                fontSize: '0.72rem',
-                                padding: '0.15rem 0.45rem',
-                              }}
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      ))}
                     </div>
+                  )}
+                </div>
+              )}
 
-                    {/* Timeline events for video */}
-                    {selectedMedia.timeline_events && selectedMedia.timeline_events.length > 0 && (
-                      <div style={{ marginTop: '0.6rem' }}>
-                        <span className="lightbox-label" style={{ display: 'block', marginBottom: '0.3rem' }}>
-                          {t('timelineEvents')}:
-                        </span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          {selectedMedia.timeline_events.map((evt, idx) => (
-                            <div key={idx} style={{ fontSize: '0.75rem', background: 'var(--input-bg)', border: '1px solid var(--border-color)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
-                              <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>
-                                {evt.timestamp_start} - {evt.timestamp_end}:
-                              </span>{' '}
-                              <span>{activeDetailLang === 'ru' ? evt.activity_ru || evt.activity : evt.activity || evt.activity_ru}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              {/* AI Description & Summary */}
+              {(selectedMedia.description || selectedMedia.description_ru || selectedMedia.summary || selectedMedia.summary_ru) && (
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider">
+                    <Sparkles size={13} className="text-primary" />
+                    <span>Описание AI</span>
                   </div>
-                )}
 
-              {/* Detected Faces & Persons on this Image */}
-              <div className="lightbox-section" style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <h4 className="lightbox-section-title" style={{ margin: 0 }}>
-                    {t('detectedFaces')} ({facesForSelected.length})
-                  </h4>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    {loadingFaces && (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {t('loadingFaces')}
-                      </span>
-                    )}
-                    {canManageFaces && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem' }}
-                        onClick={() => setIsAddingPerson((prev) => !prev)}
-                        title={t('tagPerson')}
-                      >
-                        {isAddingPerson ? '✕ ' + t('closeTooltip') : t('tagPerson')}
-                      </button>
-                    )}
+                  {/* Summary */}
+                  {(selectedMedia.summary || selectedMedia.summary_ru) && (
+                    <div className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1">
+                      <span className="text-[10px] font-bold text-primary uppercase">Кратко:</span>
+                      <p className="text-xs text-foreground leading-relaxed">
+                        {activeDetailLang === 'ru'
+                          ? (selectedMedia.summary_ru || selectedMedia.summary)
+                          : (selectedMedia.summary || selectedMedia.summary_ru)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Detailed Description */}
+                  {(selectedMedia.description || selectedMedia.description_ru) && (
+                    <div className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Подробности:</span>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {activeDetailLang === 'ru'
+                          ? (selectedMedia.description_ru || selectedMedia.description)
+                          : (selectedMedia.description || selectedMedia.description_ru)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* People & Faces */}
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider">
+                    <User size={13} className="text-primary" />
+                    <span>Люди ({groupedVideoFaces.length})</span>
                   </div>
+
+                  {canManageFaces && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingPerson((prev) => !prev)}
+                      className="px-2 py-1 rounded-lg border border-border/80 hover:bg-muted text-[11px] font-semibold text-primary transition-colors flex items-center gap-1"
+                    >
+                      <UserPlus size={11} />
+                      <span>{isAddingPerson ? 'Отмена' : 'Добавить'}</span>
+                    </button>
+                  )}
                 </div>
 
-                {/* Tag Person Selector Widget */}
+                {/* Add Person Inline Form */}
                 {isAddingPerson && (
-                  <div className="lightbox-tag-person-box">
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      <select
-                        className="input-control select-control"
-                        style={{ flex: 1, minWidth: '150px', fontSize: '0.8rem', padding: '0.35rem 0.5rem' }}
-                        value={selectedPersonToTag}
-                        onChange={(e) => setSelectedPersonToTag(e.target.value)}
-                      >
-                        <option value="">-- {t('selectPersonPlaceholder')} --</option>
-                        {effectiveKnownPersons.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} ({p.count})
-                          </option>
-                        ))}
-                        <option value="__custom__">{t('addNewPersonOption')}</option>
-                      </select>
+                  <div className="p-3 rounded-2xl border border-primary/30 bg-primary/5 space-y-2.5 animate-in fade-in">
+                    <label className="text-[11px] font-semibold text-foreground block">
+                      Привязать человека к файлу
+                    </label>
+                    <select
+                      value={selectedPersonToTag}
+                      onChange={(e) => setSelectedPersonToTag(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-border/80 bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">Выберите персону...</option>
+                      {effectiveKnownPersons.map((p) => (
+                        <option key={p.name} value={p.name}>
+                          {p.name} ({p.count})
+                        </option>
+                      ))}
+                      <option value="__custom__">+ Новое имя...</option>
+                    </select>
 
-                      {selectedPersonToTag === '__custom__' && (
-                        <input
-                          type="text"
-                          className="input-control"
-                          placeholder={t('customPersonNamePlaceholder')}
-                          style={{ flex: 1, minWidth: '130px', fontSize: '0.8rem', padding: '0.35rem 0.5rem' }}
-                          value={customPersonName}
-                          onChange={(e) => setCustomPersonName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleTagPerson();
-                          }}
-                        />
-                      )}
+                    {selectedPersonToTag === '__custom__' && (
+                      <input
+                        type="text"
+                        placeholder="Введите имя и фамилию"
+                        value={customPersonName}
+                        onChange={(e) => setCustomPersonName(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-border/80 bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    )}
 
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        className="btn btn-accent"
-                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
-                        onClick={handleTagPerson}
-                        disabled={
-                          isTagging ||
-                          !selectedPersonToTag ||
-                          (selectedPersonToTag === '__custom__' && !customPersonName.trim())
-                        }
+                        onClick={() => { setIsAddingPerson(false); setSelectedPersonToTag(''); setCustomPersonName(''); }}
+                        className="flex-1 py-1 rounded-xl border border-border/80 text-[11px] font-medium text-muted-foreground hover:bg-muted"
                       >
-                        {isTagging ? '...' : t('btnTagPerson')}
+                        Отмена
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isTagging || (!selectedPersonToTag || (selectedPersonToTag === '__custom__' && !customPersonName.trim()))}
+                        onClick={handleTagPerson}
+                        className="flex-1 py-1 rounded-xl bg-primary text-primary-foreground text-[11px] font-semibold hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {isTagging ? 'Сохранение...' : 'Привязать'}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {groupedVideoFaces.length === 0 ? (
-                  <div className='no-faces-indexed-container' style={{ margin: '0.5rem 0' }}>
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 0.4rem 0' }}>
-                      {loadingFaces ? t('loadingFaces') : t('noFacesIndexed')}
-                    </p>
-                    {!isAddingPerson && canManageFaces && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ width: '100%', fontSize: '0.8rem', padding: '0.35rem' }}
-                        onClick={() => setIsAddingPerson(true)}
-                      >
-                        {t('tagPerson')}
-                      </button>
-                    )}
+                {/* Faces List */}
+                {loadingFaces ? (
+                  <div className="flex items-center justify-center p-4 text-muted-foreground gap-2">
+                    <Loader2 size={14} className="animate-spin text-primary" />
+                    <span>Поиск лиц...</span>
                   </div>
+                ) : groupedVideoFaces.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic py-1">Лица не обнаружены</p>
                 ) : (
-                  <div className="lightbox-faces-list">
-                    {groupedVideoFaces.map((f: any) => {
-                      const isManual = !f.face_id || f.face_id.startsWith('manual_') || f.face_id.startsWith('face_manual_');
-                      const cropUrl = !isManual
-                        ? (f.image_path
-                          ? `/api/faces/image/${f.image_path.split(/[/\\]/).pop()}`
-                          : f.face_id
-                            ? `/api/faces/image/${f.face_id}`
-                            : null)
-                        : null;
-                      const personMeta = effectiveKnownPersons.find(
-                        (kp) => (f.name && kp.name.toLowerCase() === f.name.toLowerCase()) ||
-                                (f.person_id && (kp as any).person_id === f.person_id)
-                      );
-                      const displayAvatarUrl = cropUrl || personMeta?.avatarUrl || null;
-                      const isEditing = reassigningFaceId === f.face_id;
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {groupedVideoFaces.map((f) => {
                       const isSelected = selectedFaceId === f.face_id;
-                      const rawBbox = f.bbox || (f as any).bounding_box;
-                      let bbox: number[] | null = null;
-                      if (Array.isArray(rawBbox)) {
-                        bbox = rawBbox;
-                      } else if (typeof rawBbox === 'string') {
-                        try {
-                          bbox = JSON.parse(rawBbox);
-                        } catch {
-                          bbox = null;
-                        }
-                      }
+                      const isEditing = reassigningFaceId === f.face_id;
 
                       return (
                         <div
-                          className={`lightbox-face-item ${isSelected ? 'selected-face' : ''}`}
                           key={f.face_id}
-                          onClick={(e) => {
-                            if ((e.target as HTMLElement).closest('button, input, select, a')) return;
-                            setSelectedFaceId((prev) => (prev === f.face_id ? null : f.face_id));
-                          }}
-                          style={{ cursor: 'pointer' }}
-                          title={bbox ? `Click to highlight face [${bbox.join(', ')}] on photo` : 'Click to select face'}
-                        >
-                          {displayAvatarUrl ? (
-                            <img
-                              src={displayAvatarUrl}
-                              alt={f.name || f.face_id}
-                              className="lightbox-face-crop"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="lightbox-face-placeholder">👤</div>
+                          className={cn(
+                            'p-2 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer',
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
+                              : 'border-border/60 bg-muted/20 hover:border-primary/40'
                           )}
-
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            {isEditing ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.2rem' }}>
-                                <select
-                                  className="input-control select-control"
-                                  style={{ fontSize: '0.75rem', padding: '0.25rem' }}
-                                  value={reassignTargetPerson}
-                                  onChange={(e) => setReassignTargetPerson(e.target.value)}
-                                >
-                                  <option value="">-- {t('selectPersonPlaceholder')} --</option>
-                                  {effectiveKnownPersons.map((p) => (
-                                    <option key={p.name} value={p.name}>
-                                      {p.name}
-                                    </option>
-                                  ))}
-                                  <option value="__custom__">{t('addNewPersonOption')}</option>
-                                </select>
-
-                                {reassignTargetPerson === '__custom__' && (
-                                  <input
-                                    type="text"
-                                    className="input-control"
-                                    placeholder={t('customPersonNamePlaceholder')}
-                                    style={{ fontSize: '0.75rem', padding: '0.25rem' }}
-                                    value={reassignCustomName}
-                                    onChange={(e) => setReassignCustomName(e.target.value)}
-                                  />
-                                )}
-
-                                <div style={{ display: 'flex', gap: '0.3rem' }}>
-                                  <button
-                                    type="button"
-                                    className="btn btn-accent"
-                                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
-                                    disabled={
-                                      isReassigning ||
-                                      !reassignTargetPerson ||
-                                      (reassignTargetPerson === '__custom__' && !reassignCustomName.trim())
-                                    }
-                                    onClick={() => {
-                                      const finalName =
-                                        reassignTargetPerson === '__custom__' ? reassignCustomName.trim() : reassignTargetPerson.trim();
-                                      handleReassignFace(f.allFaceIds || f.face_id, finalName);
-                                    }}
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
-                                    onClick={() => setReassigningFaceId(null)}
-                                  >
-                                    ✕
-                                  </button>
+                          onClick={() => setSelectedFaceId(isSelected ? null : f.face_id)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {f.image_path ? (
+                                <img
+                                  src={`/api/media/thumbnail?path=${encodeURIComponent(f.image_path)}&size=80${vaultTokenQuery}`}
+                                  alt={f.name || 'Face'}
+                                  className="w-8 h-8 rounded-lg object-cover border border-border/80 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+                                  <User size={14} />
                                 </div>
+                              )}
+
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-foreground truncate">
+                                  {f.name || 'Неопознанное лицо'}
+                                </p>
+                                {f.confidence && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {Math.round(f.confidence * 100)}% совпадение
+                                  </p>
+                                )}
                               </div>
-                            ) : (
-                              <>
-                                <div className="lightbox-face-name">
-                                  {f.name || f.face_id}
-                                </div>
-                                <div className='known_faces_badge_confidence' style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                  {isManual ? (
-                                    <span>{t('badgeManual')}</span>
-                                  ) : (
-                                    <span>
-                                      {f.face_id} • {t('confidence')}: {f.confidence ? `${(f.confidence * 100).toFixed(0)}%` : 'N/A'}
-                                    </span>
-                                  )}
-                                </div>
-                                {f.occurrencesCount > 1 && (
-                                  <div
-                                    className="badge-pill video-occurrences-badge"
-                                    style={{
-                                      fontSize: '0.68rem',
-                                      background: 'rgba(59, 130, 246, 0.15)',
-                                      color: '#60a5fa',
-                                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                                      padding: '1px 6px',
-                                      borderRadius: '4px',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem',
-                                      marginTop: '0.2rem',
-                                    }}
-                                  >
-                                    📹 {f.occurrencesCount} кадров в видео
-                                  </div>
-                                )}
-                                {bbox && bbox.length >= 4 && (
-                                  <div
-                                    className="lightbox-face-coords"
-                                    style={{
-                                      fontSize: '0.72rem',
-                                      color: isSelected ? '#4ade80' : 'var(--text-muted)',
-                                      marginTop: '0.2rem',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.35rem',
-                                      fontFamily: 'monospace',
-                                      flexWrap: 'wrap',
-                                    }}
-                                  >
-                                    <span>📐 {t('faceCoordinates' as any) || 'Coordinates'}: [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]</span>
-                                    {isSelected && (
-                                      <span
-                                        style={{
-                                          background: 'rgba(34, 197, 94, 0.2)',
-                                          border: '1px solid #22c55e',
-                                          color: '#22c55e',
-                                          fontSize: '0.65rem',
-                                          padding: '1px 5px',
-                                          borderRadius: '4px',
-                                          fontFamily: 'sans-serif',
-                                          fontWeight: 600,
-                                        }}
-                                      >
-                                        ● {t('highlightFace' as any) || 'Highlighted'}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                {!isEditing && (() => {
-                                  const matchedPerson = f.name ? persons.find((p) => p.name.toLowerCase() === f.name?.toLowerCase()) : null;
-                                  return (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
-                                      {matchedPerson?.family_tree?.kinship_to_root && (
-                                        <span
-                                          className="badge-pill"
-                                          style={{
-                                            background: 'var(--nav-tab-active-bg, rgba(168, 85, 247, 0.25))',
-                                            border: '1px solid var(--border-color-hover, rgba(168, 85, 247, 0.5))',
-                                            color: 'var(--text-primary)',
-                                            fontSize: '0.68rem',
-                                            fontWeight: 600,
-                                          }}
-                                          title="Genealogical Kinship to 'ME' (Root)"
-                                        >
-                                          🧬 {matchedPerson.family_tree.kinship_to_root}
-                                        </span>
-                                      )}
+                            </div>
 
-                                      {onViewInFamilyTree && f.name && (
-                                        <button
-                                          id='known_faces_badge_genealogy'
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          style={{
-                                            padding: '0.15rem 0.45rem',
-                                            fontSize: '0.72rem',
-                                            background: 'var(--nav-tab-active-bg, rgba(99, 102, 241, 0.15))',
-                                            border: '1px solid var(--border-color-hover, rgba(99, 102, 241, 0.35))',
-                                            color: 'var(--primary-color)',
-                                          }}
-                                          onClick={() => {
-                                            onClose();
-                                            onViewInFamilyTree(f.name!);
-                                          }}
-                                          title={t('viewInFamilyTree', { name: f.name })}
-                                        >
-                                          🌳
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </>
-                            )}
-                          </div>
+                            {/* Face actions */}
+                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              {f.name && onViewInFamilyTree && (
+                                <button
+                                  type="button"
+                                  onClick={() => { onClose(); onViewInFamilyTree(f.name!); }}
+                                  className="p-1 rounded-lg text-muted-foreground hover:text-emerald-400 hover:bg-muted transition-colors"
+                                  title="Показать в семейном древе"
+                                >
+                                  <TreePine size={13} />
+                                </button>
+                              )}
 
-                          {!isEditing && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                               {canManageFaces && (
                                 <>
                                   <button
                                     type="button"
-                                    className="btn-icon-subtle"
                                     onClick={() => {
-                                      setReassigningFaceId(f.face_id);
+                                      setReassigningFaceId(isEditing ? null : f.face_id);
                                       setReassignTargetPerson(f.name || '');
                                       setReassignCustomName('');
                                     }}
-                                    title={t('changePerson')}
+                                    className="p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                    title="Изменить имя"
                                   >
-                                    ✏️
+                                    <Edit3 size={13} />
                                   </button>
-
                                   <button
                                     type="button"
-                                    className="btn-icon-subtle"
-                                    style={{ color: 'var(--error-color, #ef4444)' }}
                                     onClick={() => handleRemoveFace(f.allFaceIds || f.face_id)}
-                                    title={t('removePersonTooltip')}
+                                    className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+                                    title="Удалить"
                                   >
-                                    🗑️
+                                    <Trash2 size={13} />
                                   </button>
                                 </>
                               )}
+                            </div>
+                          </div>
+
+                          {/* Inline Reassign Form */}
+                          {isEditing && (
+                            <div className="pt-2 border-t border-border/50 space-y-2 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
+                              <select
+                                value={reassignTargetPerson}
+                                onChange={(e) => setReassignTargetPerson(e.target.value)}
+                                className="w-full px-2 py-1 rounded-lg border border-border/80 bg-card text-foreground text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                              >
+                                <option value="">Выберите персону...</option>
+                                {effectiveKnownPersons.map((p) => (
+                                  <option key={p.name} value={p.name}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                                <option value="__custom__">+ Новое имя...</option>
+                              </select>
+
+                              {reassignTargetPerson === '__custom__' && (
+                                <input
+                                  type="text"
+                                  placeholder="Имя и фамилия"
+                                  value={reassignCustomName}
+                                  onChange={(e) => setReassignCustomName(e.target.value)}
+                                  className="w-full px-2 py-1 rounded-lg border border-border/80 bg-card text-foreground text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                              )}
+
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setReassigningFaceId(null); setReassignCustomName(''); }}
+                                  className="flex-1 py-1 rounded-lg border border-border/80 text-[10px] text-muted-foreground hover:bg-muted"
+                                >
+                                  Отмена
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isReassigning || (!reassignTargetPerson || (reassignTargetPerson === '__custom__' && !reassignCustomName.trim()))}
+                                  onClick={() => {
+                                    const target = reassignTargetPerson === '__custom__' ? reassignCustomName : reassignTargetPerson;
+                                    handleReassignFace(f.allFaceIds || f.face_id, target);
+                                  }}
+                                  className="flex-1 py-1 rounded-lg bg-primary text-primary-foreground text-[10px] font-semibold hover:bg-primary/90 disabled:opacity-50"
+                                >
+                                  {isReassigning ? 'Сохранение...' : 'Сохранить'}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1950,29 +1405,17 @@ export default function MediaViewerModal({
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="lightbox-section lightbox-actions-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {canEdit && selectedMedia.status === 'PROCESSED' && (
-                  <button
-                    id="edit_metadata_button_id"
-                    className="btn btn-secondary"
-                    style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
-                    onClick={() => setIsEditingMetadata(true)}
-                    type="button"
-                  >
-                    ✏️ {t('btnEditMetadata' as any) || 'Edit Metadata'}
-                  </button>
-                )}
-
+              {/* Actions Footer */}
+              <div className="p-4 mt-auto space-y-2 bg-muted/10">
+                {/* Move to Vault / Restore button */}
                 {isAdmin && (
                   <button
                     id="mov_to_vault_button_id"
-                    className="btn btn-secondary"
-                    style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem' }}
+                    type="button"
                     onClick={async () => {
                       const filePath = selectedMedia.file_path || selectedMedia.filename;
                       if (selectedMedia.is_vault) {
-                        // Restore from vault — no PIN needed (vault is already unlocked to view this)
+                        // Restore from vault
                         await removeVaultItem(filePath);
                         const updated = { ...selectedMedia, is_vault: false };
                         setSelectedMedia(updated);
@@ -1980,169 +1423,78 @@ export default function MediaViewerModal({
                         window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
                         if (onRefresh) onRefresh();
                       } else {
-                        // Move to vault — require PIN confirmation first
+                        // Move to vault with PIN
                         setPendingVaultFilePath(filePath);
                         setVaultPinInput('');
                         setVaultPinError(null);
                         setShowVaultPinModal(true);
                       }
                     }}
-                    type="button"
+                    className={cn(
+                      'w-full py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs',
+                      selectedMedia.is_vault
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                        : 'border-border/80 bg-muted/40 text-foreground hover:bg-muted'
+                    )}
                   >
-                    {selectedMedia.is_vault
-                      ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Восстановить / Удалить из защищённого хранилища'}`
-                      : `🔒 ${t('vaultAddToVault' as any) || 'Переместить в защищённую/личную папку'}`}
+                    {selectedMedia.is_vault ? <Unlock size={14} /> : <Lock size={14} />}
+                    <span>
+                      {selectedMedia.is_vault
+                        ? 'Восстановить из личной папки'
+                        : 'Переместить в личную папку'}
+                    </span>
                   </button>
                 )}
 
+                {/* Add to album */}
                 <button
                   id="add_to_album_button_id"
-                  className="btn btn-secondary"
-                  style={{
-                    width: '100%',
-                    fontSize: '0.85rem',
-                    padding: '0.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem',
-                  }}
-                  onClick={() => setIsAddToAlbumOpen(true)}
                   type="button"
+                  onClick={() => setIsAddToAlbumOpen(true)}
+                  className="w-full py-2.5 px-3 rounded-xl border border-border/80 bg-muted/30 text-foreground text-xs font-semibold hover:bg-muted flex items-center justify-center gap-2 transition-colors shadow-xs"
                 >
-                  <FolderPlus size={15} />
+                  <FolderPlus size={14} />
                   <span>{t('btnAddToAlbum' as any) || 'Добавить в альбом'}</span>
                 </button>
 
+                {/* Run AI Analysis button */}
                 <button
                   id="btn_analyze_file_id"
-                  className="btn btn-accent"
-                  style={{
-                    width: '100%',
-                    fontSize: '0.85rem',
-                    padding: '0.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem',
-                    opacity: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 0.6 : 1,
-                    cursor: disabled || isAnalyzing || !isEngineConnected || !engineOnline ? 'not-allowed' : 'pointer',
-                  }}
-                  onClick={handleAnalyzeClick}
-                  disabled={disabled || isAnalyzing || !isEngineConnected || !engineOnline}
-                  title={!isEngineConnected || !engineOnline ? t('aiEngineOfflineTooltip') : t('btnAnalyzeFile')}
                   type="button"
+                  disabled={disabled || isAnalyzing || !isEngineConnected || !engineOnline}
+                  onClick={handleAnalyzeClick}
+                  className="w-full py-2.5 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors shadow-xs"
                 >
-                  {isAnalyzing && <Loader2 size={14} className="animate-spin" />}
-                  <span>{isAnalyzing ? (t('aiAnalyzingInProgress') || 'Анализ выполняется...') : (t('btnAnalyzeFile') || 'Запустить анализ')}</span>
+                  {isAnalyzing ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  <span>
+                    {isAnalyzing
+                      ? (t('aiAnalyzingInProgress') || 'Анализ выполняется...')
+                      : (t('btnAnalyzeFile') || 'Запустить AI анализ')}
+                  </span>
                 </button>
 
                 {analysisSuccess && (
-                  <div
-                    style={{
-                      padding: '0.45rem 0.65rem',
-                      borderRadius: '8px',
-                      backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                      border: '1px solid rgba(34, 197, 94, 0.3)',
-                      color: '#4ade80',
-                      fontSize: '0.78rem',
-                      textAlign: 'center',
-                      animation: 'fadeIn 0.2s ease-out',
-                    }}
-                  >
-                    {t('aiAnalysisStartedSuccess')}
+                  <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs text-center font-medium animate-in fade-in">
+                    ✓ Анализ успешно завершён
                   </div>
                 )}
 
-                <a
-                  href={`/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-secondary"
-                  style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem', textAlign: 'center', textDecoration: 'none' }}
-                >
-                  {t('btnOpenOriginal')}
-                </a>
+                {analysisError && (
+                  <div className="p-2 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs text-center font-medium animate-in fade-in">
+                    {analysisError}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* AI Engine Analysis Error Pop-up Modal */}
-      {analysisError && (
-        <div
-          className="modal-overlay active"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 11000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-          onClick={() => setAnalysisError(null)}
-        >
-          <div
-            className="modal-card"
-            style={{
-              maxWidth: '480px',
-              width: '100%',
-              backgroundColor: 'var(--modal-bg, #1a1e2d)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)',
-              animation: 'fadeIn 0.2s ease-out',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-              <span style={{ fontSize: '1.8rem' }}>⚠️</span>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>
-                {t('aiEngineErrorTitle')}
-              </h3>
-            </div>
-            <p style={{ margin: '0 0 1rem 0', color: 'var(--text-secondary, #94a3b8)', fontSize: '0.88rem', lineHeight: '1.5' }}>
-              {t('aiEngineErrorDescription')}
-            </p>
-            {analysisError && typeof analysisError === 'string' && analysisError.trim() && (
-              <div
-                style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  borderRadius: '8px',
-                  padding: '0.6rem 0.8rem',
-                  marginBottom: '1.25rem',
-                  fontSize: '0.8rem',
-                  color: '#f87171',
-                  fontFamily: 'monospace',
-                  wordBreak: 'break-word',
-                  maxHeight: '120px',
-                  overflowY: 'auto',
-                }}
-              >
-                {analysisError}
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ padding: '0.45rem 1.2rem', fontSize: '0.88rem' }}
-                onClick={() => setAnalysisError(null)}
-              >
-                {t('close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* In-Viewer Metadata Editor Modal */}
+      {/* Metadata Editor Modal */}
       <MetadataEditorModal
         isOpen={isEditingMetadata}
         onClose={() => setIsEditingMetadata(false)}
@@ -2156,21 +1508,21 @@ export default function MediaViewerModal({
           isOpen={isAddToAlbumOpen}
           onClose={() => setIsAddToAlbumOpen(false)}
           mediaFile={selectedMedia}
-          onAdded={() => {
-            if (onRefresh) onRefresh();
-          }}
+          onAdded={() => { if (onRefresh) onRefresh(); }}
         />
       )}
 
-      {/* Vault PIN Confirmation Modal — shown before moving a file into the vault */}
+      {/* Vault PIN Confirmation Modal */}
       {showVaultPinModal && (
         <div
-          className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
           onClick={(e) => { if (e.target === e.currentTarget) setShowVaultPinModal(false); }}
         >
-          <div className="w-full max-w-sm bg-card border border-border/80 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+          <div className="w-full max-w-sm bg-card border border-border/80 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-foreground">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-lg">🔒</div>
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Lock size={20} />
+              </div>
               <div>
                 <h3 className="text-sm font-bold text-foreground">Подтверждение PIN-кода</h3>
                 <p className="text-[11px] text-muted-foreground">Для перемещения файла в личную папку введите PIN-код</p>
@@ -2186,9 +1538,7 @@ export default function MediaViewerModal({
               onChange={(e) => { setVaultPinInput(e.target.value.replace(/\D/g, '')); setVaultPinError(null); }}
               onKeyDown={async (e) => {
                 if (e.key === 'Enter' && vaultPinInput.length >= 4) {
-                  // Trigger confirm on Enter
                   e.preventDefault();
-                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit?.();
                 }
               }}
               placeholder="••••••"
@@ -2196,8 +1546,9 @@ export default function MediaViewerModal({
             />
 
             {vaultPinError && (
-              <div className="flex items-center gap-2 text-xs text-destructive font-semibold animate-in fade-in">
-                <span>⚠️ {vaultPinError}</span>
+              <div className="flex items-center gap-2 text-xs text-destructive font-semibold">
+                <AlertCircle size={14} />
+                <span>{vaultPinError}</span>
               </div>
             )}
 
@@ -2217,8 +1568,6 @@ export default function MediaViewerModal({
                   setVaultPinLoading(true);
                   setVaultPinError(null);
 
-                  // Try to unlock/verify vault with provided PIN
-                  // If already unlocked with a valid session, we still re-verify PIN for security
                   const res = await unlockVault(vaultPinInput);
                   if (!res.success) {
                     setVaultPinError(res.error || 'Неверный PIN-код');
@@ -2226,7 +1575,6 @@ export default function MediaViewerModal({
                     return;
                   }
 
-                  // PIN verified — move file to vault
                   await addVaultItem(pendingVaultFilePath);
                   const updated = { ...selectedMedia!, is_vault: true };
                   setSelectedMedia(updated);
@@ -2239,10 +1587,10 @@ export default function MediaViewerModal({
                   setVaultPinInput('');
                   setPendingVaultFilePath(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {vaultPinLoading ? (
-                  <><span className="animate-spin">⟳</span><span>Проверка...</span></>
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <span>Переместить</span>
                 )}
