@@ -71,4 +71,16 @@ describe('FEAT-026: Person Profile Management & Family Tree Integration', () => 
     // Check display_name usage in select options
     assert.match(content, /p\.display_name \|\| p\.name/, 'Dropdown options must use display_name composed fallback');
   });
+
+  it('Requirement 6: PersonProfileModal must support auto-populating fields from linked or selected Family Tree person', () => {
+    assert.strictEqual(fs.existsSync(modalFilePath), true, 'PersonProfileModal.tsx must exist');
+    const content = fs.readFileSync(modalFilePath, 'utf-8');
+
+    // Check handleApplyTreeData implementation
+    assert.match(content, /handleApplyTreeData/, 'Must implement handleApplyTreeData function');
+    assert.match(content, /Использовать данные из Древа|Populate from Tree/, 'Must have populate from tree button in main tab');
+    assert.match(content, /Заполнить анкету из Древа|Populate profile from Tree/, 'Must have populate button in tree tab');
+    assert.match(content, /importSuccessMessage/, 'Must support import confirmation toast/notification');
+  });
 });
+
