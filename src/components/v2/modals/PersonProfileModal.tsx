@@ -17,6 +17,7 @@ import {
   Briefcase,
   Heart,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -163,6 +164,48 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
       .catch((err) => console.warn('Failed to load tree persons for linking:', err))
       .finally(() => setIsLoadingTree(false));
   }, [person, isOpen]);
+
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
+
+  // Apply / Populate data from Family Tree person into the profile form
+  const handleApplyTreeData = (candidatePerson?: any) => {
+    const target = candidatePerson || allTreePersons.find((tp: any) => tp.id === treePersonId);
+    if (!target) return;
+
+    if (target.first_name) setFirstName(target.first_name);
+    if (target.last_name !== undefined) setLastName(target.last_name || '');
+    if (target.middle_name !== undefined) setMiddleName(target.middle_name || '');
+    if (target.maiden_name !== undefined) setMaidenName(target.maiden_name || '');
+    if (target.gender) setGender(target.gender);
+    if (target.is_living !== undefined) setIsLiving(Boolean(target.is_living));
+    if (target.birth_date !== undefined) setBirthDate(target.birth_date || '');
+    if (target.birth_place !== undefined) setBirthPlace(target.birth_place || '');
+    if (target.death_date !== undefined) setDeathDate(target.death_date || '');
+    if (target.death_place !== undefined) setDeathPlace(target.death_place || '');
+    if (target.bio !== undefined && target.bio) setBio(target.bio);
+    if (target.avatar_face_id) setSelectedPrimaryFaceId(target.avatar_face_id);
+
+    if (target.custom_attributes) {
+      try {
+        const custom = typeof target.custom_attributes === 'string'
+          ? JSON.parse(target.custom_attributes)
+          : target.custom_attributes;
+        if (custom.profession) setProfession(custom.profession);
+        if (custom.notes) setNotes(custom.notes);
+        if (custom.nickname) setNickname(custom.nickname);
+      } catch {
+        // ignore
+      }
+    }
+
+    const nameStr = `${target.first_name || ''} ${target.last_name || ''}`.trim() || target.name || '';
+    setImportSuccessMessage(
+      isRu
+        ? `Данные персоны "${nameStr}" успешно перенесены из Семейного Древа`
+        : `Profile data for "${nameStr}" populated from Family Tree`
+    );
+    setTimeout(() => setImportSuccessMessage(null), 4500);
+  };
 
   if (!isOpen || !person) return null;
 
@@ -426,6 +469,38 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
           {/* TAB 1: ОСНОВНОЕ (General & Demographics) */}
           {activeTab === 'main' && (
             <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Import Notification Banner */}
+              {importSuccessMessage && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300 font-medium animate-in fade-in duration-150">
+                  <Check size={14} className="text-emerald-500 shrink-0" />
+                  <span>{importSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Family Tree Quick Sync Banner */}
+              {treePersonId && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                  <div className="flex items-center gap-2 text-xs text-foreground">
+                    <TreePine size={15} className="text-emerald-500 shrink-0" />
+                    <span>
+                      {isRu ? 'Связано с Древом: ' : 'Linked to Tree: '}
+                      <strong className="text-emerald-600 dark:text-emerald-400">
+                        {treeBindingInfo?.name || composedDisplayName}
+                      </strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTreeData()}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+                    title={isRu ? 'Заполнить все поля анкеты из связанной персоны Древа' : 'Populate form fields from linked Tree member'}
+                  >
+                    <Download size={13} />
+                    <span>{isRu ? 'Использовать данные из Древа' : 'Populate from Tree'}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Names Breakdown */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -689,18 +764,30 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        navigate(`/family-tree?person=${encodeURIComponent(treePersonId)}`);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                    >
-                      <ExternalLink size={13} />
-                      <span>{isRu ? 'Перейти к узлу в Древе' : 'Jump to node in Tree'}</span>
-                    </button>
+                  <div className="pt-2 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          navigate(`/family-tree?person=${encodeURIComponent(treePersonId)}`);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold border border-border/60 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <ExternalLink size={13} />
+                        <span>{isRu ? 'Перейти к узлу в Древе' : 'Jump to node in Tree'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApplyTreeData()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        title={isRu ? 'Импортировать ФИО, даты и биографию из Древа в анкету' : 'Import name, dates, and bio from Tree into profile'}
+                      >
+                        <Download size={13} />
+                        <span>{isRu ? 'Заполнить анкету из Древа' : 'Populate profile from Tree'}</span>
+                      </button>
+                    </div>
 
                     <label className="flex items-center gap-2 text-xs font-semibold text-foreground cursor-pointer">
                       <input
@@ -709,7 +796,7 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
                         onChange={(e) => setSyncTree(e.target.checked)}
                         className="rounded text-emerald-500 focus:ring-emerald-500 w-3.5 h-3.5"
                       />
-                      <span>{isRu ? 'Синхронизировать данные при сохранении' : 'Two-way sync on save'}</span>
+                      <span>{isRu ? 'Синхронизировать при сохранении' : 'Two-way sync on save'}</span>
                     </label>
                   </div>
                 </div>
@@ -764,6 +851,7 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
                                 name: fullName,
                                 kinship_to_root: tp.kinship_to_root,
                               });
+                              handleApplyTreeData(tp);
                             }}
                             className={cn(
                               'flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-colors',
