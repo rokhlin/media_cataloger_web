@@ -139,17 +139,54 @@ export default function GalleryPage() {
       if (typeFilter === 'image' && !file.is_image && file.type !== 'image') return false;
       if (typeFilter === 'video' && !file.is_video && file.type !== 'video') return false;
       
-      // Global Search query filter (matching filename, path, folder, description, summary, OCR, faces, tags, location)
+      // Global Search query filter (bilingual: Cyrillic queries match Russian metadata, Latin queries match English metadata, numbers/other match both)
       if (queryParam) {
         const query = queryParam.toLowerCase();
+        const hasCyrillic = /[а-яё]/i.test(query);
+        const hasLatin = /[a-z]/i.test(query);
+
         const nameMatch = file.filename?.toLowerCase().includes(query);
         const pathMatch = file.file_path?.toLowerCase().includes(query);
         const folderMatch = file.folder?.toLowerCase().includes(query);
-        const descMatch = (file as any).description?.toLowerCase().includes(query) || (file as any).description_ru?.toLowerCase().includes(query);
-        const summMatch = (file as any).summary?.toLowerCase().includes(query) || (file as any).summary_ru?.toLowerCase().includes(query);
+
+        let descMatch = false;
+        let summMatch = false;
+        let exifMatch = false;
+        let transMatch = false;
+
+        if (hasCyrillic && !hasLatin) {
+          // Cyrillic search targets Russian fields
+          descMatch = Boolean((file as any).description_ru?.toLowerCase().includes(query));
+          summMatch = Boolean((file as any).summary_ru?.toLowerCase().includes(query));
+          exifMatch = Boolean((file as any).exif_analysis_ru?.toLowerCase().includes(query));
+          transMatch = Boolean((file as any).transcription_ru?.toLowerCase().includes(query));
+        } else if (hasLatin && !hasCyrillic) {
+          // Latin search targets English fields
+          descMatch = Boolean((file as any).description?.toLowerCase().includes(query));
+          summMatch = Boolean((file as any).summary?.toLowerCase().includes(query));
+          exifMatch = Boolean((file as any).exif_analysis?.toLowerCase().includes(query));
+          transMatch = Boolean((file as any).transcription?.toLowerCase().includes(query));
+        } else {
+          // Mixed or other languages/numbers: search both English and Russian
+          descMatch = Boolean(
+            (file as any).description?.toLowerCase().includes(query) ||
+            (file as any).description_ru?.toLowerCase().includes(query)
+          );
+          summMatch = Boolean(
+            (file as any).summary?.toLowerCase().includes(query) ||
+            (file as any).summary_ru?.toLowerCase().includes(query)
+          );
+          exifMatch = Boolean(
+            (file as any).exif_analysis?.toLowerCase().includes(query) ||
+            (file as any).exif_analysis_ru?.toLowerCase().includes(query)
+          );
+          transMatch = Boolean(
+            (file as any).transcription?.toLowerCase().includes(query) ||
+            (file as any).transcription_ru?.toLowerCase().includes(query)
+          );
+        }
+
         const ocrMatch = (file as any).ocr_text?.toLowerCase().includes(query);
-        const exifMatch = (file as any).exif_analysis?.toLowerCase().includes(query) || (file as any).exif_analysis_ru?.toLowerCase().includes(query);
-        const transMatch = (file as any).transcription?.toLowerCase().includes(query) || (file as any).transcription_ru?.toLowerCase().includes(query);
         const locationMatch = (file as any).location_name?.toLowerCase().includes(query);
         const facesMatch = file.face_names?.some((fn) => fn.toLowerCase().includes(query)) ||
           file.faces?.some((f) => (f.name || '').toLowerCase().includes(query));

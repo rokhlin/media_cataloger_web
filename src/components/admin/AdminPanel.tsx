@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, DEFAULT_FEATURE_FLAG_PRESETS } from '../../services/featureFlagsContext';
 import UserManagementTab from './UserManagementTab';
-import AdminVaultTab from './AdminVaultTab';
+import AdminGeminiTab from './AdminGeminiTab';
 import AdminBackupTab from './AdminBackupTab';
 import type { FeatureFlag } from '../../models/featureFlags';
 import type { StatusInfo } from '../../models/status';
@@ -20,19 +20,19 @@ interface AdminPanelProps {
   uiSettings?: UISettings;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
-  initialSubTab?: 'flags' | 'users' | 'vault' | 'backups';
+  initialSubTab?: 'flags' | 'users' | 'gemini' | 'backups' | 'vault';
 }
 
 export default function AdminPanel({
   statusInfo,
   mediaFilesCount = 0,
   facesCount = 0,
-  mediaFiles = [],
-  onRefreshMedia,
-  onStartSingleAnalysis,
-  uiSettings,
-  onReloadFaces,
-  onViewInFamilyTree,
+  mediaFiles: _mediaFiles = [],
+  onRefreshMedia: _onRefreshMedia,
+  onStartSingleAnalysis: _onStartSingleAnalysis,
+  uiSettings: _uiSettings,
+  onReloadFaces: _onReloadFaces,
+  onViewInFamilyTree: _onViewInFamilyTree,
   initialSubTab = 'flags',
 }: AdminPanelProps) {
   const { t } = useLanguage();
@@ -48,7 +48,9 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault' | 'backups'>(initialSubTab);
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'gemini' | 'backups'>(
+    initialSubTab === 'vault' ? 'flags' : (initialSubTab as any)
+  );
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -427,15 +429,15 @@ export default function AdminPanel({
         <button
           type="button"
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-            activeAdminSubTab === 'vault'
+            activeAdminSubTab === 'gemini'
               ? 'bg-primary text-white border-primary shadow-xs'
               : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
           }`}
-          onClick={() => setActiveAdminSubTab('vault')}
-          id="tab-btn-admin-vault"
+          onClick={() => setActiveAdminSubTab('gemini')}
+          id="tab-btn-admin-gemini"
         >
-          <span>🔒</span>
-          <span>{t('adminTabVault' as any) || 'Secret Vault & Privacy'}</span>
+          <span>✨</span>
+          <span>{t('adminTabGemini' as any) || 'Gemini AI Configuration'}</span>
         </button>
         <button
           type="button"
@@ -454,15 +456,8 @@ export default function AdminPanel({
 
       {activeAdminSubTab === 'users' ? (
         <UserManagementTab />
-      ) : activeAdminSubTab === 'vault' ? (
-        <AdminVaultTab
-          mediaFiles={mediaFiles}
-          onRefreshMedia={onRefreshMedia}
-          onStartSingleAnalysis={onStartSingleAnalysis}
-          uiSettings={uiSettings}
-          onReloadFaces={onReloadFaces}
-          onViewInFamilyTree={onViewInFamilyTree}
-        />
+      ) : activeAdminSubTab === 'gemini' ? (
+        <AdminGeminiTab />
       ) : activeAdminSubTab === 'backups' ? (
         <AdminBackupTab />
       ) : (

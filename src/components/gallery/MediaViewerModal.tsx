@@ -1136,18 +1136,20 @@ export default function MediaViewerModal({
                           const updated = { ...selectedMedia, is_vault: false };
                           setSelectedMedia(updated);
                           if (onMediaUpdated) onMediaUpdated(updated);
+                          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
                         } else {
                           await addVaultItem(filePath);
                           const updated = { ...selectedMedia, is_vault: true };
                           setSelectedMedia(updated);
                           if (onMediaUpdated) onMediaUpdated(updated);
+                          window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: true } }));
                         }
                         if (onRefresh) onRefresh();
                       }}
                       type="button"
                       title={selectedMedia.is_vault
-                        ? `🔒 ${t('vaultRemoveFromVault' as any) || 'Remove from Secret Vault'}`
-                        : `🔓 ${t('vaultAddToVault' as any) || 'Move to Secret Vault'}`}
+                        ? `🔒 ${t('vaultRemoveFromVault' as any) || 'Убрать из личной папки'}`
+                        : `🔓 ${t('vaultAddToVault' as any) || 'Переместить в личную папку'}`}
                     >
                       {selectedMedia.is_vault
                         ? `🔒`
@@ -1964,19 +1966,21 @@ export default function MediaViewerModal({
                         const updated = { ...selectedMedia, is_vault: false };
                         setSelectedMedia(updated);
                         if (onMediaUpdated) onMediaUpdated(updated);
+                        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
                       } else {
                         await addVaultItem(filePath);
                         const updated = { ...selectedMedia, is_vault: true };
                         setSelectedMedia(updated);
                         if (onMediaUpdated) onMediaUpdated(updated);
+                        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: true } }));
                       }
                       if (onRefresh) onRefresh();
                     }}
                     type="button"
                   >
                     {selectedMedia.is_vault
-                      ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Remove from Secret Vault'}`
-                      : `🔒 ${t('vaultAddToVault' as any) || 'Move to Secret Vault'}`}
+                      ? `🔓 ${t('vaultRemoveFromVault' as any) || 'Убрать из личной папки'}`
+                      : `🔒 ${t('vaultAddToVault' as any) || 'Переместить в личную папку'}`}
                   </button>
                 )}
 

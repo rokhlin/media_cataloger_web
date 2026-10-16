@@ -27,8 +27,15 @@ import {
   Crop,
   RotateCw,
   ZoomIn,
+  FolderLock,
+  KeyRound,
+  Mail,
+  Languages,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { useVault } from '@/services/vaultContext';
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -131,6 +138,34 @@ export const UserSettingsScreen: React.FC = () => {
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isPasswordUpdating, setIsPasswordUpdating] = useState(false);
+
+  // System language
+  const { language, setLanguage } = useLanguage();
+
+  // Vault context and settings state
+  const {
+    isConfigured: isVaultConfigured,
+    isUnlocked: isVaultUnlocked,
+    remainingSeconds: vaultRemainingSeconds,
+    changePin: changeVaultPin,
+    requestPinRecovery: requestVaultRecovery,
+    resetPinWithRecovery: resetVaultPinWithRecovery,
+    fetchVaultStatus,
+  } = useVault();
+
+  const [vaultCurrentPin, setVaultCurrentPin] = useState('');
+  const [vaultNewPin, setVaultNewPin] = useState('');
+  const [vaultConfirmPin, setVaultConfirmPin] = useState('');
+  const [vaultPinStatus, setVaultPinStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isVaultPinUpdating, setIsVaultPinUpdating] = useState(false);
+
+  const [vaultRecoveryEmailInput, setVaultRecoveryEmailInput] = useState('');
+  const [vaultRecoveryCodeInput, setVaultRecoveryCodeInput] = useState('');
+  const [vaultRecoveryNewPinInput, setVaultRecoveryNewPinInput] = useState('');
+  const [vaultRecoveryConfirmPinInput, setVaultRecoveryConfirmPinInput] = useState('');
+  const [vaultRecoveryStep, setVaultRecoveryStep] = useState<'request' | 'reset'>('request');
+  const [vaultRecoveryStatus, setVaultRecoveryStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isVaultRecoveryLoading, setIsVaultRecoveryLoading] = useState(false);
 
   // Sync profile when currentUser updates
   useEffect(() => {
@@ -665,6 +700,85 @@ export const UserSettingsScreen: React.FC = () => {
     setVisionPromptTemplate((prev) => `${prev} ${token} `);
   };
 
+  const handleChangeVaultPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVaultPinStatus(null);
+    if (!vaultCurrentPin) {
+      setVaultPinStatus({ type: 'error', message: 'Введите текущий PIN-код' });
+      return;
+    }
+    if (vaultNewPin.length < 4) {
+      setVaultPinStatus({ type: 'error', message: 'Новый PIN-код должен содержать минимум 4 цифры' });
+      return;
+    }
+    if (vaultNewPin !== vaultConfirmPin) {
+      setVaultPinStatus({ type: 'error', message: 'Подтверждение нового PIN-кода не совпадает' });
+      return;
+    }
+    setIsVaultPinUpdating(true);
+    const res = await changeVaultPin(vaultCurrentPin, vaultNewPin);
+    setIsVaultPinUpdating(false);
+    if (res.success) {
+      setVaultPinStatus({ type: 'success', message: 'PIN-код личной папки успешно изменён!' });
+      setVaultCurrentPin('');
+      setVaultNewPin('');
+      setVaultConfirmPin('');
+    } else {
+      setVaultPinStatus({ type: 'error', message: res.error || 'Неверный текущий PIN-код' });
+    }
+  };
+
+  const handleVaultRecoveryRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVaultRecoveryStatus(null);
+    if (!vaultRecoveryEmailInput.trim()) {
+      setVaultRecoveryStatus({ type: 'error', message: 'Укажите e-mail адрес' });
+      return;
+    }
+    setIsVaultRecoveryLoading(true);
+    const res = await requestVaultRecovery(vaultRecoveryEmailInput.trim());
+    setIsVaultRecoveryLoading(false);
+    if (res.success) {
+      setVaultRecoveryStatus({
+        type: 'success',
+        message: res.message + (res.codeHint ? ` (Код: ${res.codeHint})` : ''),
+      });
+      setVaultRecoveryStep('reset');
+    } else {
+      setVaultRecoveryStatus({ type: 'error', message: res.error || 'Не удалось отправить проверочный код' });
+    }
+  };
+
+  const handleVaultRecoveryReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVaultRecoveryStatus(null);
+    if (!vaultRecoveryCodeInput.trim()) {
+      setVaultRecoveryStatus({ type: 'error', message: 'Введите код подтверждения' });
+      return;
+    }
+    if (vaultRecoveryNewPinInput.length < 4) {
+      setVaultRecoveryStatus({ type: 'error', message: 'PIN-код должен быть от 4 цифр' });
+      return;
+    }
+    if (vaultRecoveryNewPinInput !== vaultRecoveryConfirmPinInput) {
+      setVaultRecoveryStatus({ type: 'error', message: 'Подтверждение PIN-кода не совпадает' });
+      return;
+    }
+    setIsVaultRecoveryLoading(true);
+    const res = await resetVaultPinWithRecovery(vaultRecoveryEmailInput.trim(), vaultRecoveryCodeInput.trim(), vaultRecoveryNewPinInput);
+    setIsVaultRecoveryLoading(false);
+    if (res.success) {
+      setVaultRecoveryStatus({ type: 'success', message: 'PIN-код успешно сброшен!' });
+      setVaultRecoveryCodeInput('');
+      setVaultRecoveryNewPinInput('');
+      setVaultRecoveryConfirmPinInput('');
+      setVaultRecoveryStep('request');
+      fetchVaultStatus();
+    } else {
+      setVaultRecoveryStatus({ type: 'error', message: res.error || 'Не удалось сбросить PIN-код' });
+    }
+  };
+
   const sections = [
     {
       id: 'account',
@@ -841,6 +955,43 @@ export const UserSettingsScreen: React.FC = () => {
               />
               <p className="text-[11px] text-muted-foreground mt-1">
                 Используется для восстановления доступа и системных уведомлений.
+              </p>
+            </div>
+
+            {/* Language Selector in User Profile */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Languages size={14} className="text-primary" />
+                <span>Язык системы и метаданных (Language)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3 max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('ru')}
+                  className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
+                    language === 'ru'
+                      ? 'border-primary bg-primary/10 text-foreground ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/40'
+                  }`}
+                >
+                  <span className="text-base">🇷🇺</span>
+                  <span>Русский (Russian)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
+                    language === 'en'
+                      ? 'border-primary bg-primary/10 text-foreground ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/40'
+                  }`}
+                >
+                  <span className="text-base">🇬🇧</span>
+                  <span>English (Английский)</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Переключает язык интерфейса и приоритет отображения двуязычных описаний AI (summary_ru / description_ru).
               </p>
             </div>
           </div>
@@ -1528,6 +1679,264 @@ export const UserSettingsScreen: React.FC = () => {
             <span>{isPasswordUpdating ? 'Обновление...' : 'Обновить пароль'}</span>
           </button>
         </form>
+      ),
+    },
+    {
+      id: 'vault',
+      title: 'Личная защищённая папка',
+      subtitle: 'Управление PIN-кодом, смена пароля и восстановление через e-mail',
+      icon: FolderLock,
+      renderContent: () => (
+        <div className="space-y-6 pt-3">
+          {/* Vault Status Summary */}
+          <div className="p-4 rounded-2xl bg-muted/20 border border-border/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-sm text-foreground">Статус личной папки</h4>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                    isVaultUnlocked
+                      ? 'bg-[#2dc071]/15 text-[#2dc071]'
+                      : isVaultConfigured
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {isVaultUnlocked
+                    ? `Разблокирована (${Math.floor(vaultRemainingSeconds / 60)} мин)`
+                    : isVaultConfigured
+                      ? 'Заблокирована'
+                      : 'Не настроена'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Медиафайлы и метаданные личной папки изолированы в отдельной защищенной БД storage/.vault/vault_history.db.
+              </p>
+            </div>
+
+            <Link
+              to="/locked-folder"
+              className="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs flex items-center gap-1.5"
+            >
+              <FolderLock size={14} />
+              <span>Перейти в личную папку</span>
+            </Link>
+          </div>
+
+          {/* Form 1: Change Vault PIN */}
+          <div className="p-4 rounded-2xl bg-card border border-border/70 space-y-4 max-w-md">
+            <div className="flex items-center gap-2">
+              <KeyRound size={16} className="text-primary" />
+              <h5 className="font-bold text-xs text-foreground uppercase tracking-wider">
+                Смена PIN-кода личной папки
+              </h5>
+            </div>
+
+            <form onSubmit={handleChangeVaultPin} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Текущий PIN-код
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={vaultCurrentPin}
+                  onChange={(e) => setVaultCurrentPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm font-mono tracking-widest outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Новый PIN-код (от 4 до 6 цифр)
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={vaultNewPin}
+                  onChange={(e) => setVaultNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm font-mono tracking-widest outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Подтверждение нового PIN-кода
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={vaultConfirmPin}
+                  onChange={(e) => setVaultConfirmPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                  className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-sm font-mono tracking-widest outline-none focus:border-primary"
+                />
+              </div>
+
+              {vaultPinStatus && (
+                <div
+                  className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                    vaultPinStatus.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                      : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+                  }`}
+                >
+                  {vaultPinStatus.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                  <span>{vaultPinStatus.message}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isVaultPinUpdating}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs disabled:opacity-50"
+              >
+                <Save size={14} className={isVaultPinUpdating ? 'animate-spin' : ''} />
+                <span>{isVaultPinUpdating ? 'Сохранение...' : 'Обновить PIN-код'}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Form 2: Recovery / Reset Vault PIN via Email */}
+          <div className="p-4 rounded-2xl bg-card border border-border/70 space-y-4 max-w-md">
+            <div className="flex items-center gap-2">
+              <Mail size={16} className="text-primary" />
+              <h5 className="font-bold text-xs text-foreground uppercase tracking-wider">
+                Сброс и восстановление PIN-кода по e-mail
+              </h5>
+            </div>
+
+            {vaultRecoveryStep === 'request' ? (
+              <form onSubmit={handleVaultRecoveryRequest} className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Забыли PIN-код? Укажите ваш e-mail для получения одноразового кода восстановления.
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    E-mail адрес
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={vaultRecoveryEmailInput}
+                    onChange={(e) => setVaultRecoveryEmailInput(e.target.value)}
+                    placeholder="user@example.com"
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                  />
+                </div>
+
+                {vaultRecoveryStatus && (
+                  <div
+                    className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                      vaultRecoveryStatus.type === 'success'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+                    }`}
+                  >
+                    {vaultRecoveryStatus.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                    <span>{vaultRecoveryStatus.message}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isVaultRecoveryLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs disabled:opacity-50"
+                >
+                  <Mail size={14} className={isVaultRecoveryLoading ? 'animate-spin' : ''} />
+                  <span>{isVaultRecoveryLoading ? 'Отправка...' : 'Отправить проверочный код'}</span>
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVaultRecoveryReset} className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Введите код подтверждения и задайте новый PIN-код.
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Код из письма
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={vaultRecoveryCodeInput}
+                    onChange={(e) => setVaultRecoveryCodeInput(e.target.value.trim())}
+                    placeholder="6-значный код"
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Новый PIN-код (от 4 до 6 цифр)
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={vaultRecoveryNewPinInput}
+                    onChange={(e) => setVaultRecoveryNewPinInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="••••"
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono tracking-widest outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Подтвердите новый PIN-код
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={vaultRecoveryConfirmPinInput}
+                    onChange={(e) => setVaultRecoveryConfirmPinInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="••••"
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono tracking-widest outline-none focus:border-primary"
+                  />
+                </div>
+
+                {vaultRecoveryStatus && (
+                  <div
+                    className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                      vaultRecoveryStatus.type === 'success'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+                    }`}
+                  >
+                    {vaultRecoveryStatus.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                    <span>{vaultRecoveryStatus.message}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setVaultRecoveryStep('request')}
+                    className="px-3 py-2 border border-border/70 rounded-xl text-xs text-muted-foreground hover:bg-muted"
+                  >
+                    Назад
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isVaultRecoveryLoading}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs disabled:opacity-50"
+                  >
+                    <KeyRound size={14} className={isVaultRecoveryLoading ? 'animate-spin' : ''} />
+                    <span>{isVaultRecoveryLoading ? 'Сброс...' : 'Сбросить PIN-код'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       ),
     },
   ];

@@ -14,10 +14,13 @@ import {
   Check,
   ChevronRight,
   LogIn,
+  FolderLock,
+  Languages,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
 import { useTheme } from '../../theme/ThemeContext';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 export interface TopNavBarProps {
   onMenuToggle?: () => void;
@@ -28,6 +31,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
   const navigate = useNavigate();
   const { currentUser, isAdmin, logout } = useAuth();
   const { themeMode, toggleThemeMode } = useTheme();
+  const { language, setLanguage } = useLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
@@ -402,15 +406,58 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                   </div>
                 </div>
 
+                {/* Language Switcher */}
+                <div className="px-4 py-2 border-b border-border/50">
+                  <span className="text-[11px] font-semibold text-muted-foreground block mb-1.5 flex items-center gap-1.5">
+                    <Languages size={13} />
+                    <span>{language === 'ru' ? 'Язык системы' : 'System Language'}</span>
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-muted/60 border border-border/70">
+                    <button
+                      type="button"
+                      onClick={() => setLanguage('ru')}
+                      className={cn(
+                        'py-1 text-xs font-semibold rounded-lg transition-all',
+                        language === 'ru'
+                          ? 'bg-card text-foreground shadow-xs font-bold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      🇷🇺 RU
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage('en')}
+                      className={cn(
+                        'py-1 text-xs font-semibold rounded-lg transition-all',
+                        language === 'en'
+                          ? 'bg-card text-foreground shadow-xs font-bold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      🇬🇧 EN
+                    </button>
+                  </div>
+                </div>
+
                 {/* Menu Actions */}
                 <div className="py-1">
+                  <Link
+                    to="/locked-folder"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <FolderLock size={16} className="text-primary" />
+                    <span>{language === 'ru' ? 'Личная папка' : 'Personal Folder'}</span>
+                  </Link>
+
                   <Link
                     to="/settings"
                     onClick={() => setProfileOpen(false)}
                     className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <Settings size={16} />
-                    <span>Настройки учётной записи</span>
+                    <span>{language === 'ru' ? 'Настройки учётной записи' : 'Account Settings'}</span>
                   </Link>
 
                   {isAdmin && (
@@ -420,7 +467,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                       className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     >
                       <ShieldAlert size={16} />
-                      <span>Управление сервером</span>
+                      <span>{language === 'ru' ? 'Управление сервером' : 'Server Management'}</span>
                     </Link>
                   )}
                 </div>

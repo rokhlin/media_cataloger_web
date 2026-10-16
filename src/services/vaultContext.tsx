@@ -10,10 +10,16 @@ interface VaultContextValue {
   isLoading: boolean;
   unlockedUntil: number | null;
   remainingSeconds: number;
+  vaultMediaFiles: any[];
+  loadingVaultFiles: boolean;
   fetchVaultStatus: () => Promise<VaultStatus | null>;
-  setupVault: (pin: string, vaultFolder?: string, autoLockMinutes?: number) => Promise<{ success: boolean; error?: string }>;
+  setupVault: (pin: string, vaultFolder?: string, autoLockMinutes?: number, recoveryEmail?: string) => Promise<{ success: boolean; error?: string }>;
   unlockVault: (pin: string) => Promise<{ success: boolean; error?: string }>;
   lockVault: () => Promise<void>;
+  changePin: (currentPin: string, newPin: string) => Promise<{ success: boolean; error?: string }>;
+  requestPinRecovery: (email: string) => Promise<{ success: boolean; message: string; codeHint?: string; error?: string }>;
+  resetPinWithRecovery: (email: string, recoveryCode: string, newPin: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  fetchVaultMediaItems: () => Promise<any[]>;
   addVaultItem: (filePath: string, notes?: string) => Promise<boolean>;
   removeVaultItem: (filePath: string) => Promise<boolean>;
   vaultFetch: (url: string, init?: RequestInit) => Promise<Response>;
@@ -36,6 +42,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+  const [vaultMediaFiles, setVaultMediaFiles] = useState<any[]>([]);
+  const [loadingVaultFiles, setLoadingVaultFiles] = useState<boolean>(false);
   const timerRef = useRef<any>(null);
 
   // Vault authenticated fetch
@@ -80,9 +88,46 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return null;
   }, [authFetch, vaultToken]);
 
+  const fetchVaultMediaItems = useCallback(async (): Promise<any[]> => {
+    if (!vaultToken) return [];
+    setLoadingVaultFiles(true);
+    try {
+      const res = await vaultFetch('/api/vault/media-items');
+      if (res.ok) {
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data?.items || []);
+        setVaultMediaFiles(items);
+        return items;
+      } else {
+        // Fallback to /api/media/files?vault=true
+        const altRes = await vaultFetch('/api/media/files?vault=true');
+        if (altRes.ok) {
+          const data = await altRes.json();
+          const items = Array.isArray(data) ? data : (data?.items || []);
+          setVaultMediaFiles(items);
+          return items;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch vault media files:', err);
+    } finally {
+      setLoadingVaultFiles(false);
+    }
+    return [];
+  }, [vaultFetch, vaultToken]);
+
   useEffect(() => {
     fetchVaultStatus();
   }, [fetchVaultStatus]);
+
+  // When vault is unlocked, automatically fetch items
+  useEffect(() => {
+    if (vaultStatus?.isUnlocked && vaultToken) {
+      fetchVaultMediaItems();
+    } else {
+      setVaultMediaFiles([]);
+    }
+  }, [vaultStatus?.isUnlocked, vaultToken, fetchVaultMediaItems]);
 
   // Handle countdown timer for auto-lock
   useEffect(() => {
@@ -120,12 +165,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [vaultStatus?.isUnlocked, vaultStatus?.unlockedUntil]);
 
   const setupVault = useCallback(
-    async (pin: string, vaultFolder?: string, autoLockMinutes = 15): Promise<{ success: boolean; error?: string }> => {
+    async (pin: string, vaultFolder?: string, autoLockMinutes = 15, recoveryEmail?: string): Promise<{ success: boolean; error?: string }> => {
       try {
         const res = await authFetch('/api/vault/setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin, vaultFolder, autoLockMinutes }),
+          body: JSON.stringify({ pin, vaultFolder, autoLockMinutes, recoveryEmail }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -182,8 +227,75 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         sessionStorage.removeItem(VAULT_SESSION_KEY);
       } catch {}
       setVaultStatus((prev) => (prev ? { ...prev, isUnlocked: false, unlockedUntil: null } : null));
+      setVaultMediaFiles([]);
     }
   }, [authFetch, vaultToken]);
+
+  const changePin = useCallback(
+    async (currentPin: string, newPin: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await vaultFetch('/api/vault/change-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPin, newPin }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, error: data.message || 'Не удалось изменить PIN-код' };
+        }
+        await fetchVaultStatus();
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Ошибка сети при смене PIN-кода' };
+      }
+    },
+    [vaultFetch, fetchVaultStatus]
+  );
+
+  const requestPinRecovery = useCallback(
+    async (email: string): Promise<{ success: boolean; message: string; codeHint?: string; error?: string }> => {
+      try {
+        const res = await authFetch('/api/vault/recover-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, message: '', error: data.message || 'Ошибка запроса восстановления' };
+        }
+        return {
+          success: true,
+          message: data.message || `Код восстановления отправлен на адрес ${email}`,
+          codeHint: data.codeHint,
+        };
+      } catch (err: any) {
+        return { success: false, message: '', error: err.message || 'Ошибка сети' };
+      }
+    },
+    [authFetch]
+  );
+
+  const resetPinWithRecovery = useCallback(
+    async (email: string, recoveryCode: string, newPin: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+      try {
+        const res = await authFetch('/api/vault/recover-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, recoveryCode, newPin }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, error: data.message || 'Неверный или просроченный код восстановления' };
+        }
+        await fetchVaultStatus();
+        return { success: true, message: data.message || 'PIN-код личной папки успешно изменён' };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Ошибка сети' };
+      }
+    },
+    [authFetch, fetchVaultStatus]
+  );
 
   const addVaultItem = useCallback(
     async (filePath: string, notes?: string): Promise<boolean> => {
@@ -195,6 +307,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
         if (res.ok) {
           fetchVaultStatus();
+          fetchVaultMediaItems();
+          window.dispatchEvent(new CustomEvent('media_updated'));
           return true;
         }
         return false;
@@ -202,7 +316,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return false;
       }
     },
-    [vaultFetch, fetchVaultStatus]
+    [vaultFetch, fetchVaultStatus, fetchVaultMediaItems]
   );
 
   const removeVaultItem = useCallback(
@@ -213,6 +327,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
         if (res.ok) {
           fetchVaultStatus();
+          fetchVaultMediaItems();
+          window.dispatchEvent(new CustomEvent('media_updated'));
           return true;
         }
         return false;
@@ -220,7 +336,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return false;
       }
     },
-    [vaultFetch, fetchVaultStatus]
+    [vaultFetch, fetchVaultStatus, fetchVaultMediaItems]
   );
 
   const isUnlocked = Boolean(vaultStatus?.isUnlocked);
@@ -235,10 +351,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isLoading,
       unlockedUntil: vaultStatus?.unlockedUntil || null,
       remainingSeconds,
+      vaultMediaFiles,
+      loadingVaultFiles,
       fetchVaultStatus,
       setupVault,
       unlockVault,
       lockVault,
+      changePin,
+      requestPinRecovery,
+      resetPinWithRecovery,
+      fetchVaultMediaItems,
       addVaultItem,
       removeVaultItem,
       vaultFetch,
@@ -250,10 +372,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isConfigured,
       isLoading,
       remainingSeconds,
+      vaultMediaFiles,
+      loadingVaultFiles,
       fetchVaultStatus,
       setupVault,
       unlockVault,
       lockVault,
+      changePin,
+      requestPinRecovery,
+      resetPinWithRecovery,
+      fetchVaultMediaItems,
       addVaultItem,
       removeVaultItem,
       vaultFetch,
