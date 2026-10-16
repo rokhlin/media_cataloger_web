@@ -1,4 +1,92 @@
-/* Admin Panel Styles */
+/* Admin Panel Styles - Design System V2 */
+[data-theme-mode="light"] .admin-panel-container,
+[data-theme-mode="light"] #tab-content-users,
+[data-theme-mode="light"] #tab-content-backups,
+[data-theme-mode="light"] .admin-gemini-container {
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-color-hover: rgba(0, 0, 0, 0.2);
+  --card-bg: #ffffff;
+  --card-bg-solid: #f8fafc;
+  --modal-bg: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --input-bg: #f8fafc;
+  --input-focus-bg: #ffffff;
+  --nav-tab-bg: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme-mode="light"] .admin-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme-mode="light"] .admin-card-header-collapsible {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+[data-theme-mode="light"] .admin-card-header-collapsible:hover {
+  background: rgba(0, 0, 0, 0.035);
+}
+
+[data-theme-mode="light"] .flags-toolbar {
+  background: #f8fafc;
+}
+
+[data-theme-mode="light"] .flag-item-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme-mode="light"] .flag-item-card:hover {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.16);
+}
+
+[data-theme-mode="light"] .admin-flags-table thead tr th {
+  background: #f1f5f9;
+  color: #475569;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme-mode="light"] .admin-flags-table tbody tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .admin-flags-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+[data-theme-mode="light"] .admin-modal-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .admin-stat-pill {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme-mode="light"] .btn-admin-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme-mode="light"] .btn-admin-secondary:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .sandbox-box {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
 .admin-panel-container {
   width: 100%;
   max-width: 1400px;

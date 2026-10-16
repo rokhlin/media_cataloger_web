@@ -243,22 +243,56 @@ export default function UserManagementTab() {
                 return (
                   <tr key={user.id}>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontWeight: 600, color: '#fff' }}>{user.username}</span>
-                        {isSelf && (
-                          <span
-                            style={{
-                              fontSize: '0.72rem',
-                              padding: '0.15rem 0.45rem',
-                              background: 'rgba(99, 102, 241, 0.25)',
-                              border: '1px solid rgba(99, 102, 241, 0.4)',
-                              borderRadius: '6px',
-                              color: '#a5b4fc',
-                            }}
-                          >
-                            {t('rbacYouPill' as any) || 'You'}
-                          </span>
-                        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#23a6f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {user.avatarType === 'video' && user.avatarVideoUrl ? (
+                            <video
+                              src={user.avatarVideoUrl}
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : user.avatarUrl ? (
+                            <img
+                              src={user.avatarUrl}
+                              alt={user.username}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                              {(user.displayName || user.username || 'U').charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span style={{ fontWeight: 600, color: '#fff' }}>{user.username}</span>
+                            {isSelf && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  padding: '0.15rem 0.45rem',
+                                  background: 'rgba(99, 102, 241, 0.25)',
+                                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                                  borderRadius: '6px',
+                                  color: '#a5b4fc',
+                                }}
+                              >
+                                {t('rbacYouPill' as any) || 'You'}
+                              </span>
+                            )}
+                          </div>
+                          {user.email && (
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                              {user.email}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td>{user.displayName || '—'}</td>

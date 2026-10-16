@@ -7,6 +7,7 @@ import { ThemeProvider } from './theme/ThemeContext';
 import { FeatureFlagsProvider } from './services/featureFlagsContext';
 
 import { AuthProvider } from './services/authContext';
+import { VaultProvider } from './services/vaultContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -16,13 +17,15 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AuthProvider>
-      <LanguageProvider>
-        <ThemeProvider>
-          <FeatureFlagsProvider>
-            <AppRouter />
-          </FeatureFlagsProvider>
-        </ThemeProvider>
-      </LanguageProvider>
+      <VaultProvider>
+        <LanguageProvider>
+          <ThemeProvider>
+            <FeatureFlagsProvider>
+              <AppRouter />
+            </FeatureFlagsProvider>
+          </ThemeProvider>
+        </LanguageProvider>
+      </VaultProvider>
     </AuthProvider>
   </StrictMode>
 );

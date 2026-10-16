@@ -2,9 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, DEFAULT_FEATURE_FLAG_PRESETS } from '../../services/featureFlagsContext';
 import UserManagementTab from './UserManagementTab';
-import AdminVaultTab from './AdminVaultTab';
-import AdminBackupTab from './AdminBackupTab';
 import AdminGeminiTab from './AdminGeminiTab';
+import AdminBackupTab from './AdminBackupTab';
 import type { FeatureFlag } from '../../models/featureFlags';
 import type { StatusInfo } from '../../models/status';
 import type { GalleryMediaFile } from '../gallery/MediaGallery';
@@ -21,19 +20,19 @@ interface AdminPanelProps {
   uiSettings?: UISettings;
   onReloadFaces?: () => Promise<void>;
   onViewInFamilyTree?: (personName: string, personId?: string) => void;
-  initialSubTab?: 'flags' | 'users' | 'vault' | 'backups' | 'gemini';
+  initialSubTab?: 'flags' | 'users' | 'gemini' | 'backups' | 'vault';
 }
 
 export default function AdminPanel({
   statusInfo,
   mediaFilesCount = 0,
   facesCount = 0,
-  mediaFiles = [],
-  onRefreshMedia,
-  onStartSingleAnalysis,
-  uiSettings,
-  onReloadFaces,
-  onViewInFamilyTree,
+  mediaFiles: _mediaFiles = [],
+  onRefreshMedia: _onRefreshMedia,
+  onStartSingleAnalysis: _onStartSingleAnalysis,
+  uiSettings: _uiSettings,
+  onReloadFaces: _onReloadFaces,
+  onViewInFamilyTree: _onViewInFamilyTree,
   initialSubTab = 'flags',
 }: AdminPanelProps) {
   const { t } = useLanguage();
@@ -49,7 +48,9 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'vault' | 'backups' | 'gemini'>(initialSubTab);
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'gemini' | 'backups'>(
+    initialSubTab === 'vault' ? 'flags' : (initialSubTab as any)
+  );
 
   // Accordion open states
   const [isFlagsSectionOpen, setIsFlagsSectionOpen] = useState(true);
@@ -398,69 +399,67 @@ export default function AdminPanel({
       </div>
 
       {/* Subtab Navigation Bar */}
-      <div className="admin-subtabs-bar" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '0.75rem', flexWrap: 'wrap' }}>
+      <div className="flex items-center gap-2.5 pb-3 border-b border-border/80 flex-wrap">
         <button
           type="button"
-          className={`btn ${activeAdminSubTab === 'flags' ? 'btn-primary' : 'btn-secondary'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            activeAdminSubTab === 'flags'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+          }`}
           onClick={() => setActiveAdminSubTab('flags')}
           id="tab-btn-admin-flags"
-          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
         >
-          ⚡ {t('adminTabFlags' as any) || 'Feature Flags & System'}
+          <span>⚡</span>
+          <span>{t('adminTabFlags' as any) || 'Feature Flags & System'}</span>
         </button>
         <button
           type="button"
-          className={`btn ${activeAdminSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            activeAdminSubTab === 'users'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+          }`}
           onClick={() => setActiveAdminSubTab('users')}
           id="tab-btn-admin-users"
-          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
         >
-          👥 {t('adminTabUsers' as any) || 'User & Role Management (RBAC)'}
+          <span>👥</span>
+          <span>{t('adminTabUsers' as any) || 'User & Role Management (RBAC)'}</span>
         </button>
         <button
           type="button"
-          className={`btn ${activeAdminSubTab === 'vault' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveAdminSubTab('vault')}
-          id="tab-btn-admin-vault"
-          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
-        >
-          🔒 {t('adminTabVault' as any) || 'Secret Vault & Privacy'}
-        </button>
-        <button
-          type="button"
-          className={`btn ${activeAdminSubTab === 'backups' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveAdminSubTab('backups')}
-          id="tab-btn-admin-backups"
-          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
-        >
-          💾 {t('adminTabBackups' as any) || 'System Backups'}
-        </button>
-        <button
-          type="button"
-          className={`btn ${activeAdminSubTab === 'gemini' ? 'btn-primary' : 'btn-secondary'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            activeAdminSubTab === 'gemini'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+          }`}
           onClick={() => setActiveAdminSubTab('gemini')}
           id="tab-btn-admin-gemini"
-          style={{ padding: '0.6rem 1.2rem', fontSize: '0.92rem', borderRadius: '10px' }}
         >
-          🤖 {t('adminTabGemini' as any) || 'Gemini AI'}
+          <span>✨</span>
+          <span>{t('adminTabGemini' as any) || 'Gemini AI Configuration'}</span>
+        </button>
+        <button
+          type="button"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            activeAdminSubTab === 'backups'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+          }`}
+          onClick={() => setActiveAdminSubTab('backups')}
+          id="tab-btn-admin-backups"
+        >
+          <span>💾</span>
+          <span>{t('adminTabBackups' as any) || 'System Backups'}</span>
         </button>
       </div>
 
       {activeAdminSubTab === 'users' ? (
         <UserManagementTab />
-      ) : activeAdminSubTab === 'vault' ? (
-        <AdminVaultTab
-          mediaFiles={mediaFiles}
-          onRefreshMedia={onRefreshMedia}
-          onStartSingleAnalysis={onStartSingleAnalysis}
-          uiSettings={uiSettings}
-          onReloadFaces={onReloadFaces}
-          onViewInFamilyTree={onViewInFamilyTree}
-        />
-      ) : activeAdminSubTab === 'backups' ? (
-        <AdminBackupTab />
       ) : activeAdminSubTab === 'gemini' ? (
         <AdminGeminiTab />
+      ) : activeAdminSubTab === 'backups' ? (
+        <AdminBackupTab />
       ) : (
         <>
           {/* 1. Feature Flags Management Dropdown / Accordion Section */}

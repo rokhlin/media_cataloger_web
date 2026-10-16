@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, UserRole, Permission } from '../models/auth';
+import { mediaCacheService } from './mediaCacheService';
 
 interface AuthContextValue {
   currentUser: User | null;
@@ -14,19 +15,62 @@ interface AuthContextValue {
   hasRole: (role: UserRole | UserRole[]) => boolean;
   hasPermission: (permission: Permission | Permission[]) => boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, password: string, displayName?: string, role?: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  forgotPassword: (username: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  resetPassword: (username: string, newPassword: string, recoveryKey?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   refreshProfile: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
 const AUTH_TOKEN_KEY = 'media_cataloger_jwt_token';
 const AUTH_USER_KEY = 'media_cataloger_user_data';
+export const COOKIE_SESSION_KEY = 'media_cataloger_session';
+
+export function getSessionCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(^|;\\s*)' + COOKIE_SESSION_KEY + '=([^;]*)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+export function setSessionCookie(token: string, maxAgeDays = 7): void {
+  if (typeof document === 'undefined') return;
+  const maxAge = maxAgeDays * 24 * 60 * 60;
+  document.cookie = `${COOKIE_SESSION_KEY}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+export function clearSessionCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${COOKIE_SESSION_KEY}=; path=/; max-age=0; SameSite=Lax`;
+}
+
+/**
+ * Determines if a 401 response from the specified URL should invalidate the user's primary application login.
+ * Vault operations (e.g. entering an incorrect PIN) and auth verification attempts MUST NOT log out the user.
+ */
+export function shouldClearAuthOnUnauthorized(url: string): boolean {
+  if (!url) return true;
+  // Vault operations (PIN unlock, change PIN, etc.) must NEVER log out the app user session!
+  if (url.includes('/api/vault/')) return false;
+  // Auth login/register/recovery endpoints where 401 means invalid credentials must not wipe existing session!
+  if (
+    url.includes('/api/auth/login') ||
+    url.includes('/api/auth/register') ||
+    url.includes('/api/auth/forgot-password') ||
+    url.includes('/api/auth/reset-password')
+  ) {
+    return false;
+  }
+  return true;
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
     try {
+      const cookieToken = getSessionCookie();
+      if (cookieToken) return cookieToken;
       return localStorage.getItem(AUTH_TOKEN_KEY);
     } catch {
       return null;
@@ -48,21 +92,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authFetch = useCallback(
     async (url: string, init: RequestInit = {}): Promise<Response> => {
       const headers = new Headers(init.headers || {});
-      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+      const activeToken = token || (typeof window !== 'undefined' ? (getSessionCookie() || localStorage.getItem(AUTH_TOKEN_KEY)) : null);
       if (activeToken) {
         headers.set('Authorization', `Bearer ${activeToken}`);
       }
       const response = await fetch(url, {
+        credentials: 'include',
         ...init,
         headers,
       });
-      if (response.status === 401) {
+      if (response.status === 401 && shouldClearAuthOnUnauthorized(url)) {
+        clearSessionCookie();
         setToken(null);
         setCurrentUser(null);
         try {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(AUTH_USER_KEY);
         } catch {}
+        mediaCacheService.clearCache().catch(() => {});
       }
       return response;
     },
@@ -71,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Refresh current user profile from backend
   const refreshProfile = useCallback(async () => {
-    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+    const activeToken = token || (typeof window !== 'undefined' ? (getSessionCookie() || localStorage.getItem(AUTH_TOKEN_KEY)) : null);
     if (!activeToken) {
       setIsLoading(false);
       return;
@@ -97,21 +144,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Failed to persist user profile:', e);
           }
         } else {
+          clearSessionCookie();
           setToken(null);
           setCurrentUser(null);
           try {
             localStorage.removeItem(AUTH_TOKEN_KEY);
             localStorage.removeItem(AUTH_USER_KEY);
           } catch {}
+          mediaCacheService.clearCache().catch(() => {});
         }
       } else {
         // Token is invalid/expired
+        clearSessionCookie();
         setToken(null);
         setCurrentUser(null);
         try {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(AUTH_USER_KEY);
         } catch {}
+        mediaCacheService.clearCache().catch(() => {});
       }
     } catch (err: any) {
       console.warn('Failed to verify authentication status:', err?.name === 'AbortError' ? 'Verification timed out' : err);
@@ -134,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           res = await fetch('/api/auth/login', {
             method: 'POST',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
             },
@@ -178,6 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newToken = data.token;
         const newUser: User = data.user;
 
+        setSessionCookie(newToken);
         setToken(newToken);
         setCurrentUser(newUser);
 
@@ -200,6 +253,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
+  const register = useCallback(
+    async (username: string, password: string, displayName?: string, role: UserRole = 'admin'): Promise<{ success: boolean; error?: string }> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        let res: Response;
+        try {
+          res = await fetch('/api/auth/register', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, displayName: displayName || username, role }),
+            signal: controller.signal,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          return {
+            success: false,
+            error: fetchErr?.name === 'AbortError' ? 'Registration timed out' : 'Server is unreachable',
+          };
+        }
+        clearTimeout(timeoutId);
+
+        let data: any = {};
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch {
+            data = {};
+          }
+        } else {
+          const text = await res.text().catch(() => '');
+          data = { message: text.slice(0, 150) };
+        }
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data?.message || `Registration error (${res.status})`,
+          };
+        }
+
+        const newToken = data.token;
+        const newUser: User = data.user;
+
+        if (newToken && newUser) {
+          setSessionCookie(newToken);
+          setToken(newToken);
+          setCurrentUser(newUser);
+
+          try {
+            localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+            localStorage.setItem(AUTH_USER_KEY, JSON.stringify(newUser));
+          } catch (e) {
+            console.warn('Failed to save auth state to localStorage:', e);
+          }
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        return {
+          success: false,
+          error: err?.message || 'Connection error while registering',
+        };
+      }
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     try {
       if (token) {
@@ -211,14 +336,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }).catch(() => {});
       }
     } finally {
+      clearSessionCookie();
       setToken(null);
       setCurrentUser(null);
       try {
         localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.removeItem(AUTH_USER_KEY);
       } catch {}
+      await mediaCacheService.clearCache();
     }
   }, [token]);
+
+  const forgotPassword = useCallback(async (username: string): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return {
+          success: false,
+          error: data?.message || (res.status === 404 ? 'Пользователь не найден' : 'Ошибка при проверке восстановления пароля'),
+        };
+      }
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Сервер недоступен' };
+    }
+  }, []);
+
+  const resetPassword = useCallback(
+    async (username: string, newPassword: string, recoveryKey?: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), newPassword, recoveryKey: recoveryKey?.trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data?.message || 'Ошибка сброса пароля. Проверьте правильность ключа восстановления.',
+          };
+        }
+        return { success: true, message: data?.message || 'Пароль успешно обновлён' };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Сервер недоступен' };
+      }
+    },
+    []
+  );
 
   const hasRole = useCallback(
     (role: UserRole | UserRole[]): boolean => {
@@ -277,7 +447,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasRole,
       hasPermission,
       login,
+      register,
       logout,
+      forgotPassword,
+      resetPassword,
       refreshProfile,
       authFetch,
     }),
@@ -293,7 +466,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasRole,
       hasPermission,
       login,
+      register,
       logout,
+      forgotPassword,
+      resetPassword,
       refreshProfile,
       authFetch,
     ]

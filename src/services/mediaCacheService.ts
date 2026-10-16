@@ -220,6 +220,9 @@ export class MediaCacheService {
         }
 
         await this.mergeChunk(files, total);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('media_loaded', { detail: { count: files.length } }));
+        }
 
         return {
           files,
@@ -414,6 +417,28 @@ export class MediaCacheService {
     if (!res.ok) throw new Error(`Failed triggering recache: ${res.statusText}`);
     const data = await res.json();
     return data;
+  }
+
+  /**
+   * Completely purge client-side cache and IndexedDB store.
+   * Invoked on user logout or user switch to strictly isolate user galleries.
+   */
+  async clearCache(): Promise<void> {
+    this.cache.clear();
+    this.orderedKeys = [];
+    this.totalCount = 0;
+    this.pendingRequests.clear();
+    this.initialized = false;
+    try {
+      const db = await this.dbPromise;
+      if (db) {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        await tx.objectStore(STORE_NAME).clear();
+        await tx.done;
+      }
+    } catch (e) {
+      console.warn('Failed to clear IndexedDB media store:', e);
+    }
   }
 }
 

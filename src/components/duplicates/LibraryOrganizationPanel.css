@@ -1,5 +1,17 @@
 /* Library Organization Panel Styles */
 
+:root {
+  --card-bg: hsl(var(--card));
+  --border-color: hsl(var(--border) / 0.7);
+  --text-primary: hsl(var(--foreground));
+  --text-secondary: hsl(var(--muted-foreground));
+  --text-muted: hsl(var(--muted-foreground));
+  --card-bg-solid: hsl(var(--card));
+  --primary-color: hsl(var(--primary));
+  --input-bg: hsl(var(--muted) / 0.4);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
 .lib-org-panel {
   display: flex;
   flex-direction: column;
