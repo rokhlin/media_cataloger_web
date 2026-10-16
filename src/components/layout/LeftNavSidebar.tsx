@@ -19,11 +19,13 @@ import {
   HardDrive,
   X,
   Folder,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
 import FolderConfigModal from '../common/FolderConfigModal';
 import { getRealAlbums, type CatalogAlbum } from '../../services/albumService';
+import { virtualAlbumService, type VirtualAlbum } from '../../services/virtualAlbumService';
 
 export interface LeftNavSidebarProps {
   isOpen?: boolean;
@@ -40,12 +42,23 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
   const { isAdmin } = useAuth();
   const [albumsExpanded, setAlbumsExpanded] = useState(true);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
-  const [albums, setAlbums] = useState<CatalogAlbum[]>([]);
+  const [folderAlbums, setFolderAlbums] = useState<CatalogAlbum[]>([]);
+  const [virtualAlbums, setVirtualAlbums] = useState<VirtualAlbum[]>([]);
   const [stats, setStats] = useState<{ total: number; photos: number; videos: number } | null>(null);
   const [serverOnline, setServerOnline] = useState<boolean>(true);
 
+  const loadAlbums = () => {
+    getRealAlbums().then((loaded) => setFolderAlbums(loaded)).catch(() => {});
+    virtualAlbumService.getAlbums().then((loaded) => setVirtualAlbums(loaded)).catch(() => {});
+  };
+
   useEffect(() => {
-    getRealAlbums().then((loaded) => setAlbums(loaded));
+    loadAlbums();
+
+    const onUpdate = () => loadAlbums();
+    window.addEventListener('album_updated', onUpdate);
+    window.addEventListener('media_updated', onUpdate);
+    window.addEventListener('media_uploaded', onUpdate);
 
     fetch('/api/media/files?limit=1')
       .then((r) => {
@@ -61,6 +74,12 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
       .catch(() => {
         setServerOnline(false);
       });
+
+    return () => {
+      window.removeEventListener('album_updated', onUpdate);
+      window.removeEventListener('media_updated', onUpdate);
+      window.removeEventListener('media_uploaded', onUpdate);
+    };
   }, []);
 
   const mainRoutes = [
@@ -235,21 +254,65 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
               </div>
 
               {/* Nested Album Mini-List */}
-              {albumsExpanded && albums.length > 0 && (
-                <div className="ml-5 pl-3 border-l border-border/60 space-y-1 py-1">
-                  {albums.map((album) => (
-                    <NavLink
-                      key={album.id}
-                      to={album.path}
-                      onClick={onClose}
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    >
-                      <span className="truncate">{album.name}</span>
-                      <span className="text-[10px] bg-muted/60 px-1.5 py-0.5 rounded-full">
-                        {album.count}
-                      </span>
-                    </NavLink>
-                  ))}
+              {albumsExpanded && (virtualAlbums.length > 0 || folderAlbums.length > 0) && (
+                <div className="ml-5 pl-3 border-l border-border/60 space-y-1 py-1 max-h-56 overflow-y-auto">
+                  {/* Virtual User Albums */}
+                  {virtualAlbums.map((album) => {
+                    const isSelected =
+                      location.pathname === '/photos' && location.search.includes(`album=${album.id}`);
+                    return (
+                      <NavLink
+                        key={album.id}
+                        to={`/photos?album=${album.id}`}
+                        onClick={onClose}
+                        className={cn(
+                          'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors',
+                          isSelected
+                            ? 'bg-primary/20 text-primary font-semibold'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                        title={`Альбом: ${album.title}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          <span className="truncate">{album.title}</span>
+                        </div>
+                        <span className="text-[10px] bg-muted/70 px-1.5 py-0.5 rounded-full font-mono shrink-0">
+                          {album.filePaths?.length ?? 0}
+                        </span>
+                      </NavLink>
+                    );
+                  })}
+
+                  {/* Physical Folder Albums */}
+                  {folderAlbums.map((album) => {
+                    const isSelected =
+                      location.pathname === '/photos' &&
+                      (location.search.includes(`folder=${encodeURIComponent(album.name)}`) ||
+                        location.search.includes(`folder=${album.name}`));
+                    return (
+                      <NavLink
+                        key={album.id}
+                        to={album.path || `/photos?folder=${encodeURIComponent(album.name)}`}
+                        onClick={onClose}
+                        className={cn(
+                          'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors',
+                          isSelected
+                            ? 'bg-primary/20 text-primary font-semibold'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                        title={`Каталог: ${album.name}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{album.name}</span>
+                        </div>
+                        <span className="text-[10px] bg-muted/70 px-1.5 py-0.5 rounded-full font-mono shrink-0">
+                          {album.count}
+                        </span>
+                      </NavLink>
+                    );
+                  })}
                 </div>
               )}
             </div>

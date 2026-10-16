@@ -90,6 +90,7 @@ export const AlbumsScreen: React.FC = () => {
   const { currentUser } = useAuth();
   const [folderAlbums, setFolderAlbums] = useState<CatalogAlbum[]>([]);
   const [virtualAlbums, setVirtualAlbums] = useState<VirtualAlbum[]>([]);
+  const [coverOrientations, setCoverOrientations] = useState<Record<string, 'portrait' | 'landscape'>>({});
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
   const [showFolderTree, setShowFolderTree] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -408,25 +409,43 @@ export const AlbumsScreen: React.FC = () => {
                 , чтобы сгруппировать избранные фотографии.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 auto-rows-[230px] [grid-auto-flow:dense]">
                 {virtualAlbums.map((album) => {
                   const cover = album.filePaths[0];
-                  const coverUrl = cover ? `/api/media/thumbnail?path=${encodeURIComponent(cover)}&size=400` : null;
+                  const coverUrl = cover ? `/api/media/thumbnail?path=${encodeURIComponent(cover)}&size=600` : null;
+                  const orientation = coverOrientations[album.id] || 'landscape';
+                  const isPortrait = orientation === 'portrait';
 
                   return (
                     <div
                       key={album.id}
-                      className="group bg-card border border-border/70 hover:border-primary/50 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 shadow-xs hover:shadow-md relative"
+                      className={`group bg-card border border-border/70 hover:border-primary/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-xs hover:shadow-md relative ${
+                        isPortrait ? 'sm:row-span-2' : 'sm:row-span-1'
+                      }`}
                     >
                       {/* Album Cover Thumbnail */}
                       <div
                         onClick={() => handleOpenEditAlbum(album)}
-                        className="aspect-4/3 w-full bg-muted/60 relative overflow-hidden flex items-center justify-center cursor-pointer"
+                        className={`w-full bg-muted/60 relative overflow-hidden flex items-center justify-center cursor-pointer ${
+                          isPortrait ? 'h-[310px] shrink-0' : 'h-36 shrink-0'
+                        }`}
                       >
                         {coverUrl ? (
                           <img
                             src={coverUrl}
                             alt={album.title}
+                            onLoad={(e) => {
+                              const img = e.currentTarget;
+                              if (img.naturalHeight > img.naturalWidth * 1.1) {
+                                if (coverOrientations[album.id] !== 'portrait') {
+                                  setCoverOrientations((prev) => ({ ...prev, [album.id]: 'portrait' }));
+                                }
+                              } else {
+                                if (coverOrientations[album.id] !== 'landscape') {
+                                  setCoverOrientations((prev) => ({ ...prev, [album.id]: 'landscape' }));
+                                }
+                              }
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = 'none';
@@ -467,25 +486,25 @@ export const AlbumsScreen: React.FC = () => {
                       </div>
 
                       {/* Album Metadata */}
-                      <div className="p-4 flex flex-col flex-1 justify-between">
+                      <div className="p-3.5 flex flex-col flex-1 justify-between bg-card min-h-0">
                         <div
                           onClick={() => handleOpenEditAlbum(album)}
                           className="cursor-pointer"
                         >
-                          <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors truncate">
+                          <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
                             {album.title}
                           </h3>
                           {album.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
                               {album.description}
                             </p>
                           )}
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
                             {album.filePaths.length} фото
                           </p>
                         </div>
 
-                        <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/40 text-[11px] text-muted-foreground">
+                        <div className="flex items-center justify-between pt-2 mt-1 border-t border-border/40 text-[11px] text-muted-foreground">
                           <Link
                             to={`/photos?album=${album.id}`}
                             className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
@@ -526,7 +545,7 @@ export const AlbumsScreen: React.FC = () => {
                     className="group bg-card border border-border/70 hover:border-primary/50 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 shadow-xs hover:shadow-md"
                   >
                     {/* Album Cover Thumbnail */}
-                    <div className="aspect-4/3 w-full bg-muted/60 relative overflow-hidden flex items-center justify-center">
+                    <div className="h-40 w-full bg-muted/60 relative overflow-hidden flex items-center justify-center">
                       {album.coverUrl ? (
                         <img
                           src={album.coverUrl}

@@ -1,5 +1,16 @@
 /* Duplicates Manager Workspace CSS */
 
+:root {
+  --card-bg: hsl(var(--card));
+  --border-color: hsl(var(--border) / 0.7);
+  --text-primary: hsl(var(--foreground));
+  --text-secondary: hsl(var(--muted-foreground));
+  --text-muted: hsl(var(--muted-foreground));
+  --card-bg-solid: hsl(var(--card));
+  --primary-color: hsl(var(--primary));
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
 .duplicates-manager-container {
   display: flex;
   flex-direction: column;

@@ -14,6 +14,39 @@ interface GeoCluster {
   files: GalleryMediaFile[];
 }
 
+export function extractMediaCoordinates(file: any): { lat: number; lon: number; locationName?: string } | null {
+  if (!file) return null;
+
+  // 1. Direct properties
+  let rawLat = file.latitude ?? file.gps_latitude ?? file.gps?.latitude;
+  let rawLon = file.longitude ?? file.gps_longitude ?? file.gps?.longitude;
+
+  // 2. EXIF object properties
+  if (rawLat == null || rawLon == null) {
+    rawLat = file.exif?.gps?.latitude ?? file.exif?.latitude;
+    rawLon = file.exif?.gps?.longitude ?? file.exif?.longitude;
+  }
+
+  // 3. Sidecar properties
+  if (rawLat == null || rawLon == null) {
+    rawLat = file.sidecar?.exif?.gps?.latitude ?? file.sidecar?.gps?.latitude ?? file.sidecar?.latitude;
+    rawLon = file.sidecar?.exif?.gps?.longitude ?? file.sidecar?.gps?.longitude ?? file.sidecar?.longitude;
+  }
+
+  if (rawLat == null || rawLon == null) return null;
+
+  const lat = typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat));
+  const lon = typeof rawLon === 'number' ? rawLon : parseFloat(String(rawLon));
+
+  if (isNaN(lat) || isNaN(lon)) return null;
+  // Valid coordinates range check
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  if (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) return null;
+
+  const locationName = file.location_name || file.city || file.exif?.location?.city || file.sidecar?.location_name || file.sidecar?.location?.city;
+  return { lat, lon, locationName };
+}
+
 export const GeoMapScreen: React.FC = () => {
   const navigate = useNavigate();
   const [allFiles, setAllFiles] = useState<GalleryMediaFile[]>([]);
@@ -25,9 +58,9 @@ export const GeoMapScreen: React.FC = () => {
     const loadMedia = async () => {
       try {
         let files = mediaCacheService.getAll();
-        if (files.length === 0) {
-          const res = await mediaCacheService.fetchChunk({ offset: 0, limit: 1000 });
-          files = res.files || [];
+        if (files.length === 0 || files.length < 200) {
+          const res = await mediaCacheService.fetchChunk({ offset: 0, limit: 2000, refresh: true });
+          files = res.files || mediaCacheService.getAll();
         }
         setAllFiles(files);
       } catch (err) {
@@ -37,15 +70,17 @@ export const GeoMapScreen: React.FC = () => {
       }
     };
     loadMedia();
+    window.addEventListener('media_uploaded', loadMedia);
+    window.addEventListener('media_updated', loadMedia);
+    return () => {
+      window.removeEventListener('media_uploaded', loadMedia);
+      window.removeEventListener('media_updated', loadMedia);
+    };
   }, []);
 
   // Filter media files that contain real GPS coordinates
   const geotaggedFiles = useMemo(() => {
-    return allFiles.filter((f) => {
-      const lat = (f as any).latitude ?? (f as any).gps_latitude ?? (f as any).exif?.latitude;
-      const lon = (f as any).longitude ?? (f as any).gps_longitude ?? (f as any).exif?.longitude;
-      return typeof lat === 'number' && typeof lon === 'number';
-    });
+    return allFiles.filter((f) => extractMediaCoordinates(f) !== null);
   }, [allFiles]);
 
   // Derive geographical clusters from real files
@@ -54,9 +89,9 @@ export const GeoMapScreen: React.FC = () => {
     const map = new Map<string, GalleryMediaFile[]>();
 
     for (const file of geotaggedFiles) {
-      const lat = (file as any).latitude ?? (file as any).gps_latitude ?? (file as any).exif?.latitude;
-      const lon = (file as any).longitude ?? (file as any).gps_longitude ?? (file as any).exif?.longitude;
-      const clusterKey = `${lat.toFixed(1)},${lon.toFixed(1)}`;
+      const coords = extractMediaCoordinates(file);
+      if (!coords) continue;
+      const clusterKey = `${coords.lat.toFixed(1)},${coords.lon.toFixed(1)}`;
       if (!map.has(clusterKey)) {
         map.set(clusterKey, []);
       }
@@ -70,7 +105,8 @@ export const GeoMapScreen: React.FC = () => {
       // Normalized projection percentage for abstract map
       const x = Math.min(95, Math.max(5, ((lon + 180) / 360) * 100)).toFixed(1) + '%';
       const y = Math.min(95, Math.max(5, ((90 - lat) / 180) * 100)).toFixed(1) + '%';
-      const cityName = (files[0] as any).location_name || (files[0] as any).city || `Координаты ${key}`;
+      const firstCoords = extractMediaCoordinates(files[0]);
+      const cityName = (files[0] as any).location_name || firstCoords?.locationName || (files[0] as any).city || `Координаты ${key}`;
 
       return {
         id: `cluster-${index}`,

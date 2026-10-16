@@ -11,6 +11,17 @@ import { useAuth } from '../../services/authContext';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import LibraryOrganizationPanel from './LibraryOrganizationPanel';
 import DuplicateDetectionRules from './DuplicateDetectionRules';
+import {
+  ChevronDown,
+  FolderCog,
+  CopyCheck,
+  Layers,
+  Files,
+  HardDrive,
+  Zap,
+  CheckCheck,
+  XCircle,
+} from 'lucide-react';
 import './DuplicatesManagerTab.css';
 
 export interface DuplicatesManagerTabProps {
@@ -317,140 +328,180 @@ export default function DuplicatesManagerTab({
   const isScanning = Boolean(scanStatus?.isScanning);
 
   return (
-    <div className="duplicates-manager-container">
+    <div className="duplicates-manager-container space-y-6 max-w-7xl mx-auto p-4 md:p-6 animate-in fade-in duration-300">
       {/* Collapsible Section 1: Media Library Organization */}
-      <div className="organize-accordion-section">
+      <div className="organize-accordion-section bg-card border border-border/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200">
         <div
-          className="organize-accordion-header"
+          className="organize-accordion-header flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors select-none"
           onClick={() => setIsOrganizeOpen((prev) => !prev)}
         >
-          <div className="organize-accordion-title">
-            <span className={`organize-accordion-toggle-icon ${isOrganizeOpen ? 'expanded' : ''}`}>
-              ▶
-            </span>
-            <span>📚</span>
-            <span>{t('sectionLibraryOrganize' as any) || 'Организация медиатеки'}</span>
+          <div className="organize-accordion-title flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
+              <FolderCog className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                {t('sectionLibraryOrganize' as any) || 'Организация медиатеки'}
+              </h2>
+              <p className="text-xs text-muted-foreground font-normal">
+                Структурирование файлов по папкам, датам и событиям
+              </p>
+            </div>
           </div>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
-            {isOrganizeOpen ? 'Свернуть' : 'Развернуть'}
-          </span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <span>{isOrganizeOpen ? 'Свернуть' : 'Развернуть'}</span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform duration-200 ${isOrganizeOpen ? 'rotate-180' : ''}`}
+            />
+          </div>
         </div>
 
         {isOrganizeOpen && (
-          <div className="organize-accordion-content">
+          <div className="organize-accordion-content p-5 border-t border-border/60">
             <LibraryOrganizationPanel onRefreshMedia={onRefreshMedia} />
           </div>
         )}
       </div>
 
       {/* Collapsible Section 2: Duplicates & Cleanup */}
-      <div className="organize-accordion-section">
+      <div className="organize-accordion-section bg-card border border-border/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200">
         <div
-          className="organize-accordion-header"
+          className="organize-accordion-header flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors select-none"
           onClick={() => setIsDuplicatesOpen((prev) => !prev)}
         >
-          <div className="organize-accordion-title">
-            <span className={`organize-accordion-toggle-icon ${isDuplicatesOpen ? 'expanded' : ''}`}>
-              ▶
-            </span>
-            <span>🗂️</span>
-            <span>{t('sectionDuplicatesManager' as any) || 'Поиск и управление дубликатами'}</span>
+          <div className="organize-accordion-title flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-[#23a6f0]/10 text-[#23a6f0] shrink-0">
+              <CopyCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                {t('sectionDuplicatesManager' as any) || 'Поиск и управление дубликатами'}
+              </h2>
+              <p className="text-xs text-muted-foreground font-normal">
+                Поиск полных копий, визуально похожих фото и серийной съемки
+              </p>
+            </div>
           </div>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
-            {isDuplicatesOpen ? 'Свернуть' : 'Развернуть'}
-          </span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <span>{isDuplicatesOpen ? 'Свернуть' : 'Развернуть'}</span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform duration-200 ${isDuplicatesOpen ? 'rotate-180' : ''}`}
+            />
+          </div>
         </div>
 
         {isDuplicatesOpen && (
-          <div className="organize-accordion-content">
+          <div className="organize-accordion-content p-5 border-t border-border/60 space-y-6">
             {/* Metric Summary Cards */}
-      <div className="dup-metrics-grid">
-        <div className="dup-metric-card">
-          <span className="dup-metric-icon" aria-hidden="true">🗂️</span>
-          <div className="dup-metric-info">
-            <span className="dup-metric-value">{summary?.totalGroups || groups.length}</span>
-            <span className="dup-metric-label">{t('duplicateGroups' as any) || 'Duplicate Groups'}</span>
-          </div>
-        </div>
+            <div className="dup-metrics-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="dup-metric-card p-4 bg-muted/20 border border-border/60 rounded-xl flex items-center gap-3.5 shadow-xs">
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div className="dup-metric-info">
+                  <span className="dup-metric-value text-xl font-extrabold text-foreground font-mono">
+                    {summary?.totalGroups || groups.length}
+                  </span>
+                  <span className="dup-metric-label text-xs text-muted-foreground">
+                    {t('duplicateGroups' as any) || 'Групп дубликатов'}
+                  </span>
+                </div>
+              </div>
 
-        <div className="dup-metric-card">
-          <span className="dup-metric-icon" aria-hidden="true">📑</span>
-          <div className="dup-metric-info">
-            <span className="dup-metric-value">{summary?.totalDuplicateFiles || 0}</span>
-            <span className="dup-metric-label">{t('duplicateCopies' as any) || 'Duplicate Copies'}</span>
-          </div>
-        </div>
+              <div className="dup-metric-card p-4 bg-muted/20 border border-border/60 rounded-xl flex items-center gap-3.5 shadow-xs">
+                <div className="p-2.5 rounded-xl bg-[#f3cd03]/10 text-[#f3cd03] shrink-0">
+                  <Files className="h-5 w-5" />
+                </div>
+                <div className="dup-metric-info">
+                  <span className="dup-metric-value text-xl font-extrabold text-foreground font-mono">
+                    {summary?.totalDuplicateFiles || 0}
+                  </span>
+                  <span className="dup-metric-label text-xs text-muted-foreground">
+                    {t('duplicateCopies' as any) || 'Повторяющихся копий'}
+                  </span>
+                </div>
+              </div>
 
-        <div className="dup-metric-card">
-          <span className="dup-metric-icon" aria-hidden="true">💾</span>
-          <div className="dup-metric-info">
-            <span className="dup-metric-value" style={{ color: '#10b981' }}>
-              {formatBytes(summary?.totalReclaimableBytes || 0)}
-            </span>
-            <span className="dup-metric-label">{t('reclaimableSpace' as any) || 'Reclaimable Space'}</span>
-          </div>
-        </div>
+              <div className="dup-metric-card p-4 bg-muted/20 border border-border/60 rounded-xl flex items-center gap-3.5 shadow-xs">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0">
+                  <HardDrive className="h-5 w-5" />
+                </div>
+                <div className="dup-metric-info">
+                  <span className="dup-metric-value text-xl font-extrabold text-emerald-500 font-mono">
+                    {formatBytes(summary?.totalReclaimableBytes || 0)}
+                  </span>
+                  <span className="dup-metric-label text-xs text-muted-foreground">
+                    {t('reclaimableSpace' as any) || 'Освобождаемое место'}
+                  </span>
+                </div>
+              </div>
 
-        <div className="dup-metric-card">
-          <span className="dup-metric-icon" aria-hidden="true">⚡</span>
-          <div className="dup-metric-info">
-            <span className="dup-metric-value" style={{ fontSize: '1.1rem' }}>
-              {summary?.engineUsed === 'gpu' ? 'GPU (RTX 4080)' : 'CPU (Low-Memory Safe)'}
-            </span>
-            <span className="dup-metric-label">{t('duplicateEngine' as any) || 'Engine Mode'}</span>
-          </div>
-        </div>
-      </div>
+              <div className="dup-metric-card p-4 bg-muted/20 border border-border/60 rounded-xl flex items-center gap-3.5 shadow-xs">
+                <div className="p-2.5 rounded-xl bg-[#23a6f0]/10 text-[#23a6f0] shrink-0">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <div className="dup-metric-info">
+                  <span className="dup-metric-value text-base font-extrabold text-foreground font-mono">
+                    {summary?.engineUsed === 'gpu' ? 'GPU (RTX 4080)' : 'CPU (Low-Memory Safe)'}
+                  </span>
+                  <span className="dup-metric-label text-xs text-muted-foreground">
+                    {t('duplicateEngine' as any) || 'Режим движка'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-      {/* Control Panel: Detection Rules & Thresholds */}
-      <DuplicateDetectionRules
-        activeInputFolders={activeInputFolders}
-        selectedEngine={selectedEngine}
-        setSelectedEngine={setSelectedEngine}
-        selectedMode={selectedMode}
-        setSelectedMode={setSelectedMode}
-        similarityThreshold={similarityThreshold}
-        setSimilarityThreshold={setSimilarityThreshold}
-        burstWindowSec={burstWindowSec}
-        setBurstWindowSec={setBurstWindowSec}
-        selectedFolderScope={selectedFolderScope}
-        setSelectedFolderScope={setSelectedFolderScope}
-        forceRehash={forceRehash}
-        setForceRehash={setForceRehash}
-        isScanning={Boolean(scanStatus?.isScanning)}
-        scanStatus={scanStatus}
-        onStartScan={handleStartScan}
-        onStopScan={handleStopScan}
-      />
+            {/* Control Panel: Detection Rules & Thresholds */}
+            <DuplicateDetectionRules
+              activeInputFolders={activeInputFolders}
+              selectedEngine={selectedEngine}
+              setSelectedEngine={setSelectedEngine}
+              selectedMode={selectedMode}
+              setSelectedMode={setSelectedMode}
+              similarityThreshold={similarityThreshold}
+              setSimilarityThreshold={setSimilarityThreshold}
+              burstWindowSec={burstWindowSec}
+              setBurstWindowSec={setBurstWindowSec}
+              selectedFolderScope={selectedFolderScope}
+              setSelectedFolderScope={setSelectedFolderScope}
+              forceRehash={forceRehash}
+              setForceRehash={setForceRehash}
+              isScanning={Boolean(scanStatus?.isScanning)}
+              scanStatus={scanStatus}
+              onStartScan={handleStartScan}
+              onStopScan={handleStopScan}
+            />
 
-      {/* Smart Selection & Action Bar */}
-      {groups.length > 0 && (
-        <div className="dup-actions-bar">
-          <div className="dup-selection-tools">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleSelectAllDuplicates}
-              style={{ fontSize: '0.85rem' }}
-            >
-              ✨ {t('selectAllDuplicates' as any) || 'Select All Duplicates'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleDeselectAll}
-              style={{ fontSize: '0.85rem' }}
-              disabled={selectedFiles.size === 0}
-            >
-              ❌ {t('deselectAll' as any) || 'Deselect All'}
-            </button>
+            {/* Smart Selection & Action Bar */}
+            {groups.length > 0 && (
+              <div className="dup-actions-bar flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/20 border border-border/60 rounded-xl">
+                <div className="dup-selection-tools flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors shadow-xs cursor-pointer"
+                    onClick={handleSelectAllDuplicates}
+                  >
+                    <CheckCheck size={14} className="text-primary" />
+                    <span>{t('selectAllDuplicates' as any) || 'Выбрать все дубликаты'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                    onClick={handleDeselectAll}
+                    disabled={selectedFiles.size === 0}
+                  >
+                    <XCircle size={14} className="text-muted-foreground" />
+                    <span>{t('deselectAll' as any) || 'Снять выбор'}</span>
+                  </button>
 
-            {selectedFiles.size > 0 && (
-              <span style={{ fontSize: '0.9rem', color: '#a5b4fc', fontWeight: 600, marginLeft: '0.5rem' }}>
-                {t('selectedSummary' as any) || `Selected ${selectedFiles.size} duplicate(s) (${formatBytes(selectedBytesTotal)})`}
-              </span>
-            )}
-          </div>
+                  {selectedFiles.size > 0 && (
+                    <span className="text-xs font-semibold text-primary ml-2">
+                      {t('selectedSummary' as any) || `Выбрано ${selectedFiles.size} дубликатов (${formatBytes(selectedBytesTotal)})`}
+                    </span>
+                  )}
+                </div>
 
           <div className="dup-action-buttons">
             <button

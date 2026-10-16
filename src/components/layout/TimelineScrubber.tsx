@@ -17,8 +17,14 @@ export function extractMediaYear(file: any): number | null {
     file.media_date,
     file.exif?.DateTimeOriginal,
     file.exif?.CreateDate,
+    file.exif?.datetime,
+    file.exif?.DateTime,
+    file.sidecar?.exif?.DateTimeOriginal,
+    file.sidecar?.exif?.datetime,
+    file.sidecar?.exif?.CreateDate,
+    file.sidecar?.capture_date,
+    file.sidecar?.media_date,
     file.date_taken,
-    file.created_at,
   ];
   for (const c of candidates) {
     if (c) {
@@ -30,7 +36,17 @@ export function extractMediaYear(file: any): number | null {
       }
     }
   }
-  // Fallback to mtime (seconds or milliseconds)
+
+  // Parse year from filename (e.g., 2016-07-02 12-25-42.JPG, 20240808_130100.heic, IMG_20250602_...)
+  const fname = file.filename || file.file_path || '';
+  const matchFname = fname.match(/\b(19\d\d|20\d\d)[-_](0[1-9]|1[0-2])[-_](0[1-9]|[12]\d|3[01])\b/) ||
+                     fname.match(/\b(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
+  if (matchFname) {
+    const y = parseInt(matchFname[1], 10);
+    if (y >= 1900 && y <= 2035) return y;
+  }
+
+  // Fallback to mtime (seconds or milliseconds) only as last resort
   if (typeof file.mtime === 'number' && file.mtime > 0) {
     const ms = file.mtime < 10000000000 ? file.mtime * 1000 : file.mtime;
     const y = new Date(ms).getFullYear();

@@ -24,6 +24,9 @@ import {
   RotateCcw,
   Sliders,
   Film,
+  Crop,
+  RotateCw,
+  ZoomIn,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 
@@ -50,6 +53,20 @@ export const UserSettingsScreen: React.FC = () => {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [savingAccount, setSavingAccount] = useState(false);
 
+  // Photo Avatar Cropping Modal State
+  const [photoCropModalOpen, setPhotoCropModalOpen] = useState(false);
+  const [, setSelectedPhotoFile] = useState<File | null>(null);
+  const [selectedPhotoObjectUrl, setSelectedPhotoObjectUrl] = useState<string | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoPanX, setPhotoPanX] = useState(0);
+  const [photoPanY, setPhotoPanY] = useState(0);
+  const [photoRotation, setPhotoRotation] = useState(0);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const photoImageRef = useRef<HTMLImageElement | null>(null);
+
   // Video Avatar Trimming Modal State
   const [trimModalOpen, setTrimModalOpen] = useState(false);
   const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
@@ -74,6 +91,8 @@ export const UserSettingsScreen: React.FC = () => {
   const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
   const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
+  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+  const [pipelineFeedback, setPipelineFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Storage Telemetry State
   const [storageTelemetry, setStorageTelemetry] = useState<{
@@ -228,6 +247,164 @@ export const UserSettingsScreen: React.FC = () => {
     } finally {
       setSavingAccount(false);
       setTimeout(() => setAccountStatus(null), 4000);
+    }
+  };
+
+  const handlePhotoFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Пожалуйста, выберите файл изображения (JPEG, PNG, WebP)');
+      return;
+    }
+    if (selectedPhotoObjectUrl) {
+      URL.revokeObjectURL(selectedPhotoObjectUrl);
+    }
+    const url = URL.createObjectURL(file);
+    setSelectedPhotoFile(file);
+    setSelectedPhotoObjectUrl(url);
+    setPhotoZoom(1);
+    setPhotoPanX(0);
+    setPhotoPanY(0);
+    setPhotoRotation(0);
+    setPhotoCropModalOpen(true);
+    e.target.value = '';
+  };
+
+  const handleConfirmCropAndUpload = async () => {
+    if (!selectedPhotoObjectUrl) return;
+    setIsUploadingPhoto(true);
+
+    try {
+      const img = new Image();
+      img.src = selectedPhotoObjectUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image for cropping'));
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not create canvas context');
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.save();
+      ctx.translate(256, 256);
+      ctx.rotate((photoRotation * Math.PI) / 180);
+      ctx.scale(photoZoom, photoZoom);
+
+      const aspect = img.width / img.height;
+      let drawW = 512;
+      let drawH = 512;
+      if (aspect > 1) {
+        drawW = 512 * aspect;
+        drawH = 512;
+      } else {
+        drawW = 512;
+        drawH = 512 / aspect;
+      }
+
+      ctx.drawImage(img, -drawW / 2 + photoPanX, -drawH / 2 + photoPanY, drawW, drawH);
+      ctx.restore();
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      if (!blob) throw new Error('Canvas export failed');
+
+      const formData = new FormData();
+      formData.append('photo', blob, 'avatar.jpg');
+
+      const res = await authFetch('/api/auth/avatar-photo', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newUrl = data.avatarUrl;
+        setAvatarUrl(newUrl);
+        setAvatarType('image');
+        setPhotoCropModalOpen(false);
+
+        await authFetch('/api/auth/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            avatarType: 'image',
+            avatarUrl: newUrl,
+          }),
+        });
+
+        await refreshProfile();
+        localStorage.setItem('user_avatar_url', newUrl);
+        window.dispatchEvent(
+          new CustomEvent('user_avatar_updated', {
+            detail: { avatarType: 'image', avatarUrl: newUrl },
+          })
+        );
+        setAccountStatus('Фото-аватар успешно обрезан, загружен и сохранён!');
+        setTimeout(() => setAccountStatus(null), 4000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Ошибка загрузки: ${err.message || 'сервер отклонил загрузку фотографии'}`);
+      }
+    } catch (err: any) {
+      alert(`Ошибка обрезки фото: ${err.message}`);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleTriggerAnalysis = async (force: boolean) => {
+    const modes: string[] = [];
+    if (aiFaceClustering) modes.push('faces');
+    if (aiClipSearch || aiOcrRecognition) modes.push('vision');
+
+    if (modes.length === 0) {
+      alert('Пожалуйста, выберите хотя бы один модуль анализа (Кластеризация лиц, Семантический поиск или OCR).');
+      return;
+    }
+
+    setIsRunningPipeline(true);
+    setPipelineFeedback(null);
+    try {
+      const res = await authFetch(`/api/run?force=${force}&modes=${encodeURIComponent(modes.join(','))}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modes,
+          force,
+          ocr: aiOcrRecognition,
+          vision: aiClipSearch || aiOcrRecognition,
+          faces: aiFaceClustering,
+        }),
+      });
+
+      if (res.ok) {
+        setPipelineFeedback({
+          type: 'success',
+          message: force
+            ? `Запущен полный переанализ всех файлов (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`
+            : `Запущен выборочный анализ файлов без метаданных (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`,
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setPipelineFeedback({
+          type: 'error',
+          message: err.message || 'Ошибка запуска конвейера анализа',
+        });
+      }
+    } catch (e: any) {
+      setPipelineFeedback({
+        type: 'error',
+        message: e.message || 'Ошибка сети при запуске анализа',
+      });
+    } finally {
+      setIsRunningPipeline(false);
+      setTimeout(() => setPipelineFeedback(null), 8000);
     }
   };
 
@@ -565,17 +742,41 @@ export const UserSettingsScreen: React.FC = () => {
               </div>
 
               {avatarType === 'image' ? (
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-muted-foreground">
-                    URL фотографии аватара
-                  </label>
-                  <input
-                    type="text"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://example.com/avatar.jpg"
-                    className="w-full px-3 py-1.5 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="file"
+                      ref={photoInputRef}
+                      onChange={handlePhotoFileSelected}
+                      accept="image/png,image/jpeg,image/webp,image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <Crop size={14} />
+                      <span>Выбрать локальное фото с обрезкой</span>
+                    </button>
+                    {avatarUrl && avatarUrl.startsWith('/api/auth/avatar-photo/') && (
+                      <span className="text-[11px] text-emerald-500 font-mono">
+                        ✓ Локальное фото сохранено
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1">
+                      Либо укажите прямой URL фотографии:
+                    </label>
+                    <input
+                      type="text"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      placeholder="https://example.com/avatar.jpg или /api/auth/avatar-photo/..."
+                      className="w-full px-3 py-1.5 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1025,16 +1226,52 @@ export const UserSettingsScreen: React.FC = () => {
             </label>
           </div>
 
-          <div className="pt-2">
+          {/* Action buttons: Save, Force Re-analyze, and Analyze Only Without Metadata */}
+          <div className="pt-3 border-t border-border/50 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleSaveAi}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
             >
               <Save size={14} />
               <span>Сохранить параметры AI и промпт</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => handleTriggerAnalysis(true)}
+              disabled={isRunningPipeline}
+              className="flex items-center gap-2 px-4 py-2 border border-rose-500/50 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              title="Принудительно запустить анализ всех медиафайлов заново, перезаписывая существующие метаданные"
+            >
+              <RefreshCw size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
+              <span>Переанализировать все файлы (игнорируя метаданные)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTriggerAnalysis(false)}
+              disabled={isRunningPipeline}
+              className="flex items-center gap-2 px-4 py-2 border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              title="Запустить анализ только по тем файлам, для которых метаданные еще не сформированы"
+            >
+              <Sparkles size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
+              <span>Анализировать файлы без метаданных</span>
+            </button>
           </div>
+
+          {pipelineFeedback && (
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                pipelineFeedback.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+              }`}
+            >
+              <CheckCircle2 size={15} className="shrink-0" />
+              <span>{pipelineFeedback.message}</span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -1440,6 +1677,131 @@ export const UserSettingsScreen: React.FC = () => {
                     <span>{isUploadingVideo ? 'Сохранение...' : 'Применить видео-аватар'}</span>
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Avatar Cropping Modal */}
+      {photoCropModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border/70 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Crop className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-bold text-foreground">
+                  Обрезка фото-аватара (Квадрат 1:1)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoCropModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Interactive Square Crop Viewport */}
+            <div
+              className="aspect-square max-h-72 w-full bg-black/90 rounded-2xl overflow-hidden relative flex items-center justify-center border-2 border-primary/30 select-none cursor-grab active:cursor-grabbing"
+              onMouseDown={(e) => {
+                setIsDraggingPhoto(true);
+                setDragStartPos({ x: e.clientX - photoPanX, y: e.clientY - photoPanY });
+              }}
+              onMouseMove={(e) => {
+                if (isDraggingPhoto) {
+                  setPhotoPanX(e.clientX - dragStartPos.x);
+                  setPhotoPanY(e.clientY - dragStartPos.y);
+                }
+              }}
+              onMouseUp={() => setIsDraggingPhoto(false)}
+              onMouseLeave={() => setIsDraggingPhoto(false)}
+            >
+              {selectedPhotoObjectUrl && (
+                <img
+                  ref={photoImageRef}
+                  src={selectedPhotoObjectUrl}
+                  alt="Crop preview"
+                  draggable={false}
+                  style={{
+                    transform: `translate(${photoPanX}px, ${photoPanY}px) scale(${photoZoom}) rotate(${photoRotation}deg)`,
+                    transformOrigin: 'center center',
+                    transition: isDraggingPhoto ? 'none' : 'transform 0.1s ease-out',
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                  }}
+                />
+              )}
+
+              {/* Circular Avatar Guide Overlay */}
+              <div className="absolute inset-0 pointer-events-none rounded-full border border-dashed border-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]" />
+            </div>
+
+            {/* Controls: Zoom & Rotate */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="flex justify-between mb-1 text-muted-foreground">
+                  <span className="flex items-center gap-1 font-semibold">
+                    <ZoomIn size={13} className="text-primary" />
+                    <span>Масштаб (Zoom):</span>
+                  </span>
+                  <span className="font-mono">{photoZoom.toFixed(2)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.8}
+                  max={3.0}
+                  step={0.05}
+                  value={photoZoom}
+                  onChange={(e) => setPhotoZoom(Number(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPhotoRotation((r) => (r + 90) % 360)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/80 hover:bg-muted text-foreground font-semibold cursor-pointer"
+                >
+                  <RotateCw size={13} />
+                  <span>Повернуть 90°</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoZoom(1);
+                    setPhotoPanX(0);
+                    setPhotoPanY(0);
+                    setPhotoRotation(0);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
+                >
+                  Сбросить позицию
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+                <button
+                  type="button"
+                  onClick={() => setPhotoCropModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-border/80 text-muted-foreground hover:bg-muted font-medium cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCropAndUpload}
+                  disabled={isUploadingPhoto}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Save size={13} className={isUploadingPhoto ? 'animate-spin' : ''} />
+                  <span>{isUploadingPhoto ? 'Сохранение...' : 'Применить фото-аватар'}</span>
+                </button>
               </div>
             </div>
           </div>
