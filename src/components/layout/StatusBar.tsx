@@ -4,6 +4,7 @@ import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder
 import { cn } from '@/utils';
 import FolderConfigModal from '../common/FolderConfigModal';
 import { useAuth } from '../../services/authContext';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 export interface StatusBarProps {
   progress?: number; // 0 - 100
@@ -27,6 +28,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   className,
 }) => {
   const { authFetch } = useAuth();
+  const { language } = useLanguage();
+  const isRu = language === 'ru';
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -53,13 +56,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         if (isRunning) {
           const percent = data.progress?.percent ?? data.progress?.percentage ?? 0;
           setLiveProgress(percent);
-          const currentFile = data.progress?.current_file ? `Файл: ${data.progress.current_file}` : '';
+          const currentFile = data.progress?.current_file ? (isRu ? `Файл: ${data.progress.current_file}` : `File: ${data.progress.current_file}`) : '';
           const stage = data.progress?.stage ? `[${data.progress.stage}] ` : '';
-          setLiveTitle('Фоновое сканирование медиатеки');
-          setLiveDetail(`${stage}${currentFile || 'Обработка медиафайлов и индексация...'}`);
+          setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
+          setLiveDetail(`${stage}${currentFile || (isRu ? 'Обработка медиафайлов и индексация...' : 'Processing media files and indexing...')}`);
         } else {
           setLiveProgress(100);
-          setLiveTitle('Медиатека готова к работе');
+          setLiveTitle(isRu ? 'Медиатека готова к работе' : 'Media library ready');
         }
 
         if (data.queue) {
@@ -72,7 +75,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     } catch {
       // Backend not yet responding
     }
-  }, []);
+  }, [isRu]);
 
   const [modelProvider, setModelProvider] = useState<'gemini' | 'local'>('gemini');
   const [activeModelName, setActiveModelName] = useState('Gemini 3.8 Flash');
@@ -104,11 +107,21 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     fetchSettings();
     const interval = setInterval(fetchStatus, 3000);
     window.addEventListener('ai_settings_updated', fetchSettings);
+
+    const onPipelineStarted = () => {
+      setBackendStatus('running');
+      setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
+      setLiveDetail(isRu ? 'Запуск пайплайна сканирования...' : 'Starting scanning pipeline...');
+      fetchStatus();
+    };
+    window.addEventListener('pipeline_started', onPipelineStarted);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('ai_settings_updated', fetchSettings);
+      window.removeEventListener('pipeline_started', onPipelineStarted);
     };
-  }, [fetchStatus, fetchSettings]);
+  }, [fetchStatus, fetchSettings, isRu]);
 
   const handleStartScan = async () => {
     setIsTriggeringScan(true);
@@ -119,8 +132,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       });
       if (res.ok) {
         setBackendStatus('running');
-        setLiveTitle('Фоновое сканирование медиатеки');
-        setLiveDetail('Запуск пайплайна сканирования...');
+        setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
+        setLiveDetail(isRu ? 'Запуск пайплайна сканирования...' : 'Starting scanning pipeline...');
         fetchStatus();
       }
     } catch (err) {
@@ -153,7 +166,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
   const effectiveDetail = propDetail !== undefined ? propDetail : (
     effectiveStatus === 'idle'
-      ? (configuredFolders.length > 0 ? `Папки: ${configuredFolders.join(', ')}` : 'Папки для сканирования не настроены')
+      ? (configuredFolders.length > 0
+          ? (isRu ? `Папки: ${configuredFolders.join(', ')}` : `Folders: ${configuredFolders.join(', ')}`)
+          : (isRu ? 'Папки для сканирования не настроены' : 'Folders for scanning are not configured'))
       : liveDetail
   );
 
@@ -162,7 +177,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <>
       <aside
-        aria-label="Состояние фоновых процессов"
+        aria-label={isRu ? "Состояние фоновых процессов" : "Background process status"}
         className={cn(
           'w-full border-t bg-card/95 backdrop-blur-md px-4 py-2 transition-all duration-300 text-xs text-foreground shadow-sm',
           className
@@ -202,10 +217,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     type="button"
                     onClick={handleOpenFolderConfig}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors border border-border/60"
-                    title="Указать папки на диске для поиска фото и видео"
+                    title={isRu ? "Указать папки на диске для поиска фото и видео" : "Specify folders on disk for photos and videos"}
                   >
                     <Folder size={13} className="text-primary" />
-                    <span>Настроить папки</span>
+                    <span>{isRu ? 'Настроить папки' : 'Configure folders'}</span>
                   </button>
 
                   <button
@@ -213,10 +228,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     disabled={isTriggeringScan}
                     onClick={handleStartScan}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-xs transition-colors"
-                    title="Запустить сканирование медиафайлов"
+                    title={isRu ? "Запустить сканирование медиафайлов" : "Start scanning media files"}
                   >
                     <Play size={12} className="fill-white" />
-                    <span>Сканировать</span>
+                    <span>{isRu ? 'Сканировать' : 'Scan'}</span>
                   </button>
                 </>
               )}
@@ -232,8 +247,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   type="button"
                   onClick={() => setExpanded(!expanded)}
                   className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  title={expanded ? 'Свернуть детали' : 'Развернуть детали'}
-                  aria-label={expanded ? 'Свернуть детали' : 'Развернуть детали'}
+                  title={expanded ? (isRu ? 'Свернуть детали' : 'Collapse details') : (isRu ? 'Развернуть детали' : 'Expand details')}
+                  aria-label={expanded ? (isRu ? 'Свернуть детали' : 'Collapse details') : (isRu ? 'Развернуть детали' : 'Expand details')}
                 >
                   {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
@@ -247,8 +262,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     onDismiss();
                   }}
                   className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  title="Скрыть"
-                  aria-label="Скрыть строку прогресса"
+                  title={isRu ? "Скрыть" : "Dismiss"}
+                  aria-label={isRu ? "Скрыть строку прогресса" : "Dismiss progress bar"}
                 >
                   <X size={14} />
                 </button>
@@ -279,23 +294,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           {expanded && (
             <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-muted-foreground">
               <div>
-                <span className="font-medium text-foreground">Потоки обработки:</span>{' '}
-                {activeWorkers > 0 ? `${activeWorkers} активных потоков` : 'В режиме ожидания'}
+                <span className="font-medium text-foreground">{isRu ? 'Потоки обработки:' : 'Worker threads:'}</span>{' '}
+                {activeWorkers > 0 ? (isRu ? `${activeWorkers} активных потоков` : `${activeWorkers} active threads`) : (isRu ? 'В режиме ожидания' : 'Idle')}
               </div>
               <div>
-                <span className="font-medium text-foreground">ИИ Модели:</span>{' '}
+                <span className="font-medium text-foreground">{isRu ? 'ИИ Модели:' : 'AI Models:'}</span>{' '}
                 {modelProvider === 'gemini' ? (
-                  `${activeModelName} (Онлайн)`
+                  `${activeModelName} ${isRu ? '(Онлайн)' : '(Online)'}`
                 ) : (
                   <>
-                    {modelsLoaded.vision_llm ? (activeModelName || 'Qwen2.5-VL онлайн') : 'Загрузка'}
-                    {modelsLoaded.whisper ? ', Whisper готов' : ''}
+                    {modelsLoaded.vision_llm ? (activeModelName || (isRu ? 'Qwen2.5-VL онлайн' : 'Qwen2.5-VL online')) : (isRu ? 'Загрузка' : 'Loading')}
+                    {modelsLoaded.whisper ? (isRu ? ', Whisper готов' : ', Whisper ready') : ''}
                   </>
                 )}
               </div>
               <div>
-                <span className="font-medium text-foreground">Источники:</span>{' '}
-                {configuredFolders.length > 0 ? configuredFolders[0] : 'Не заданы'}
+                <span className="font-medium text-foreground">{isRu ? 'Источники:' : 'Sources:'}</span>{' '}
+                {configuredFolders.length > 0 ? configuredFolders[0] : (isRu ? 'Не заданы' : 'Not configured')}
               </div>
             </div>
           )}

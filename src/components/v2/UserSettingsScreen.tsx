@@ -141,6 +141,7 @@ export const UserSettingsScreen: React.FC = () => {
 
   // System language
   const { language, setLanguage } = useLanguage();
+  const isRu = language === 'ru';
 
   // Vault context and settings state
   const {
@@ -399,7 +400,7 @@ export const UserSettingsScreen: React.FC = () => {
     if (aiClipSearch || aiOcrRecognition) modes.push('vision');
 
     if (modes.length === 0) {
-      alert('Пожалуйста, выберите хотя бы один модуль анализа (Кластеризация лиц, Семантический поиск или OCR).');
+      alert(isRu ? 'Пожалуйста, выберите хотя бы один модуль анализа (Кластеризация лиц, Семантический поиск или OCR).' : 'Please select at least one analysis module (Face clustering, Semantic search, or OCR).');
       return;
     }
 
@@ -419,23 +420,28 @@ export const UserSettingsScreen: React.FC = () => {
       });
 
       if (res.ok) {
+        window.dispatchEvent(new CustomEvent('pipeline_started', { detail: { force, modes } }));
         setPipelineFeedback({
           type: 'success',
-          message: force
-            ? `Запущен полный переанализ всех файлов (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`
-            : `Запущен выборочный анализ файлов без метаданных (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`,
+          message: isRu
+            ? (force
+              ? `Запущен полный переанализ всех файлов (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`
+              : `Запущен выборочный анализ файлов без метаданных (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`)
+            : (force
+              ? `Full re-analysis of all files (${modes.join(', ')}) started in background.`
+              : `Selective analysis of unanalyzed files (${modes.join(', ')}) started in background.`),
         });
       } else {
         const err = await res.json().catch(() => ({}));
         setPipelineFeedback({
           type: 'error',
-          message: err.message || 'Ошибка запуска конвейера анализа',
+          message: err.message || (isRu ? 'Ошибка запуска конвейера анализа' : 'Failed to start analysis pipeline'),
         });
       }
     } catch (e: any) {
       setPipelineFeedback({
         type: 'error',
-        message: e.message || 'Ошибка сети при запуске анализа',
+        message: e.message || (isRu ? 'Ошибка сети при запуске анализа' : 'Network error when starting analysis'),
       });
     } finally {
       setIsRunningPipeline(false);
@@ -782,8 +788,8 @@ export const UserSettingsScreen: React.FC = () => {
   const sections = [
     {
       id: 'account',
-      title: 'Учётная запись и профиль',
-      subtitle: 'Имя пользователя, резервная почта, фото или зацикленный видео-аватар',
+      title: isRu ? 'Учётная запись и профиль' : 'Account & Profile',
+      subtitle: isRu ? 'Имя пользователя, резервная почта, фото или зацикленный видео-аватар' : 'Username, backup email, photo or looping video avatar',
       icon: User,
       renderContent: () => (
         <div className="space-y-5 pt-3">
@@ -1033,8 +1039,8 @@ export const UserSettingsScreen: React.FC = () => {
     },
     {
       id: 'ai-features',
-      title: 'Искусственный интеллект и распознавание',
-      subtitle: 'Провайдеры Gemini и LM Studio, промпт анализа и параллельные воркеры',
+      title: isRu ? 'Искусственный интеллект и распознавание' : 'AI & Recognition',
+      subtitle: isRu ? 'Провайдеры Gemini и LM Studio, промпт анализа и параллельные воркеры' : 'Gemini & LM Studio providers, analysis prompt and parallel workers',
       icon: Sparkles,
       renderContent: () => (
         <div className="space-y-5 pt-3">
@@ -1385,7 +1391,7 @@ export const UserSettingsScreen: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
             >
               <Save size={14} />
-              <span>Сохранить параметры AI и промпт</span>
+              <span>{isRu ? 'Сохранить параметры AI и промпт' : 'Save AI Parameters & Prompt'}</span>
             </button>
 
             <button
@@ -1393,10 +1399,10 @@ export const UserSettingsScreen: React.FC = () => {
               onClick={() => handleTriggerAnalysis(true)}
               disabled={isRunningPipeline}
               className="flex items-center gap-2 px-4 py-2 border border-rose-500/50 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-              title="Принудительно запустить анализ всех медиафайлов заново, перезаписывая существующие метаданные"
+              title={isRu ? "Принудительно запустить анализ всех медиафайлов заново, перезаписывая существующие метаданные" : "Force full re-analysis of all media files, overwriting existing metadata"}
             >
               <RefreshCw size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
-              <span>Переанализировать все файлы (игнорируя метаданные)</span>
+              <span>{isRu ? 'Переанализировать все файлы (игнорируя метаданные)' : 'Re-analyze all files (ignore metadata)'}</span>
             </button>
 
             <button
@@ -1404,10 +1410,10 @@ export const UserSettingsScreen: React.FC = () => {
               onClick={() => handleTriggerAnalysis(false)}
               disabled={isRunningPipeline}
               className="flex items-center gap-2 px-4 py-2 border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-              title="Запустить анализ только по тем файлам, для которых метаданные еще не сформированы"
+              title={isRu ? "Запустить анализ только по тем файлам, для которых метаданные еще не сформированы" : "Run analysis only for files without existing metadata"}
             >
               <Sparkles size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
-              <span>Анализировать файлы без метаданных</span>
+              <span>{isRu ? 'Анализировать файлы без метаданных' : 'Analyze files without metadata'}</span>
             </button>
           </div>
 
@@ -1428,8 +1434,8 @@ export const UserSettingsScreen: React.FC = () => {
     },
     {
       id: 'storage',
-      title: 'Квота дискового хранилища',
-      subtitle: 'Реальная телеметрия ОС, занятое место и детализация по типам файлов',
+      title: isRu ? 'Квота дискового хранилища' : 'Disk Storage Quota',
+      subtitle: isRu ? 'Реальная телеметрия ОС, занятое место и детализация по типам файлов' : 'Host OS telemetry, storage usage and file breakdown',
       icon: HardDrive,
       renderContent: () => {
         const total = storageTelemetry?.totalDiskBytes || 1;
@@ -1551,8 +1557,8 @@ export const UserSettingsScreen: React.FC = () => {
     },
     {
       id: 'sources',
-      title: 'Папки и источники медиа',
-      subtitle: 'Подключенные локальные и сетевые папки',
+      title: isRu ? 'Папки и источники медиа' : 'Folders & Media Sources',
+      subtitle: isRu ? 'Подключенные локальные и сетевые папки' : 'Connected local and network folders',
       icon: Folder,
       renderContent: () => (
         <div className="space-y-4 pt-3">
@@ -1615,8 +1621,8 @@ export const UserSettingsScreen: React.FC = () => {
     },
     {
       id: 'password',
-      title: 'Безопасность и смена пароля',
-      subtitle: 'Изменение текущего пароля учётной записи',
+      title: isRu ? 'Безопасность и смена пароля' : 'Security & Password',
+      subtitle: isRu ? 'Изменение текущего пароля учётной записи' : 'Change current account password',
       icon: Lock,
       renderContent: () => (
         <form onSubmit={handleChangePassword} className="space-y-4 pt-3 max-w-md">
@@ -1683,8 +1689,8 @@ export const UserSettingsScreen: React.FC = () => {
     },
     {
       id: 'vault',
-      title: 'Личная защищённая папка',
-      subtitle: 'Управление PIN-кодом, смена пароля и восстановление через e-mail',
+      title: isRu ? 'Личная защищённая папка' : 'Personal Locked Folder',
+      subtitle: isRu ? 'Управление PIN-кодом, смена пароля и восстановление через e-mail' : 'PIN code management, password change and email recovery',
       icon: FolderLock,
       renderContent: () => (
         <div className="space-y-6 pt-3">
@@ -1944,9 +1950,13 @@ export const UserSettingsScreen: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Настройки пользователя и системы</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isRu ? 'Настройки пользователя и системы' : 'User & System Settings'}
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Конфигурация учётной записи, AI-движков, хранилища и параметров приватности.
+          {isRu
+            ? 'Конфигурация учётной записи, AI-движков, хранилища и параметров приватности.'
+            : 'Account configuration, AI engines, storage quotas and privacy parameters.'}
         </p>
       </div>
 

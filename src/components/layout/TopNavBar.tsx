@@ -215,8 +215,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Поиск фотографий, людей, мест... (⌘K)"
-            aria-label="Поиск по медиатеке"
+            placeholder={language === 'ru' ? "Поиск фотографий, людей, мест... (⌘K)" : "Search photos, people, places... (⌘K)"}
+            aria-label={language === 'ru' ? "Поиск по медиатеке" : "Search media library"}
             className="w-full h-10 pl-10 pr-16 bg-muted/50 hover:bg-muted/70 focus:bg-background border border-border/60 focus:border-primary rounded-full text-sm placeholder:text-muted-foreground/80 text-foreground transition-all duration-200 outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:hidden"
           />
 
@@ -225,7 +225,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
               type="button"
               onClick={handleClearSearch}
               className="absolute right-10 p-1 text-muted-foreground hover:text-foreground"
-              aria-label="Очистить поиск"
+              aria-label={language === 'ru' ? "Очистить поиск" : "Clear search"}
             >
               <X size={14} />
             </button>
@@ -263,22 +263,22 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                 ? 'bg-primary/70 cursor-wait'
                 : 'bg-[#23a6f0] hover:bg-[#2091f9] active:bg-[#1c7ed6]'
           )}
-          title="Загрузить медиафайлы"
+          title={language === 'ru' ? "Загрузить медиафайлы" : "Upload media files"}
         >
           {uploadSuccess ? (
             <>
               <Check size={16} />
-              <span className="hidden sm:inline">Загружено</span>
+              <span className="hidden sm:inline">{language === 'ru' ? 'Загружено' : 'Uploaded'}</span>
             </>
           ) : isUploading ? (
             <>
               <UploadCloud size={16} className="animate-bounce" />
-              <span className="hidden sm:inline">Загрузка...</span>
+              <span className="hidden sm:inline">{language === 'ru' ? 'Загрузка...' : 'Uploading...'}</span>
             </>
           ) : (
             <>
               <UploadCloud size={16} />
-              <span className="hidden sm:inline">Загрузить</span>
+              <span className="hidden sm:inline">{language === 'ru' ? 'Загрузить' : 'Upload'}</span>
             </>
           )}
         </button>
@@ -288,8 +288,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
           type="button"
           onClick={toggleThemeMode}
           className="p-2 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus:ring-2 focus:ring-primary/30"
-          aria-label={themeMode === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
-          title={themeMode === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+          aria-label={themeMode === 'dark' ? (language === 'ru' ? 'Включить светлую тему' : 'Switch to light mode') : (language === 'ru' ? 'Включить тёмную тему' : 'Switch to dark mode')}
+          title={themeMode === 'dark' ? (language === 'ru' ? 'Включить светлую тему' : 'Switch to light mode') : (language === 'ru' ? 'Включить тёмную тему' : 'Switch to dark mode')}
         >
           {themeMode === 'dark' ? (
             <Sun size={18} className="text-[#f3cd03]" />
@@ -304,8 +304,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
             type="button"
             onClick={() => setNotificationsOpen(!notificationsOpen)}
             className="p-2 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors relative focus:ring-2 focus:ring-primary/30"
-            aria-label="Уведомления"
-            title="Уведомления"
+            aria-label={language === 'ru' ? "Уведомления" : "Notifications"}
+            title={language === 'ru' ? "Уведомления" : "Notifications"}
           >
             <Bell size={18} />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e74040]" />
@@ -315,9 +315,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
           {notificationsOpen && (
             <div className="absolute right-0 mt-2 w-80 bg-card border border-border/80 rounded-2xl shadow-xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="flex items-center justify-between pb-2 border-b border-border/50 px-1">
-                <span className="font-semibold text-sm text-foreground">Уведомления</span>
+                <span className="font-semibold text-sm text-foreground">{language === 'ru' ? 'Уведомления' : 'Notifications'}</span>
                 <span className="text-[11px] text-primary cursor-pointer hover:underline">
-                  Прочитать все
+                  {language === 'ru' ? 'Прочитать все' : 'Mark all as read'}
                 </span>
               </div>
               <div className="py-2 space-y-2 text-xs">
@@ -331,10 +331,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                 >
                   <div className="space-y-0.5 pr-2">
                     <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      Индексация завершена
+                      {language === 'ru' ? 'Индексация завершена' : 'Indexing completed'}
                     </p>
                     <p className="text-muted-foreground text-[11px] leading-relaxed">
-                      Медиафайлы добавлены в общую ленту. Нажмите для перехода к галерее.
+                      {language === 'ru' ? 'Медиафайлы добавлены в общую ленту. Нажмите для перехода к галерее.' : 'Media files added to the main feed. Click to open gallery.'}
                     </p>
                   </div>
                   <ChevronRight size={14} className="text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
@@ -350,10 +350,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                 >
                   <div className="space-y-0.5 pr-2">
                     <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      Обнаружены дубликаты
+                      {language === 'ru' ? 'Обнаружены дубликаты' : 'Duplicates detected'}
                     </p>
                     <p className="text-muted-foreground text-[11px] leading-relaxed">
-                      Найдены группы схожих медиафайлов. Нажмите для анализа и очистки.
+                      {language === 'ru' ? 'Найдены группы схожих медиафайлов. Нажмите для анализа и очистки.' : 'Groups of similar media files found. Click to review and cleanup.'}
                     </p>
                   </div>
                   <ChevronRight size={14} className="text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
@@ -370,8 +370,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
               type="button"
               onClick={() => setProfileOpen(!profileOpen)}
               className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#23a6f0] to-[#2091f9] text-white font-bold text-sm flex items-center justify-center shadow-xs hover:ring-2 hover:ring-primary/40 transition-all focus:ring-2 focus:ring-primary overflow-hidden relative"
-              aria-label="Профиль пользователя"
-              title="Профиль пользователя"
+              aria-label={language === 'ru' ? "Профиль пользователя" : "User Profile"}
+              title={language === 'ru' ? "Профиль пользователя" : "User Profile"}
             >
               {avatarUrl ? (
                 <img
@@ -401,7 +401,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                   </p>
                   <div className="mt-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary/15 text-primary px-2 py-0.5 rounded-full">
-                      {isAdmin ? 'Администратор' : 'Пользователь'}
+                      {isAdmin ? (language === 'ru' ? 'Администратор' : 'Administrator') : (language === 'ru' ? 'Пользователь' : 'User')}
                     </span>
                   </div>
                 </div>
@@ -485,7 +485,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[#e74040] hover:bg-[#e74040]/10 transition-colors text-left"
                 >
                   <LogOut size={16} />
-                  <span>Выход</span>
+                  <span>{language === 'ru' ? 'Выход' : 'Logout'}</span>
                 </button>
               </div>
             )}
@@ -494,10 +494,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuToggle, className })
           <Link
             to="/login"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors shadow-xs"
-            title="Войти в систему"
+            title={language === 'ru' ? "Войти в систему" : "Sign in"}
           >
             <LogIn size={15} />
-            <span>Войти</span>
+            <span>{language === 'ru' ? 'Войти' : 'Sign in'}</span>
           </Link>
         )}
       </div>

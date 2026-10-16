@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useAuth } from '../../services/authContext';
+import { useLanguage } from '@/i18n/LanguageContext';
 import FolderConfigModal from '../common/FolderConfigModal';
 import { getRealAlbums, type CatalogAlbum } from '../../services/albumService';
 import { virtualAlbumService, type VirtualAlbum } from '../../services/virtualAlbumService';
@@ -40,6 +41,8 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
 }) => {
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const { language } = useLanguage();
+  const isRu = language === 'ru';
   const [albumsExpanded, setAlbumsExpanded] = useState(true);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
   const [folderAlbums, setFolderAlbums] = useState<CatalogAlbum[]>([]);
@@ -83,20 +86,20 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
   }, []);
 
   const mainRoutes = [
-    { label: 'Фото', path: '/', icon: Image },
-    { label: 'Поиск', path: '/search', icon: Search },
-    { label: 'Карта', path: '/map', icon: MapPin },
-    { label: 'Люди', path: '/people', icon: Smile },
-    { label: 'Семейное древо', path: '/family-tree', icon: Users },
-    { label: 'Общие', path: '/shared', icon: Share2 },
+    { label: isRu ? 'Фото' : 'Photos', path: '/', icon: Image },
+    { label: isRu ? 'Поиск' : 'Search', path: '/search', icon: Search },
+    { label: isRu ? 'Карта' : 'Map', path: '/map', icon: MapPin },
+    { label: isRu ? 'Люди' : 'People', path: '/people', icon: Smile },
+    { label: isRu ? 'Семейное древо' : 'Family Tree', path: '/family-tree', icon: Users },
+    { label: isRu ? 'Общие' : 'Shared', path: '/shared', icon: Share2 },
   ];
 
   const libraryRoutes = [
-    { label: 'Избранное', path: '/favorites', icon: Heart },
-    { label: 'Утилиты', path: '/duplicates', icon: Sliders },
-    { label: 'Архив', path: '/archive', icon: Archive },
-    { label: 'Личная папка', path: '/locked-folder', icon: Lock },
-    { label: 'Корзина', path: '/trash', icon: Trash2 },
+    { label: isRu ? 'Избранное' : 'Favorites', path: '/favorites', icon: Heart },
+    { label: isRu ? 'Утилиты' : 'Utilities', path: '/duplicates', icon: Sliders },
+    { label: isRu ? 'Архив' : 'Archive', path: '/archive', icon: Archive },
+    { label: isRu ? 'Личная папка' : 'Personal Folder', path: '/locked-folder', icon: Lock },
+    { label: isRu ? 'Корзина' : 'Trash', path: '/trash', icon: Trash2 },
   ];
 
   const renderNavLink = (item: { label: string; path: string; icon: React.ElementType }) => {
@@ -213,7 +216,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
             {/* Section Divider & Label */}
             <div className="pt-4 pb-1 px-3">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                Библиотека
+                {isRu ? 'Библиотека' : 'Library'}
               </span>
             </div>
 
@@ -237,7 +240,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                   className="flex items-center gap-3.5 flex-1 min-w-0"
                 >
                   <FolderHeart className="h-5 w-5 shrink-0" />
-                  <span className="truncate">Альбомы</span>
+                  <span className="truncate">{isRu ? 'Альбомы' : 'Albums'}</span>
                 </NavLink>
 
                 <button
@@ -247,7 +250,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                     setAlbumsExpanded(!albumsExpanded);
                   }}
                   className="p-1 text-muted-foreground hover:text-foreground"
-                  aria-label={albumsExpanded ? 'Свернуть альбомы' : 'Развернуть альбомы'}
+                  aria-label={albumsExpanded ? (isRu ? 'Свернуть альбомы' : 'Collapse albums') : (isRu ? 'Развернуть альбомы' : 'Expand albums')}
                 >
                   {albumsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
@@ -271,7 +274,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                             ? 'bg-primary/20 text-primary font-semibold'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
-                        title={`Альбом: ${album.title}`}
+                        title={`${isRu ? 'Альбом' : 'Album'}: ${album.title}`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -301,7 +304,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                             ? 'bg-primary/20 text-primary font-semibold'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
-                        title={`Каталог: ${album.name}`}
+                        title={`${isRu ? 'Каталог' : 'Folder'}: ${album.name}`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -333,7 +336,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                 className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-all"
               >
                 <Folder className="h-5 w-5 shrink-0 text-primary" />
-                <span className="truncate">Папки медиа</span>
+                <span className="truncate">{isRu ? 'Папки медиа' : 'Media Folders'}</span>
               </button>
             </div>
 
@@ -341,7 +344,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
             {isAdmin && (
               <div className="pt-2">
                 {renderNavLink({
-                  label: 'Админ панель',
+                  label: isRu ? 'Админ панель' : 'Admin Panel',
                   path: '/admin',
                   icon: ShieldAlert,
                 })}
@@ -357,10 +360,10 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="font-semibold text-foreground flex items-center gap-1.5">
                 <HardDrive size={13} className="text-primary" />
-                Хранилище
+                {isRu ? 'Хранилище' : 'Storage'}
               </span>
               <span className="text-[11px] font-mono text-muted-foreground">
-                {stats ? `${stats.total} медиа` : 'Сканирование...'}
+                {stats ? `${stats.total} ${isRu ? 'медиа' : 'items'}` : (isRu ? 'Сканирование...' : 'Scanning...')}
               </span>
             </div>
 
@@ -368,7 +371,7 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
             {stats && stats.total > 0 ? (
               <div
                 role="meter"
-                aria-label="Использование медиатеки"
+                aria-label={isRu ? 'Использование медиатеки' : 'Media library storage'}
                 aria-valuenow={stats.total}
                 aria-valuemin={0}
                 aria-valuemax={stats.total}
@@ -378,13 +381,13 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                 <div
                   className="h-full bg-[#23a6f0] transition-all duration-500"
                   style={{ width: `${Math.round((stats.photos / stats.total) * 100)}%` }}
-                  title={`Фотографий: ${stats.photos}`}
+                  title={`${isRu ? 'Фотографий' : 'Photos'}: ${stats.photos}`}
                 />
                 {/* Videos slice (accent/yellow) */}
                 <div
                   className="h-full bg-[#f3cd03] transition-all duration-500"
                   style={{ width: `${Math.round((stats.videos / stats.total) * 100)}%` }}
-                  title={`Видеозаписей: ${stats.videos}`}
+                  title={`${isRu ? 'Видеозаписей' : 'Videos'}: ${stats.videos}`}
                 />
               </div>
             ) : (
@@ -394,8 +397,8 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
             )}
 
             <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1.5">
-              <span>Фото: {stats?.photos ?? 0}</span>
-              <span>Видео: {stats?.videos ?? 0}</span>
+              <span>{isRu ? 'Фото' : 'Photos'}: {stats?.photos ?? 0}</span>
+              <span>{isRu ? 'Видео' : 'Videos'}: {stats?.videos ?? 0}</span>
             </div>
           </div>
 
@@ -409,11 +412,11 @@ export const LeftNavSidebar: React.FC<LeftNavSidebarProps> = ({
                 <span className={cn("relative inline-flex rounded-full h-2 w-2", serverOnline ? "bg-[#2dc071]" : "bg-[#e74040]")} />
               </span>
               <span className="text-muted-foreground text-[11px]">
-                {serverOnline ? 'Сервер в сети' : 'Сервер недоступен'}
+                {serverOnline ? (isRu ? 'Сервер в сети' : 'Server Online') : (isRu ? 'Сервер недоступен' : 'Server Offline')}
               </span>
             </div>
-            <span className="text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded" title="Версия веб-клиента">
-              Клиент: v1.0.0
+            <span className="text-[10px] font-mono font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded" title={isRu ? "Версия веб-клиента" : "Web client version"}>
+              {isRu ? 'Клиент: v1.0.0' : 'Client: v1.0.0'}
             </span>
           </div>
         </div>
