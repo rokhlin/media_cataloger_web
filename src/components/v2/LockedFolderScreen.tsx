@@ -558,7 +558,7 @@ export const LockedFolderScreen: React.FC = () => {
           Личная защищённая папка
         </h1>
         <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-          Введите ваш PIN-код для доступа к личным медиафайлам
+          Введите ваш PIN-код для доступа к личным медиафайлам (по умолчанию: <span className="font-mono font-bold text-primary">123456</span>)
         </p>
 
         {/* 6-Digit Segmented PIN Inputs */}
