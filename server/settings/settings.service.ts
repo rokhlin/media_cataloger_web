@@ -66,6 +66,7 @@ export class SettingsService {
       preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
       vision_prompt_template: this.config.visionPromptTemplate,
       default_vision_prompt_template: DEFAULT_VISION_PROMPT_TEMPLATE,
+      ui_public_url: saved.UI_PUBLIC_URL || process.env.UI_PUBLIC_URL || '',
     };
   }
 
@@ -101,6 +102,7 @@ export class SettingsService {
     if (dto.whisper_model !== undefined) additional.WHISPER_MODEL = dto.whisper_model;
     if (dto.preserve_structure !== undefined) additional.PRESERVE_STRUCTURE = Boolean(dto.preserve_structure);
     if (dto.vision_prompt_template !== undefined) additional.VISION_PROMPT_TEMPLATE = dto.vision_prompt_template;
+    if (dto.ui_public_url !== undefined) additional.UI_PUBLIC_URL = String(dto.ui_public_url).trim();
 
     // Identify removed or renamed folders for recalculating cache
     if (dto.input_folders && this.mediaService) {

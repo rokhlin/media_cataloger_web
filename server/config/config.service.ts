@@ -527,6 +527,18 @@ export class AppConfigService {
     );
   }
 
+  get uiPublicUrl(): string {
+    const saved = this.getSavedSettings();
+    const savedUrl = saved.UI_PUBLIC_URL || saved.ui_public_url;
+    if (savedUrl && String(savedUrl).trim()) {
+      return String(savedUrl).trim().replace(/\/+$/, '');
+    }
+    if (process.env.UI_PUBLIC_URL && process.env.UI_PUBLIC_URL.trim()) {
+      return process.env.UI_PUBLIC_URL.trim().replace(/\/+$/, '');
+    }
+    return `http://localhost:${this.port}`;
+  }
+
   /**
    * Export the active execution configuration to pass to the BE pipeline worker.
    * UI is the single source of truth for all runtime settings and output paths.
@@ -544,7 +556,7 @@ export class AppConfigService {
       whisper_model: saved.WHISPER_MODEL || process.env.WHISPER_MODEL || 'large-v3-turbo',
       preserve_structure: saved.PRESERVE_STRUCTURE !== undefined ? Boolean(saved.PRESERVE_STRUCTURE) : true,
       vision_prompt_template: this.visionPromptTemplate,
-      ui_base_url: process.env.UI_PUBLIC_URL || `http://localhost:${this.port}`,
+      ui_base_url: this.uiPublicUrl,
     };
   }
 

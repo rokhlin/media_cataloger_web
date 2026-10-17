@@ -33,14 +33,29 @@ export class CatalogerClientService {
     return url;
   }
 
-  async triggerRun(force: boolean = false, customPayload?: any, userId?: string, rootPath?: string, userRole?: string): Promise<any> {
+  async triggerRun(
+    force: boolean = false,
+    customPayload?: any,
+    userId?: string,
+    rootPath?: string,
+    userRole?: string,
+    callerUiBaseUrl?: string,
+  ): Promise<any> {
     const execConfig = this.config.getPipelineExecutionConfig();
-    this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)})`);
+    const effectiveUiBase = (
+      customPayload?.ui_base_url ||
+      (callerUiBaseUrl && !callerUiBaseUrl.includes('localhost') && !callerUiBaseUrl.includes('127.0.0.1') ? callerUiBaseUrl : undefined) ||
+      execConfig.ui_base_url ||
+      `http://localhost:${this.config.port}`
+    ).replace(/\/+$/, '');
+
+    this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)}) using UI base URL: ${effectiveUiBase}`);
 
     const scanned = await this.mediaService.scanInputFolders();
     this.logBuffer?.debug('Pipeline', `Found ${scanned.length} media file(s) across input sources`, {
       inputFolders: execConfig.input_folders,
       totalFiles: scanned.length,
+      effectiveUiBase,
     });
 
     const files = scanned.map(s => {
@@ -59,7 +74,7 @@ export class CatalogerClientService {
         filename: path.basename(s.filePath),
         file_size: size,
         mtime: mtime,
-        stream_url: `${execConfig.ui_base_url}/api/media/file?path=${encodeURIComponent(s.filePath)}`,
+        stream_url: `${effectiveUiBase}/api/media/file?path=${encodeURIComponent(s.filePath)}`,
       };
     });
 
@@ -68,7 +83,11 @@ export class CatalogerClientService {
       total_files: files.length,
       files: files,
       output_folder: execConfig.output_folder,
-      settings: execConfig,
+      settings: {
+        ...execConfig,
+        ui_base_url: effectiveUiBase,
+      },
+      ui_base_url: effectiveUiBase,
       ...(customPayload || {}),
     };
 
@@ -139,7 +158,14 @@ export class CatalogerClientService {
     }
   }
 
-  async triggerAnalyzeFile(file: string, customPayload?: any, userId?: string, rootPath?: string, userRole?: string): Promise<any> {
+  async triggerAnalyzeFile(
+    file: string,
+    customPayload?: any,
+    userId?: string,
+    rootPath?: string,
+    userRole?: string,
+    callerUiBaseUrl?: string,
+  ): Promise<any> {
     if (!file || !file.trim()) {
       this.logBuffer?.warn('Pipeline', 'Single file analysis requested with empty file path');
       throw new BadRequestException('File parameter cannot be empty');
@@ -177,6 +203,13 @@ export class CatalogerClientService {
     }
 
     const execConfig = this.config.getPipelineExecutionConfig();
+    const effectiveUiBase = (
+      customPayload?.ui_base_url ||
+      (callerUiBaseUrl && !callerUiBaseUrl.includes('localhost') && !callerUiBaseUrl.includes('127.0.0.1') ? callerUiBaseUrl : undefined) ||
+      execConfig.ui_base_url ||
+      `http://localhost:${this.config.port}`
+    ).replace(/\/+$/, '');
+
     const isGeminiProvider = execConfig.model_provider === 'gemini' || (!execConfig.model_provider && Boolean(this.config.geminiApiKey));
 
     // When Gemini provider is selected, use the Gemini configuration and functionality on the web backend!
@@ -207,9 +240,13 @@ export class CatalogerClientService {
       file_size: size,
       mtime: mtime,
       output_folder: execConfig.output_folder,
-      settings: execConfig,
+      settings: {
+        ...execConfig,
+        ui_base_url: effectiveUiBase,
+      },
       vision_prompt_template: execConfig.vision_prompt_template,
-      stream_url: `${execConfig.ui_base_url}/api/media/file?path=${encodeURIComponent(resolvedPath)}`,
+      stream_url: `${effectiveUiBase}/api/media/file?path=${encodeURIComponent(resolvedPath)}`,
+      ui_base_url: effectiveUiBase,
       ...(customPayload || {}),
     };
 

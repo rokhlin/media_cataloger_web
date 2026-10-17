@@ -66,4 +66,9 @@ export class SettingsUpdateRequestDto {
   @IsOptional()
   @IsString()
   vision_prompt_template?: string;
+
+  @ApiPropertyOptional({ description: 'Public/LAN URL of Media Cataloger Web for distributed AI Engine file streaming', example: 'http://192.168.8.13:8000' })
+  @IsOptional()
+  @IsString()
+  ui_public_url?: string;
 }
