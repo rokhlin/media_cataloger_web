@@ -6,6 +6,22 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Public, RequirePermissions } from '../auth/auth.decorators.js';
 
+function extractCallerBaseUrl(req: any): string | undefined {
+  if (!req) return undefined;
+  try {
+    const rawProto = req.headers?.['x-forwarded-proto'] || (req.connection?.encrypted ? 'https' : 'http') || req.protocol || 'http';
+    const proto = Array.isArray(rawProto) ? rawProto[0] : String(rawProto).split(',')[0].trim();
+    const rawHost = req.headers?.['x-forwarded-host'] || req.headers?.host;
+    const host = Array.isArray(rawHost) ? rawHost[0] : (rawHost ? String(rawHost).split(',')[0].trim() : undefined);
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // Ignore extraction errors
+  }
+  return undefined;
+}
+
 @ApiTags('pipeline')
 @Controller('api')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,6 +48,7 @@ export class CatalogerController {
       const userRole = req?.user?.role === 'admin' || (Array.isArray(req?.user?.permissions) && req?.user?.permissions.includes('admin_panel'))
         ? 'admin'
         : (req?.user?.role || 'user');
+      const callerUiBaseUrl = extractCallerBaseUrl(req);
       let resolvedModes: string[] | undefined = undefined;
       if (customPayload?.modes && Array.isArray(customPayload.modes)) {
         resolvedModes = customPayload.modes;
@@ -48,7 +65,7 @@ export class CatalogerController {
         ...(resolvedModes ? { modes: resolvedModes } : {}),
       };
 
-      return await this.catalogerService.triggerRun(forceBool, mergedPayload, userId, rootPath, userRole);
+      return await this.catalogerService.triggerRun(forceBool, mergedPayload, userId, rootPath, userRole, callerUiBaseUrl);
     } catch (err: any) {
       if (err instanceof HttpException) {
         throw err;
@@ -72,7 +89,8 @@ export class CatalogerController {
       const userRole = req?.user?.role === 'admin' || (Array.isArray(req?.user?.permissions) && req?.user?.permissions.includes('admin_panel'))
         ? 'admin'
         : (req?.user?.role || 'user');
-      return await this.catalogerService.triggerAnalyzeFile(String(targetFile).trim(), body, userId, rootPath, userRole);
+      const callerUiBaseUrl = extractCallerBaseUrl(req);
+      return await this.catalogerService.triggerAnalyzeFile(String(targetFile).trim(), body, userId, rootPath, userRole, callerUiBaseUrl);
     } catch (err: any) {
       if (err instanceof HttpException) {
         throw err;

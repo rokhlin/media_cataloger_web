@@ -97,6 +97,7 @@ export const UserSettingsScreen: React.FC = () => {
   const [maxWorkers, setMaxWorkers] = useState(3);
   const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
   const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
+  const [uiPublicUrl, setUiPublicUrl] = useState('');
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [pipelineFeedback, setPipelineFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -206,6 +207,9 @@ export const UserSettingsScreen: React.FC = () => {
         }
         if (data?.default_vision_prompt_template) {
           setDefaultVisionPromptTemplate(data.default_vision_prompt_template);
+        }
+        if (data?.ui_public_url) {
+          setUiPublicUrl(data.ui_public_url);
         }
       })
       .catch(() => {});
@@ -645,6 +649,7 @@ export const UserSettingsScreen: React.FC = () => {
           ai_model: aiModel,
           gemini_max_workers: maxWorkers,
           vision_prompt_template: visionPromptTemplate.trim(),
+          ui_public_url: uiPublicUrl.trim(),
         }),
       });
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
@@ -1344,6 +1349,37 @@ export const UserSettingsScreen: React.FC = () => {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* UI Public URL / Callback URL Card */}
+          <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <label className="font-bold text-foreground flex items-center gap-1.5">
+                <Server size={14} className="text-primary" />
+                <span>{isRu ? 'URL сервера для AI Engine (UI_PUBLIC_URL)' : 'Server URL for AI Engine (UI_PUBLIC_URL)'}</span>
+              </label>
+              {typeof window !== 'undefined' && !uiPublicUrl && (
+                <button
+                  type="button"
+                  onClick={() => setUiPublicUrl(window.location.origin)}
+                  className="text-[11px] text-primary hover:underline cursor-pointer"
+                >
+                  {isRu ? `Подставить ${window.location.origin}` : `Use ${window.location.origin}`}
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={uiPublicUrl}
+              onChange={(e) => setUiPublicUrl(e.target.value)}
+              placeholder={typeof window !== 'undefined' ? window.location.origin : 'http://192.168.8.x:8000'}
+              className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono outline-none focus:border-primary"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {isRu
+                ? 'Сетевой адрес веб-приложения для обратного потокового скачивания файлов удаленным AI Engine. Если пусто, определяется автоматически из запроса.'
+                : 'Network address of Media Cataloger Web for remote AI Engine streaming fallback. Auto-detected from HTTP requests if left empty.'}
+            </p>
           </div>
 
           {/* AI Feature Toggles */}

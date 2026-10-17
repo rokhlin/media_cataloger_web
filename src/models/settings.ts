@@ -23,6 +23,7 @@ export interface SettingsData {
   tag_format?: 'categorized' | 'flat' | 'prefixed';
   vision_prompt_template?: string;
   default_vision_prompt_template?: string;
+  ui_public_url?: string;
   [key: string]: unknown;
 }
 

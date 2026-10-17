@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as http from 'node:http';
+import axios from 'axios';
 import { CatalogerClientService } from '../cataloger.service.js';
 
 describe('CatalogerClientService', () => {
@@ -135,6 +136,27 @@ describe('CatalogerClientService', () => {
     assert.strictEqual(res.status, 'started');
     assert.strictEqual(res.message, 'Sync started');
     assert.strictEqual(res.provided_files_count, 1);
+  });
+
+  it('should use callerUiBaseUrl for stream_url when triggering run', async () => {
+    let capturedPayload: any = null;
+    const originalPost = axios.post;
+    // @ts-ignore
+    axios.post = async (url: string, payload: any) => {
+      capturedPayload = payload;
+      return { status: 200, data: { status: 'started', message: 'Sync started' } };
+    };
+
+    try {
+      await catalogerService.triggerRun(false, {}, undefined, undefined, undefined, 'http://192.168.8.13:8000');
+      assert.ok(capturedPayload, 'Payload should have been dispatched');
+      assert.strictEqual(capturedPayload.settings.ui_base_url, 'http://192.168.8.13:8000');
+      if (capturedPayload.files && capturedPayload.files.length > 0) {
+        assert.ok(capturedPayload.files[0].stream_url.startsWith('http://192.168.8.13:8000/api/media/file'));
+      }
+    } finally {
+      axios.post = originalPost;
+    }
   });
 
   it('should trigger file analysis on mock cataloger service', async () => {
