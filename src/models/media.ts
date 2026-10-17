@@ -92,6 +92,8 @@ export interface MediaFileItem {
   camera_model?: string;
   lens_model?: string;
   location_name?: string;
+  content_type?: string;
+  content_type_ru?: string;
   media_date?: string;
   tags?: string[];
   folder?: string;

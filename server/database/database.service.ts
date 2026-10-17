@@ -377,6 +377,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         camera_model: 'TEXT',
         lens_model: 'TEXT',
         location_name: 'TEXT',
+        content_type: 'TEXT',
+        content_type_ru: 'TEXT',
       };
       for (const [col, type] of Object.entries(metaAdditions)) {
         if (!mmCols.has(col)) {

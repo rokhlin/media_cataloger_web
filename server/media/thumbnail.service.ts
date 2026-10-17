@@ -110,10 +110,11 @@ export class ThumbnailService {
     targetSize: number,
     tempPath: string,
   ): Promise<void> {
+    const ffmpegBin = process.env.FFMPEG_PATH || 'ffmpeg';
     return new Promise<void>((resolve, reject) => {
       // Fast seek to 0.1s to avoid initial black frames, extract 1 frame
       const ffmpeg = spawn(
-        'ffmpeg',
+        ffmpegBin,
         [
           '-ss', '0.1',
           '-i', sourcePath,
@@ -162,8 +163,12 @@ export class ThumbnailService {
         reject(err);
       });
 
-      ffmpeg.on('error', (err) => {
-        reject(new Error(`FFmpeg spawn error: ${err.message}`));
+      ffmpeg.on('error', (err: any) => {
+        if (err?.code === 'ENOENT') {
+          reject(new Error(`FFmpeg not found ('${ffmpegBin}'). Please ensure ffmpeg is installed and available in PATH, or set FFMPEG_PATH.`));
+        } else {
+          reject(new Error(`FFmpeg spawn error: ${err.message}`));
+        }
       });
 
       ffmpeg.on('close', (code) => {
@@ -187,9 +192,10 @@ export class ThumbnailService {
     targetSize: number,
     tempPath: string,
   ): Promise<void> {
+    const ffmpegBin = process.env.FFMPEG_PATH || 'ffmpeg';
     return new Promise<void>((resolve, reject) => {
       const ffmpeg = spawn(
-        'ffmpeg',
+        ffmpegBin,
         [
           '-i', sourcePath,
           '-frames:v', '1',
@@ -220,7 +226,13 @@ export class ThumbnailService {
       fileStream.on('finish', () => resolve());
       fileStream.on('error', reject);
       sharpTransform.on('error', reject);
-      ffmpeg.on('error', reject);
+      ffmpeg.on('error', (err: any) => {
+        if (err?.code === 'ENOENT') {
+          reject(new Error(`FFmpeg not found ('${ffmpegBin}'). Please ensure ffmpeg is installed and available in PATH, or set FFMPEG_PATH.`));
+        } else {
+          reject(err);
+        }
+      });
 
       ffmpeg.stdout.pipe(sharpTransform).pipe(fileStream);
     });
@@ -353,5 +365,21 @@ export class ThumbnailService {
     this.inFlightGenerations.set(cacheKey, generationPromise);
     const resultPath = await generationPromise;
     return { filePath: resultPath, isCached: false };
+  }
+
+  async invalidateThumbnail(sourcePath: string): Promise<void> {
+    try {
+      if (!fs.existsSync(this.cacheDir)) return;
+      const files = await fs.promises.readdir(this.cacheDir);
+      const hash16 = crypto.createHash('sha256').update(sourcePath).digest('hex').substring(0, 16);
+      const hashNorm = crypto.createHash('sha256').update(sourcePath.replace(/\\/g, '/')).digest('hex').substring(0, 16);
+      for (const file of files) {
+        if (file.startsWith(hash16) || file.startsWith(hashNorm)) {
+          await fs.promises.unlink(path.join(this.cacheDir, file)).catch(() => {});
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 }

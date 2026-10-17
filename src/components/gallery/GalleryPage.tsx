@@ -10,6 +10,7 @@ import type { GalleryMediaFile } from '../../models';
 import { virtualAlbumService, type VirtualAlbum } from '../../services/virtualAlbumService';
 import { extractMediaYear } from '../layout/TimelineScrubber';
 import MediaViewerModal from './MediaViewerModal';
+import { CategoryFilterChips, type CategoryFilterKey } from './CategoryFilterChips';
 
 export default function GalleryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,6 +22,7 @@ export default function GalleryPage() {
   const [mediaFiles, setMediaFiles] = useState<GalleryMediaFile[]>([]);
   const [activeAlbum, setActiveAlbum] = useState<VirtualAlbum | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterKey>('all');
   const [selectedFile, setSelectedFile] = useState<GalleryMediaFile | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(1200);
   const [zoomLevel, setZoomLevel] = useState<number>(3); // 1 (large) to 5 (compact)
@@ -215,10 +217,46 @@ export default function GalleryPage() {
           return false;
         }
       }
+
+      // Category filter (FEAT-028)
+      if (categoryFilter !== 'all') {
+        const hasPeople = Boolean(
+          (file.face_names && file.face_names.length > 0) ||
+          (file.faces && file.faces.length > 0)
+        );
+
+        if (categoryFilter === 'family_memories') {
+          // Priority 1: People primacy rule
+          const matches = file.content_type === 'family_memories' || hasPeople;
+          if (!matches) return false;
+        } else {
+          // Other categories: matches raw content_type
+          if (file.content_type !== categoryFilter) {
+            return false;
+          }
+        }
+      }
       
       return true;
     });
-  }, [mediaFiles, queryParam, typeFilter, folderParam, personParam, albumParam, activeAlbum]);
+  }, [mediaFiles, queryParam, typeFilter, categoryFilter, folderParam, personParam, albumParam, activeAlbum]);
+
+  // Category counts for CategoryFilterChips (FEAT-028)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: mediaFiles.length };
+    for (const f of mediaFiles) {
+      const hasPeople = Boolean(
+        (f.face_names && f.face_names.length > 0) ||
+        (f.faces && f.faces.length > 0)
+      );
+      const ct = f.content_type || (hasPeople ? 'family_memories' : 'other');
+      counts[ct] = (counts[ct] || 0) + 1;
+      if (hasPeople && ct !== 'family_memories') {
+        counts['family_memories'] = (counts['family_memories'] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [mediaFiles]);
 
   // Derived column count based on container width and zoom level
   const columns = useMemo(() => {
@@ -378,6 +416,7 @@ export default function GalleryPage() {
             }
             setSearchParams(searchParams);
             setTypeFilter('all');
+            setCategoryFilter('all');
           }}
         >
           <FilterX size={16} />
@@ -386,6 +425,15 @@ export default function GalleryPage() {
         <div className="ml-auto text-sm text-muted-foreground">
           Найдено: {filteredFiles.length}
         </div>
+      </div>
+
+      {/* Category Filter Chips Bar (FEAT-028) */}
+      <div className="bg-card/40 backdrop-blur-xs border rounded-lg p-1.5 shadow-2xs">
+        <CategoryFilterChips
+          selectedCategory={categoryFilter}
+          onSelectCategory={setCategoryFilter}
+          categoryCounts={categoryCounts}
+        />
       </div>
 
       {/* Virtualized Grid Area */}

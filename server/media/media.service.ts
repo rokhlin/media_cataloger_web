@@ -2,9 +2,11 @@ import { Injectable, NotFoundException, BadRequestException, Logger, Inject, Opt
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
+import sharp from 'sharp';
 import { AppConfigService } from '../config/config.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { FamilyTreePublicService } from '../family-tree/family-tree-public.service.js';
+import { ThumbnailService } from './thumbnail.service.js';
 import { UpdateMediaMetadataDto } from './dto/media.dto.js';
 
 export interface ScannedMediaFile {
@@ -43,6 +45,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     @Inject(AppConfigService) private readonly config: AppConfigService,
     @Inject(DatabaseService) private readonly db: DatabaseService,
     @Optional() @Inject(FamilyTreePublicService) private readonly familyTreePublicService?: FamilyTreePublicService,
+    @Optional() @Inject(ThumbnailService) private readonly thumbnailService?: ThumbnailService,
   ) {}
 
   private cachedMediaList: any[] | null = null;
@@ -98,6 +101,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         camera_make: r.camera_make,
         camera_model: r.camera_model,
         location_name: r.location_name,
+        content_type: r.content_type || null,
+        content_type_ru: r.content_type_ru || null,
         face_count: fileFaces.length || faceCounts[r.file_path] || 0,
         faces: fileFaces,
         face_names: faceNames,
@@ -1530,6 +1535,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     let exifAnalysisRu: string | null = dbMeta?.exif_analysis_ru || null;
     let transcription: string | null = dbMeta?.transcription || null;
     let transcriptionRu: string | null = dbMeta?.transcription_ru || null;
+    let contentType: string | null = (dbMeta as any)?.content_type || null;
+    let contentTypeRu: string | null = (dbMeta as any)?.content_type_ru || null;
     let timelineEvents: any = null;
     if (dbMeta?.timeline_events) {
       try {
@@ -1563,6 +1570,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         if (ga.exif_analysis_ru || sdata.exif_analysis_ru) exifAnalysisRu = ga.exif_analysis_ru || sdata.exif_analysis_ru;
         if (ga.transcription || sdata.transcription) transcription = ga.transcription || sdata.transcription;
         if (ga.transcription_ru || sdata.transcription_ru) transcriptionRu = ga.transcription_ru || sdata.transcription_ru;
+        if (ga.content_type || sdata.content_type) contentType = ga.content_type || sdata.content_type;
+        if (ga.content_type_ru || sdata.content_type_ru) contentTypeRu = ga.content_type_ru || sdata.content_type_ru;
         if (ga.timeline_events || sdata.timeline_events) timelineEvents = ga.timeline_events || sdata.timeline_events;
 
         if (desc || descRu || summ || summRu || status === 'UNPROCESSED') {
@@ -1612,6 +1621,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       description_ru: descRu,
       summary: summ,
       summary_ru: summRu,
+      content_type: contentType,
+      content_type_ru: contentTypeRu,
       environment: environment,
       lighting: lighting,
       lighting_ru: lightingRu,
@@ -2161,6 +2172,192 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       file_path: destPath,
       filename: safeName,
     };
+  }
+
+  async rotateImage(targetPath: string, degrees: number = -90): Promise<{ success: boolean; filePath: string }> {
+    const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${targetPath}`);
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    if (!this.config.supportedPhotoExts.has(ext)) {
+      throw new BadRequestException(`Cannot rotate non-image file: ${resolved}`);
+    }
+
+    const tempFile = `${resolved}.tmp_rotate_${Date.now()}`;
+    await sharp(resolved, { failOn: 'none' })
+      .rotate(degrees)
+      .toFile(tempFile);
+    await fs.promises.rename(tempFile, resolved);
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(resolved);
+    }
+
+    const stat = fs.statSync(resolved);
+    if (this.cachedMediaList) {
+      const idx = this.cachedMediaList.findIndex(
+        (f) => f.file_path === resolved || f.filename === path.basename(resolved)
+      );
+      if (idx !== -1) {
+        this.cachedMediaList[idx].mtime = stat.mtimeMs / 1000;
+        this.cachedMediaList[idx].file_size = stat.size;
+      }
+    }
+
+    return { success: true, filePath: resolved };
+  }
+
+  async renameMediaFile(targetPath: string, newFilename: string): Promise<{ success: boolean; oldPath: string; newPath: string; newFilename: string }> {
+    const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${targetPath}`);
+    }
+
+    const cleanName = path.basename(newFilename).trim();
+    if (!cleanName || cleanName === '.' || cleanName === '..') {
+      throw new BadRequestException('Invalid new filename');
+    }
+
+    const dir = path.dirname(resolved);
+    const newPath = path.join(dir, cleanName);
+
+    if (fs.existsSync(newPath) && newPath !== resolved) {
+      throw new BadRequestException(`Target file already exists: ${cleanName}`);
+    }
+
+    await fs.promises.rename(resolved, newPath);
+
+    // Rename sidecar if exists
+    const sidecarOld = this.findSidecarFile(resolved);
+    if (sidecarOld && fs.existsSync(sidecarOld)) {
+      const sidecarNew = path.join(path.dirname(sidecarOld), `${cleanName}.json`);
+      if (sidecarOld !== sidecarNew) {
+        try {
+          await fs.promises.rename(sidecarOld, sidecarNew);
+        } catch {}
+      }
+    }
+
+    // Update DB records
+    try {
+      const db = this.db.getDb();
+      db.prepare('UPDATE media_items SET file_path = ?, file_name = ?, updated_at = datetime(\'now\', \'localtime\') WHERE file_path = ?').run(newPath, cleanName, resolved);
+      db.prepare('UPDATE media_faces SET source_file = ? WHERE source_file = ?').run(newPath, resolved);
+      db.prepare('UPDATE media_hashes SET file_path = ? WHERE file_path = ?').run(newPath, resolved);
+      db.prepare('UPDATE vault_items SET file_path = ? WHERE file_path = ?').run(newPath, resolved);
+    } catch {}
+
+    // Update memory maps and cache
+    this.filePathMap.delete(resolved);
+    this.filePathMap.delete(resolved.toLowerCase());
+    this.filePathMap.set(newPath, newPath);
+    this.filePathMap.set(newPath.toLowerCase(), newPath);
+
+    if (this.cachedMediaList) {
+      const idx = this.cachedMediaList.findIndex((f) => f.file_path === resolved);
+      if (idx !== -1) {
+        this.cachedMediaList[idx].file_path = newPath;
+        this.cachedMediaList[idx].filename = cleanName;
+      }
+    }
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(resolved);
+    }
+
+    return { success: true, oldPath: resolved, newPath, newFilename: cleanName };
+  }
+
+  async deleteMediaFile(targetPath: string): Promise<{ success: boolean; filePath: string }> {
+    const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${targetPath}`);
+    }
+
+    await fs.promises.unlink(resolved);
+
+    const sidecar = this.findSidecarFile(resolved);
+    if (sidecar && fs.existsSync(sidecar)) {
+      try {
+        await fs.promises.unlink(sidecar);
+      } catch {}
+    }
+
+    try {
+      const db = this.db.getDb();
+      db.prepare('DELETE FROM media_items WHERE file_path = ?').run(resolved);
+      db.prepare('DELETE FROM media_faces WHERE source_file = ?').run(resolved);
+      db.prepare('DELETE FROM media_hashes WHERE file_path = ?').run(resolved);
+      db.prepare('DELETE FROM vault_items WHERE file_path = ?').run(resolved);
+    } catch {}
+
+    this.filePathMap.delete(resolved);
+    this.filePathMap.delete(resolved.toLowerCase());
+    if (this.cachedMediaList) {
+      this.cachedMediaList = this.cachedMediaList.filter((f) => f.file_path !== resolved);
+    }
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(resolved);
+    }
+
+    return { success: true, filePath: resolved };
+  }
+
+  async moveMediaFile(targetPath: string, targetFolder: string): Promise<{ success: boolean; oldPath: string; newPath: string }> {
+    const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${targetPath}`);
+    }
+
+    if (!fs.existsSync(targetFolder)) {
+      fs.mkdirSync(targetFolder, { recursive: true });
+    }
+
+    const baseName = path.basename(resolved);
+    const newPath = path.join(targetFolder, baseName);
+
+    if (fs.existsSync(newPath) && newPath !== resolved) {
+      throw new BadRequestException(`File already exists in destination folder: ${newPath}`);
+    }
+
+    await fs.promises.rename(resolved, newPath);
+
+    const sidecar = this.findSidecarFile(resolved);
+    if (sidecar && fs.existsSync(sidecar) && path.dirname(sidecar) === path.dirname(resolved)) {
+      const newSidecar = path.join(targetFolder, path.basename(sidecar));
+      try {
+        await fs.promises.rename(sidecar, newSidecar);
+      } catch {}
+    }
+
+    try {
+      const db = this.db.getDb();
+      db.prepare('UPDATE media_items SET file_path = ?, folder = ?, updated_at = datetime(\'now\', \'localtime\') WHERE file_path = ?').run(newPath, targetFolder, resolved);
+      db.prepare('UPDATE media_faces SET source_file = ? WHERE source_file = ?').run(newPath, resolved);
+      db.prepare('UPDATE media_hashes SET file_path = ? WHERE file_path = ?').run(newPath, resolved);
+      db.prepare('UPDATE vault_items SET file_path = ? WHERE file_path = ?').run(newPath, resolved);
+    } catch {}
+
+    this.filePathMap.delete(resolved);
+    this.filePathMap.delete(resolved.toLowerCase());
+    this.filePathMap.set(newPath, newPath);
+    this.filePathMap.set(newPath.toLowerCase(), newPath);
+
+    if (this.cachedMediaList) {
+      const idx = this.cachedMediaList.findIndex((f) => f.file_path === resolved);
+      if (idx !== -1) {
+        this.cachedMediaList[idx].file_path = newPath;
+        this.cachedMediaList[idx].folder = targetFolder;
+      }
+    }
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(resolved);
+    }
+
+    return { success: true, oldPath: resolved, newPath };
   }
 }
 

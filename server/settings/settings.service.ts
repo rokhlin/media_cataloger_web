@@ -67,6 +67,12 @@ export class SettingsService {
       vision_prompt_template: this.config.visionPromptTemplate,
       default_vision_prompt_template: DEFAULT_VISION_PROMPT_TEMPLATE,
       ui_public_url: saved.UI_PUBLIC_URL || process.env.UI_PUBLIC_URL || '',
+      ai_gemini_fallback_enabled: saved.FALLBACK_TO_GEMINI !== undefined
+        ? Boolean(saved.FALLBACK_TO_GEMINI)
+        : (saved.ai_gemini_fallback_enabled !== undefined ? Boolean(saved.ai_gemini_fallback_enabled) : true),
+      fallback_to_gemini: saved.FALLBACK_TO_GEMINI !== undefined
+        ? Boolean(saved.FALLBACK_TO_GEMINI)
+        : (saved.ai_gemini_fallback_enabled !== undefined ? Boolean(saved.ai_gemini_fallback_enabled) : true),
     };
   }
 
@@ -103,6 +109,13 @@ export class SettingsService {
     if (dto.preserve_structure !== undefined) additional.PRESERVE_STRUCTURE = Boolean(dto.preserve_structure);
     if (dto.vision_prompt_template !== undefined) additional.VISION_PROMPT_TEMPLATE = dto.vision_prompt_template;
     if (dto.ui_public_url !== undefined) additional.UI_PUBLIC_URL = String(dto.ui_public_url).trim();
+    if (dto.ai_gemini_fallback_enabled !== undefined) {
+      additional.FALLBACK_TO_GEMINI = Boolean(dto.ai_gemini_fallback_enabled);
+      additional.ai_gemini_fallback_enabled = Boolean(dto.ai_gemini_fallback_enabled);
+    } else if (dto.fallback_to_gemini !== undefined) {
+      additional.FALLBACK_TO_GEMINI = Boolean(dto.fallback_to_gemini);
+      additional.ai_gemini_fallback_enabled = Boolean(dto.fallback_to_gemini);
+    }
 
     // Identify removed or renamed folders for recalculating cache
     if (dto.input_folders && this.mediaService) {

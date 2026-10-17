@@ -71,4 +71,14 @@ export class SettingsUpdateRequestDto {
   @IsOptional()
   @IsString()
   ui_public_url?: string;
+
+  @ApiPropertyOptional({ description: 'Automatic fallback to Gemini when LM Studio is unavailable', example: true })
+  @IsOptional()
+  @IsBoolean()
+  ai_gemini_fallback_enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Alias for ai_gemini_fallback_enabled', example: true })
+  @IsOptional()
+  @IsBoolean()
+  fallback_to_gemini?: boolean;
 }

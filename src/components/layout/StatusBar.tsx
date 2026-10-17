@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder, Play } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, X, Folder, Play, Pause, Square } from 'lucide-react';
 import { cn } from '@/utils';
 import FolderConfigModal from '../common/FolderConfigModal';
 import { useAuth } from '../../services/authContext';
@@ -35,6 +35,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const [dismissed, setDismissed] = useState(false);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Live polling state from backend
   const [backendStatus, setBackendStatus] = useState<'idle' | 'running' | 'completed' | 'error'>('idle');
@@ -51,15 +53,25 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       if (res.ok) {
         const data = await res.json();
         const isRunning = data.status === 'running';
-        setBackendStatus(isRunning ? 'running' : 'idle');
+        const isCurrentlyPaused = data.status === 'paused' || data.is_paused === true;
+        setIsPaused(isCurrentlyPaused);
+        setBackendStatus(isRunning || isCurrentlyPaused ? 'running' : 'idle');
 
-        if (isRunning) {
+        if (isRunning || isCurrentlyPaused) {
           const percent = data.progress?.percent ?? data.progress?.percentage ?? 0;
           setLiveProgress(percent);
           const currentFile = data.progress?.current_file ? (isRu ? `Файл: ${data.progress.current_file}` : `File: ${data.progress.current_file}`) : '';
           const stage = data.progress?.stage ? `[${data.progress.stage}] ` : '';
-          setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
-          setLiveDetail(`${stage}${currentFile || (isRu ? 'Обработка медиафайлов и индексация...' : 'Processing media files and indexing...')}`);
+          setLiveTitle(
+            isCurrentlyPaused
+              ? (isRu ? 'Сканирование приостановлено' : 'Scan paused')
+              : (isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan')
+          );
+          setLiveDetail(
+            isCurrentlyPaused
+              ? (isRu ? 'Обработка временно приостановлена' : 'Processing temporarily paused')
+              : `${stage}${currentFile || (isRu ? 'Обработка медиафайлов и индексация...' : 'Processing media files and indexing...')}`
+          );
         } else {
           setLiveProgress(100);
           setLiveTitle(isRu ? 'Медиатека готова к работе' : 'Media library ready');
@@ -140,6 +152,41 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       console.error('Failed to trigger scan:', err);
     } finally {
       setIsTriggeringScan(false);
+    }
+  };
+
+  const handleTogglePause = async () => {
+    setIsActionInProgress(true);
+    try {
+      const endpoint = isPaused ? '/api/resume' : '/api/pause';
+      const res = await authFetch(endpoint, { method: 'POST' });
+      if (res.ok) {
+        setIsPaused(!isPaused);
+        fetchStatus();
+      }
+    } catch (err) {
+      console.error('Failed to toggle pause:', err);
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const handleStopScan = async () => {
+    setIsActionInProgress(true);
+    try {
+      const res = await authFetch('/api/stop', { method: 'POST' });
+      if (res.ok) {
+        setBackendStatus('idle');
+        setIsPaused(false);
+        setLiveProgress(0);
+        setLiveTitle(isRu ? 'Сканирование отменено' : 'Scan cancelled');
+        setLiveDetail(isRu ? 'Процесс сканирования остановлен пользователем' : 'Scan stopped by user');
+        fetchStatus();
+      }
+    } catch (err) {
+      console.error('Failed to stop scan:', err);
+    } finally {
+      setIsActionInProgress(false);
     }
   };
 
@@ -237,9 +284,31 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               )}
 
               {effectiveStatus === 'running' && (
-                <span className="font-mono font-medium text-primary text-xs">
-                  {clampedProgress}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-medium text-primary text-xs">
+                    {clampedProgress}%
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isActionInProgress}
+                    onClick={handleTogglePause}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors border border-border/60 disabled:opacity-50"
+                    title={isPaused ? (isRu ? 'Продолжить анализ' : 'Resume analysis') : (isRu ? 'Приостановить анализ' : 'Pause analysis')}
+                  >
+                    {isPaused ? <Play size={11} className="fill-current text-primary" /> : <Pause size={11} className="text-amber-500" />}
+                    <span>{isPaused ? (isRu ? 'Продолжить' : 'Resume') : (isRu ? 'Приостановить' : 'Pause')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isActionInProgress}
+                    onClick={handleStopScan}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors border border-destructive/30 disabled:opacity-50"
+                    title={isRu ? 'Отменить сканирование' : 'Cancel scan'}
+                  >
+                    <Square size={11} className="fill-current text-destructive" />
+                    <span>{isRu ? 'Отменить' : 'Cancel'}</span>
+                  </button>
+                </div>
               )}
 
               {isCollapsible && (

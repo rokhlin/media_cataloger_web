@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Query, Req, Res, Headers, BadRequestException, ForbiddenException, Inject, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Query, Req, Res, Headers, BadRequestException, ForbiddenException, Inject, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
@@ -355,6 +355,52 @@ export class MediaController {
       throw new BadRequestException('No media file uploaded or file buffer is empty');
     }
     return this.mediaService.uploadAndProcessMediaFile(file.buffer, file.originalname);
+  }
+
+  @Post('rotate')
+  @ApiOperation({ summary: 'Rotate image counter-clockwise or clockwise on disk' })
+  async rotateMediaFile(@Body() body: { filePath: string; degrees?: number }) {
+    if (!body?.filePath) {
+      throw new BadRequestException('Missing filePath');
+    }
+    return this.mediaService.rotateImage(body.filePath, body.degrees ?? -90);
+  }
+
+  @Post('rename')
+  @ApiOperation({ summary: 'Rename media file and update corresponding DB and sidecar records' })
+  async renameMediaFile(@Body() body: { filePath: string; newName: string }) {
+    if (!body?.filePath || !body?.newName) {
+      throw new BadRequestException('Missing filePath or newName');
+    }
+    return this.mediaService.renameMediaFile(body.filePath, body.newName);
+  }
+
+  @Delete('file')
+  @ApiOperation({ summary: 'Delete media file and associated metadata records' })
+  async deleteMediaFileDelete(@Query('path') queryPath?: string, @Body() body?: { filePath?: string }) {
+    const target = queryPath || body?.filePath;
+    if (!target) {
+      throw new BadRequestException('Missing filePath or path query');
+    }
+    return this.mediaService.deleteMediaFile(target);
+  }
+
+  @Post('delete')
+  @ApiOperation({ summary: 'Delete media file and associated metadata records (POST fallback)' })
+  async deleteMediaFilePost(@Body() body: { filePath: string }) {
+    if (!body?.filePath) {
+      throw new BadRequestException('Missing filePath');
+    }
+    return this.mediaService.deleteMediaFile(body.filePath);
+  }
+
+  @Post('move')
+  @ApiOperation({ summary: 'Move media file to destination folder on disk' })
+  async moveMediaFile(@Body() body: { filePath: string; targetFolder: string }) {
+    if (!body?.filePath || !body?.targetFolder) {
+      throw new BadRequestException('Missing filePath or targetFolder');
+    }
+    return this.mediaService.moveMediaFile(body.filePath, body.targetFolder);
   }
 }
 

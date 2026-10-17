@@ -32,6 +32,8 @@ import {
   Mail,
   Languages,
   AlertCircle,
+  Pause,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -98,8 +100,10 @@ export const UserSettingsScreen: React.FC = () => {
   const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
   const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
   const [uiPublicUrl, setUiPublicUrl] = useState('');
+  const [aiGeminiFallbackEnabled, setAiGeminiFallbackEnabled] = useState(true);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [pipelineFeedback, setPipelineFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Storage Telemetry State
@@ -210,6 +214,11 @@ export const UserSettingsScreen: React.FC = () => {
         }
         if (data?.ui_public_url) {
           setUiPublicUrl(data.ui_public_url);
+        }
+        if (data?.ai_gemini_fallback_enabled !== undefined) {
+          setAiGeminiFallbackEnabled(Boolean(data.ai_gemini_fallback_enabled));
+        } else if (data?.fallback_to_gemini !== undefined) {
+          setAiGeminiFallbackEnabled(Boolean(data.fallback_to_gemini));
         }
       })
       .catch(() => {});
@@ -436,6 +445,7 @@ export const UserSettingsScreen: React.FC = () => {
               : `Selective analysis of unanalyzed files (${modes.join(', ')}) started in background.`),
         });
       } else {
+        setIsRunningPipeline(false);
         const err = await res.json().catch(() => ({}));
         setPipelineFeedback({
           type: 'error',
@@ -443,13 +453,53 @@ export const UserSettingsScreen: React.FC = () => {
         });
       }
     } catch (e: any) {
+      setIsRunningPipeline(false);
       setPipelineFeedback({
         type: 'error',
         message: e.message || (isRu ? 'Ошибка сети при запуске анализа' : 'Network error when starting analysis'),
       });
     } finally {
-      setIsRunningPipeline(false);
       setTimeout(() => setPipelineFeedback(null), 8000);
+    }
+  };
+
+  const handleTogglePause = async () => {
+    try {
+      const endpoint = isPaused ? '/api/resume' : '/api/pause';
+      const res = await authFetch(endpoint, { method: 'POST' });
+      if (res.ok) {
+        setIsPaused(!isPaused);
+        setPipelineFeedback({
+          type: 'success',
+          message: isPaused
+            ? (isRu ? 'Конвейер анализа возобновлен' : 'Analysis pipeline resumed')
+            : (isRu ? 'Конвейер анализа приостановлен' : 'Analysis pipeline paused'),
+        });
+      }
+    } catch {
+      setPipelineFeedback({
+        type: 'error',
+        message: isRu ? 'Ошибка изменения состояния очереди' : 'Failed to change queue status',
+      });
+    }
+  };
+
+  const handleStopPipeline = async () => {
+    try {
+      const res = await authFetch('/api/stop', { method: 'POST' });
+      if (res.ok) {
+        setIsRunningPipeline(false);
+        setIsPaused(false);
+        setPipelineFeedback({
+          type: 'success',
+          message: isRu ? 'Конвейер анализа успешно остановлен' : 'Analysis pipeline stopped',
+        });
+      }
+    } catch {
+      setPipelineFeedback({
+        type: 'error',
+        message: isRu ? 'Ошибка остановки конвейера' : 'Failed to stop pipeline',
+      });
     }
   };
 
@@ -650,6 +700,8 @@ export const UserSettingsScreen: React.FC = () => {
           gemini_max_workers: maxWorkers,
           vision_prompt_template: visionPromptTemplate.trim(),
           ui_public_url: uiPublicUrl.trim(),
+          ai_gemini_fallback_enabled: aiGeminiFallbackEnabled,
+          fallback_to_gemini: aiGeminiFallbackEnabled,
         }),
       });
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
@@ -1278,6 +1330,29 @@ export const UserSettingsScreen: React.FC = () => {
             )}
           </div>
 
+          {/* Automatic Fallback to Gemini Checkbox */}
+          <div className="p-3.5 bg-muted/20 border border-border/60 rounded-xl flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="aiGeminiFallbackEnabled"
+              checked={aiGeminiFallbackEnabled}
+              onChange={(e) => setAiGeminiFallbackEnabled(e.target.checked)}
+              className="mt-0.5 rounded border-border/70 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+            />
+            <div className="space-y-0.5">
+              <label htmlFor="aiGeminiFallbackEnabled" className="text-xs font-bold text-foreground cursor-pointer">
+                {isRu
+                  ? 'Автоматический fallback на Google Gemini, если LM Studio недоступна'
+                  : 'Automatic fallback to Google Gemini when LM Studio is unavailable'}
+              </label>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isRu
+                  ? 'При сбое локальной модели автоматически переключает текущий анализ на облачную модель Gemini с предупреждением в логах, предотвращая аварийную остановку очереди. Если отключено — пайплайн немедленно останавливается с критической ошибкой.'
+                  : 'When local model fails, automatically falls back to Gemini API with a warning, keeping the queue running. If unchecked, the pipeline halts immediately with a critical error.'}
+              </p>
+            </div>
+          </div>
+
           {/* Parallel Concurrent Workers Slider */}
           <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-2">
             <div className="flex items-center justify-between text-xs">
@@ -1451,6 +1526,27 @@ export const UserSettingsScreen: React.FC = () => {
               <Sparkles size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
               <span>{isRu ? 'Анализировать файлы без метаданных' : 'Analyze files without metadata'}</span>
             </button>
+
+            {isRunningPipeline && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTogglePause}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-xs font-semibold hover:bg-amber-500/20 cursor-pointer"
+                >
+                  <Pause size={13} />
+                  <span>{isPaused ? (isRu ? 'Продолжить' : 'Resume') : (isRu ? 'Приостановить' : 'Pause')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStopPipeline}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-xl text-xs font-semibold hover:bg-rose-500/20 cursor-pointer"
+                >
+                  <Square size={13} />
+                  <span>{isRu ? 'Остановить' : 'Stop'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {pipelineFeedback && (

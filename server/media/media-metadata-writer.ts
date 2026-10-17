@@ -111,7 +111,8 @@ export async function writeMediaTagsDirectly(
         const escapedOutput = `"${tempVideoPath.replace(/"/g, '\\"')}"`;
         const escapedTagStr = tagString.replace(/"/g, '\\"');
 
-        const cmd = `ffmpeg -y -i ${escapedInput} -codec copy -metadata description="${escapedTagStr}" -metadata comment="${escapedTagStr}" -movflags use_metadata_tags ${escapedOutput}`;
+        const ffmpegBin = process.env.FFMPEG_PATH || 'ffmpeg';
+        const cmd = `${ffmpegBin} -y -i ${escapedInput} -codec copy -metadata description="${escapedTagStr}" -metadata comment="${escapedTagStr}" -movflags use_metadata_tags ${escapedOutput}`;
         await execAsync(cmd);
 
         if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 0) {

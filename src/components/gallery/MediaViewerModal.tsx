@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type {
   GalleryMediaFile,
   DetectedFaceRecord,
@@ -15,10 +15,13 @@ import AddToAlbumModal from './AddToAlbumModal';
 import { useFavorites } from '../../services/favoritesService';
 import {
   FolderPlus,
+  FolderInput,
+  Folder,
   Loader2,
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Heart,
   Edit3,
   Lock,
@@ -32,9 +35,26 @@ import {
   Download,
   Film,
   Image as ImageIcon,
+  RotateCcw,
+  Pencil,
+  Maximize2,
+  Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 import { cn } from '../../utils';
 import './MediaViewerModal.css';
+
+export const TAXONOMY_BADGES: Record<string, { labelRu: string; labelEn: string; icon: string; color: string }> = {
+  family_memories: { labelRu: 'Семейное', labelEn: 'Family Memories', icon: '👨‍👩‍👧‍👦', color: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' },
+  food: { labelRu: 'Еда и напитки', labelEn: 'Food & Dining', icon: '🍲', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  nature: { labelRu: 'Природа и пейзажи', labelEn: 'Nature & Landscapes', icon: '🌲', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  animals: { labelRu: 'Животные и питомцы', labelEn: 'Animals & Pets', icon: '🐾', color: 'bg-teal-500/15 text-teal-400 border-teal-500/30' },
+  documents: { labelRu: 'Документы и текст', labelEn: 'Documents & Receipts', icon: '📄', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  business_card: { labelRu: 'Визитки и вывески', labelEn: 'Cards & Signs', icon: '🏷️', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+  dashcam: { labelRu: 'Видеорегистратор', labelEn: 'Dashcam Video', icon: '🚗', color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+  other: { labelRu: 'Разное', labelEn: 'Other', icon: '📁', color: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
+};
 
 const CATEGORY_ICONS: Record<string, string> = {
   BIRTH: '👶',
@@ -128,6 +148,233 @@ export default function MediaViewerModal({
   const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [videoPlaybackError, setVideoPlaybackError] = useState(false);
+
+  // FEAT-027: Fullscreen and Collapsible Sidebar
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('media_viewer_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('media_viewer_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (containerRef.current?.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error('Fullscreen toggle error:', err);
+    }
+  };
+
+  // FEAT-027: Rotate Left 90°
+  const [rotationDeg, setRotationDeg] = useState(0);
+  const [isRotating, setIsRotating] = useState(false);
+
+  useEffect(() => {
+    setRotationDeg(0);
+  }, [selectedMedia?.file_path, selectedMedia?.filename]);
+
+  const handleRotateLeft = async () => {
+    if (!selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    setRotationDeg((prev) => (prev - 90) % 360);
+    setIsRotating(true);
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/rotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, degrees: -90 }),
+      });
+      if (res.ok) {
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath } }));
+        if (onRefresh) onRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to rotate image:', err);
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
+  // FEAT-027: Rename File
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [newFilenameInput, setNewFilenameInput] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  const handleOpenRename = () => {
+    if (!selectedMedia) return;
+    setNewFilenameInput(selectedMedia.filename);
+    setRenameError(null);
+    setShowRenameModal(true);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!selectedMedia || !newFilenameInput.trim()) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    setIsRenaming(true);
+    setRenameError(null);
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, newName: newFilenameInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updated = {
+          ...selectedMedia,
+          file_path: data.newPath || selectedMedia.file_path,
+          filename: data.newFilename || newFilenameInput.trim(),
+        };
+        setSelectedMedia(updated);
+        if (onMediaUpdated) onMediaUpdated(updated);
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.newPath } }));
+        setShowRenameModal(false);
+        if (onRefresh) onRefresh();
+      } else {
+        setRenameError(data.message || 'Ошибка при переименовании файла');
+      }
+    } catch (err: any) {
+      setRenameError(err.message || 'Ошибка сети при переименовании');
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  // FEAT-027: Delete File (Hard Confirmation)
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleConfirmDelete = async () => {
+    if (!selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/file', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath }),
+      });
+      if (res.ok) {
+        setShowDeleteModal(false);
+        window.dispatchEvent(new CustomEvent('media_deleted', { detail: { filePath } }));
+        if (onRefresh) onRefresh();
+        if (hasNext && onNext) {
+          onNext();
+        } else if (hasPrev && onPrev) {
+          onPrev();
+        } else {
+          onClose();
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.message || 'Не удалось удалить файл');
+      }
+    } catch (err: any) {
+      setDeleteError(err.message || 'Ошибка сети при удалении');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // FEAT-027: Move To Folder & Move Popover
+  const [showMoveFolderModal, setShowMoveFolderModal] = useState(false);
+  const [targetFolderInput, setTargetFolderInput] = useState('');
+  const [isMovingFolder, setIsMovingFolder] = useState(false);
+  const [moveFolderError, setMoveFolderError] = useState<string | null>(null);
+  const [isMoveMenuOpen, setIsMoveMenuOpen] = useState(false);
+
+  const handleConfirmMoveFolder = async () => {
+    if (!selectedMedia || !targetFolderInput.trim()) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    setIsMovingFolder(true);
+    setMoveFolderError(null);
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/media/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, targetFolder: targetFolderInput.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updated = {
+          ...selectedMedia,
+          file_path: data.newPath || selectedMedia.file_path,
+          folder: targetFolderInput.trim(),
+        };
+        setSelectedMedia(updated);
+        if (onMediaUpdated) onMediaUpdated(updated);
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.newPath } }));
+        setShowMoveFolderModal(false);
+        if (onRefresh) onRefresh();
+      } else {
+        setMoveFolderError(data.message || 'Ошибка при перемещении файла');
+      }
+    } catch (err: any) {
+      setMoveFolderError(err.message || 'Ошибка сети при перемещении');
+    } finally {
+      setIsMovingFolder(false);
+    }
+  };
+
+  // FEAT-027: Restore from vault
+  const handleRestoreFromVault = async () => {
+    if (!selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    await removeVaultItem(filePath);
+    const updated = { ...selectedMedia, is_vault: false };
+    setSelectedMedia(updated);
+    if (onMediaUpdated) onMediaUpdated(updated);
+    window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
+    if (onRefresh) onRefresh();
+  };
+
+  // FEAT-027: Download original
+  const handleDownload = () => {
+    if (!selectedMedia) return;
+    const downloadUrl = `/api/media/file?path=${encodeURIComponent(selectedMedia.file_path || selectedMedia.filename)}${vaultTokenQuery}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = selectedMedia.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Vault PIN confirmation state
   const [showVaultPinModal, setShowVaultPinModal] = useState(false);
@@ -678,10 +925,28 @@ export default function MediaViewerModal({
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showVaultPinModal || isAddingPerson || reassigningFaceId || isEditingMetadata || isAddToAlbumOpen) {
+      if (
+        showVaultPinModal ||
+        isAddingPerson ||
+        reassigningFaceId ||
+        isEditingMetadata ||
+        isAddToAlbumOpen ||
+        showRenameModal ||
+        showDeleteModal ||
+        showMoveFolderModal
+      ) {
         return;
       }
-      if (e.key === 'Escape') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      } else if (e.key === 'F11') {
+        e.preventDefault();
+        handleToggleFullscreen();
+      } else if (e.key === 'Escape') {
+        if (document.fullscreenElement) {
+          return;
+        }
         onClose();
       } else if (e.key === 'ArrowLeft' && onPrev && hasPrev) {
         onPrev();
@@ -691,7 +956,24 @@ export default function MediaViewerModal({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, onPrev, onNext, hasPrev, hasNext, showVaultPinModal, isAddingPerson, reassigningFaceId, isEditingMetadata, isAddToAlbumOpen]);
+  }, [
+    isOpen,
+    onClose,
+    onPrev,
+    onNext,
+    hasPrev,
+    hasNext,
+    showVaultPinModal,
+    isAddingPerson,
+    reassigningFaceId,
+    isEditingMetadata,
+    isAddToAlbumOpen,
+    showRenameModal,
+    showDeleteModal,
+    showMoveFolderModal,
+    toggleSidebar,
+    handleToggleFullscreen,
+  ]);
 
   if (!isOpen || !selectedMedia) {
     return null;
@@ -739,7 +1021,11 @@ export default function MediaViewerModal({
         onClick={onClose}
       >
         <div
-          className="relative w-full max-w-7xl h-[94vh] bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-foreground backdrop-blur-2xl"
+          ref={containerRef}
+          className={cn(
+            'relative w-full max-w-7xl h-[94vh] bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-foreground backdrop-blur-2xl transition-all',
+            isFullscreen && 'max-w-none w-screen h-screen rounded-none border-none p-0 m-0'
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -827,32 +1113,29 @@ export default function MediaViewerModal({
                 </button>
               )}
 
-              {/* Favorite toggle */}
+              {/* Fullscreen toggle (FEAT-027) */}
               <button
                 type="button"
-                onClick={() => {
-                  const target = selectedMedia.file_path || selectedMedia.filename;
-                  if (target) toggleFavorite(target);
-                }}
-                className={cn(
-                  'w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center transition-colors',
-                  isFavorite(selectedMedia.file_path || selectedMedia.filename)
-                    ? 'text-rose-500 bg-rose-500/10 border-rose-500/30'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                )}
-                title={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'Удалить из избранного' : 'Добавить в избранное'}
+                onClick={handleToggleFullscreen}
+                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                title={isFullscreen ? 'Выйти из полноэкранного режима (Esc / F11)' : 'Полноэкранный режим (F11)'}
               >
-                <Heart size={16} fill={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'currentColor' : 'none'} />
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
 
-              {/* Add to album */}
+              {/* Sidebar toggle (FEAT-027) */}
               <button
                 type="button"
-                onClick={() => setIsAddToAlbumOpen(true)}
-                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                title="Добавить в альбом"
+                onClick={toggleSidebar}
+                className={cn(
+                  'w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center transition-colors',
+                  isSidebarCollapsed
+                    ? 'text-primary bg-primary/10 border-primary/30'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                )}
+                title={isSidebarCollapsed ? 'Показать панель сведений (Ctrl+B)' : 'Скрыть панель сведений (Ctrl+B)'}
               >
-                <FolderPlus size={16} />
+                {isSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
               </button>
 
               {/* Close */}
@@ -913,6 +1196,10 @@ export default function MediaViewerModal({
                     <img
                       src={mainImageSrc}
                       alt={selectedMedia.filename}
+                      style={{
+                        transform: rotationDeg !== 0 ? `rotate(${rotationDeg}deg)` : undefined,
+                        transition: 'transform 0.25s ease-out',
+                      }}
                       className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl transition-all"
                       onLoad={(e) => {
                         const target = e.currentTarget;
@@ -1055,11 +1342,24 @@ export default function MediaViewerModal({
               )}
             </div>
 
-            {/* Sidebar / Info Panel */}
-            <div className="w-full md:w-80 lg:w-96 border-t md:border-t-0 md:border-l border-border/80 bg-card/60 backdrop-blur-md flex flex-col overflow-y-auto text-xs divide-y divide-border/60 shrink-0">
-              {/* File details card */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
+            {/* Sidebar / Info Panel (Collapsible per FEAT-027) */}
+            {!isSidebarCollapsed && (
+              <div className="w-full md:w-80 lg:w-96 border-t md:border-t-0 md:border-l border-border/80 bg-card/60 backdrop-blur-md flex flex-col overflow-y-auto text-xs divide-y divide-border/60 shrink-0">
+                {/* File details card */}
+                <div className="p-4 space-y-3">
+                  {/* Category Taxonomy Badge (FEAT-028) */}
+                  {(() => {
+                    const rawCt = selectedMedia.content_type || 'other';
+                    const badge = TAXONOMY_BADGES[rawCt] || TAXONOMY_BADGES.other;
+                    return (
+                      <div className={cn('px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 self-start shadow-2xs', badge.color)}>
+                        <span>{badge.icon}</span>
+                        <span>{activeDetailLang === 'ru' ? badge.labelRu : badge.labelEn}</span>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
                     {t('fileDetails') || 'Сведения о файле'}
                   </h4>
@@ -1470,59 +1770,169 @@ export default function MediaViewerModal({
                 )}
               </div>
 
-              {/* Actions Footer */}
-              <div className="p-4 mt-auto space-y-2 bg-muted/10">
-                {/* Move to Vault / Restore button */}
-                {isAdmin && (
+              {/* Bottom Actions Panel (FEAT-027) */}
+              <div className="p-4 mt-auto space-y-3 bg-muted/10 border-t border-border/60">
+                {/* 2x3 Modern Action Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 1. Favorite toggle */}
                   <button
-                    id="mov_to_vault_button_id"
                     type="button"
-                    onClick={async () => {
-                      const filePath = selectedMedia.file_path || selectedMedia.filename;
-                      if (selectedMedia.is_vault) {
-                        // Restore from vault
-                        await removeVaultItem(filePath);
-                        const updated = { ...selectedMedia, is_vault: false };
-                        setSelectedMedia(updated);
-                        if (onMediaUpdated) onMediaUpdated(updated);
-                        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath, is_vault: false } }));
-                        if (onRefresh) onRefresh();
-                      } else {
-                        // Move to vault with PIN
-                        setPendingVaultFilePath(filePath);
-                        setVaultPinInput('');
-                        setVaultPinError(null);
-                        setShowVaultPinModal(true);
-                      }
+                    onClick={() => {
+                      const target = selectedMedia.file_path || selectedMedia.filename;
+                      if (target) toggleFavorite(target);
                     }}
                     className={cn(
-                      'w-full py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs',
-                      selectedMedia.is_vault
-                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                        : 'border-border/80 bg-muted/40 text-foreground hover:bg-muted'
+                      'py-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors',
+                      isFavorite(selectedMedia.file_path || selectedMedia.filename)
+                        ? 'text-rose-500 bg-rose-500/10 border-rose-500/30'
+                        : 'text-muted-foreground hover:text-foreground bg-card/50 border-border/70 hover:bg-muted'
                     )}
+                    title={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'Удалить из избранного' : 'Добавить в избранное'}
                   >
-                    {selectedMedia.is_vault ? <Unlock size={14} /> : <Lock size={14} />}
-                    <span>
-                      {selectedMedia.is_vault
-                        ? 'Восстановить из личной папки'
-                        : 'Переместить в личную папку'}
+                    <Heart size={14} fill={isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'currentColor' : 'none'} />
+                    <span className="truncate">
+                      {isFavorite(selectedMedia.file_path || selectedMedia.filename) ? 'В избранном' : 'В избранное'}
                     </span>
+                  </button>
+
+                  {/* 2. Rotate Left 90° */}
+                  <button
+                    type="button"
+                    disabled={selectedMedia.is_video || isRotating || !canEdit}
+                    onClick={handleRotateLeft}
+                    className="py-2 px-2.5 rounded-xl border border-border/70 bg-card/50 text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    title="Повернуть на 90° против часовой стрелки"
+                  >
+                    <RotateCcw size={14} className={cn(isRotating && 'animate-spin')} />
+                    <span className="truncate">Повернуть</span>
+                  </button>
+
+                  {/* 3. Direct Download */}
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="py-2 px-2.5 rounded-xl border border-border/70 bg-card/50 text-foreground hover:bg-muted text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    title="Скачать исходный файл"
+                  >
+                    <Download size={14} />
+                    <span className="truncate">Скачать</span>
+                  </button>
+
+                  {/* 4. Rename File */}
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={handleOpenRename}
+                    className="py-2 px-2.5 rounded-xl border border-border/70 bg-card/50 text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    title="Переименовать файл"
+                  >
+                    <Pencil size={14} />
+                    <span className="truncate">Имя</span>
+                  </button>
+
+                  {/* 5. Metadata Editor */}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMetadata(true)}
+                      className="py-2 px-2.5 rounded-xl border border-border/70 bg-card/50 text-foreground hover:bg-muted text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      title="Редактировать метаданные"
+                    >
+                      <Edit3 size={14} />
+                      <span className="truncate">Свойства</span>
+                    </button>
+                  )}
+
+                  {/* 6. Unified Move Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsMoveMenuOpen((prev) => !prev)}
+                      className="w-full py-2 px-2.5 rounded-xl border border-border/70 bg-card/50 text-foreground hover:bg-muted text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      title="Переместить (в альбом, папку или личную папку)"
+                    >
+                      <FolderInput size={14} />
+                      <span className="truncate">Переместить</span>
+                      <ChevronDown size={12} className="opacity-60" />
+                    </button>
+
+                    {isMoveMenuOpen && (
+                      <div className="absolute bottom-full mb-1.5 right-0 w-56 rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl py-1 text-xs z-50 animate-in fade-in zoom-in-95">
+                        {/* 6a. Personal folder / Vault */}
+                        {isAdmin && (
+                          <button
+                            id="mov_to_vault_button_id"
+                            type="button"
+                            onClick={() => {
+                              setIsMoveMenuOpen(false);
+                              const filePath = selectedMedia.file_path || selectedMedia.filename;
+                              if (selectedMedia.is_vault) {
+                                handleRestoreFromVault();
+                              } else {
+                                setPendingVaultFilePath(filePath);
+                                setVaultPinInput('');
+                                setVaultPinError(null);
+                                setShowVaultPinModal(true);
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 text-foreground font-medium"
+                          >
+                            {selectedMedia.is_vault ? <Unlock size={14} className="text-amber-400" /> : <Lock size={14} />}
+                            <span>{selectedMedia.is_vault ? 'Восстановить из личной папки' : 'В личную папку (Vault)'}</span>
+                          </button>
+                        )}
+
+                        {/* 6b. Move to another folder on disk */}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMoveMenuOpen(false);
+                              setTargetFolderInput(selectedMedia.folder || '');
+                              setMoveFolderError(null);
+                              setShowMoveFolderModal(true);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 text-foreground font-medium"
+                          >
+                            <Folder size={14} />
+                            <span>В другую папку...</span>
+                          </button>
+                        )}
+
+                        {/* 6c. Add to Virtual Album */}
+                        <button
+                          id="add_to_album_button_id"
+                          type="button"
+                          onClick={() => {
+                            setIsMoveMenuOpen(false);
+                            setIsAddToAlbumOpen(true);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 text-foreground font-medium"
+                        >
+                          <FolderPlus size={14} />
+                          <span>Добавить в альбом...</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 7. Delete File Action (Hard-confirmation) */}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError(null);
+                      setShowDeleteModal(true);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 flex items-center justify-center gap-2 transition-colors shadow-2xs"
+                  >
+                    <Trash2 size={14} />
+                    <span>Удалить файл</span>
                   </button>
                 )}
 
-                {/* Add to album */}
-                <button
-                  id="add_to_album_button_id"
-                  type="button"
-                  onClick={() => setIsAddToAlbumOpen(true)}
-                  className="w-full py-2.5 px-3 rounded-xl border border-border/80 bg-muted/30 text-foreground text-xs font-semibold hover:bg-muted flex items-center justify-center gap-2 transition-colors shadow-xs"
-                >
-                  <FolderPlus size={14} />
-                  <span>{t('btnAddToAlbum' as any) || 'Добавить в альбом'}</span>
-                </button>
-
-                {/* Run AI Analysis button */}
+                {/* 8. Run AI Analysis button */}
                 <button
                   id="btn_analyze_file_id"
                   type="button"
@@ -1555,6 +1965,7 @@ export default function MediaViewerModal({
                 )}
               </div>
             </div>
+          )}
           </div>
         </div>
       </div>
@@ -1659,6 +2070,178 @@ export default function MediaViewerModal({
                 ) : (
                   <span>Переместить</span>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename File Modal (FEAT-027) */}
+      {showRenameModal && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRenameModal(false); }}
+        >
+          <div className="w-full max-w-sm bg-card border border-border/80 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-foreground">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Pencil size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Переименовать файл</h3>
+                <p className="text-[11px] text-muted-foreground">Введите новое имя файла с расширением</p>
+              </div>
+            </div>
+
+            <input
+              type="text"
+              autoFocus
+              value={newFilenameInput}
+              onChange={(e) => { setNewFilenameInput(e.target.value); setRenameError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleConfirmRename();
+                } else if (e.key === 'Escape') {
+                  setShowRenameModal(false);
+                }
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border/80 bg-muted/30 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+
+            {renameError && (
+              <div className="flex items-center gap-2 text-xs text-destructive font-semibold">
+                <AlertCircle size={14} />
+                <span>{renameError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowRenameModal(false); setRenameError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-border/80 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isRenaming || !newFilenameInput.trim() || newFilenameInput.trim() === selectedMedia?.filename}
+                onClick={handleConfirmRename}
+                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRenaming ? <Loader2 size={14} className="animate-spin" /> : <span>Сохранить</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal (FEAT-027) */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteModal(false); }}
+        >
+          <div className="w-full max-w-sm bg-card border border-destructive/40 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-foreground">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Удаление файла</h3>
+                <p className="text-[11px] text-muted-foreground">Это действие необратимо удалит файл с диска</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded-xl border border-border/60 break-all font-mono">
+              {selectedMedia?.filename}
+            </p>
+
+            {deleteError && (
+              <div className="flex items-center gap-2 text-xs text-destructive font-semibold">
+                <AlertCircle size={14} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteModal(false); setDeleteError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-border/80 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <span>Удалить</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move To Folder Modal (FEAT-027) */}
+      {showMoveFolderModal && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowMoveFolderModal(false); }}
+        >
+          <div className="w-full max-w-md bg-card border border-border/80 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-foreground">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Folder size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Переместить в другую папку</h3>
+                <p className="text-[11px] text-muted-foreground">Укажите путь к целевой папке на сервере</p>
+              </div>
+            </div>
+
+            <input
+              type="text"
+              autoFocus
+              value={targetFolderInput}
+              onChange={(e) => { setTargetFolderInput(e.target.value); setMoveFolderError(null); }}
+              placeholder="/nas/photos/archive"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleConfirmMoveFolder();
+                } else if (e.key === 'Escape') {
+                  setShowMoveFolderModal(false);
+                }
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border/80 bg-muted/30 text-foreground text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+
+            {moveFolderError && (
+              <div className="flex items-center gap-2 text-xs text-destructive font-semibold">
+                <AlertCircle size={14} />
+                <span>{moveFolderError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowMoveFolderModal(false); setMoveFolderError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-border/80 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isMovingFolder || !targetFolderInput.trim()}
+                onClick={handleConfirmMoveFolder}
+                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isMovingFolder ? <Loader2 size={14} className="animate-spin" /> : <span>Переместить</span>}
               </button>
             </div>
           </div>

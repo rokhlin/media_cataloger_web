@@ -20,6 +20,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8000
 
+# Install runtime dependencies for video thumbnail generation and EXIF metadata handling
+RUN apk add --no-cache ffmpeg perl
+
 # Install production dependencies only
 COPY package*.json ./
 RUN npm ci --omit=dev

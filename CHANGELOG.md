@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.2.0] - 2026-10-17
+
+### Added
+- **FEAT-027: Media Viewer Enhancements & AI Analysis Controls**:
+  - **Collapsible Metadata Sidebar**: Toggleable sidebar with smooth transitions, `localStorage` persistence, keyboard shortcut (`Ctrl+B`), and header action button (`PanelRightClose` / `PanelRightOpen`). Media canvas dynamically expands to 100% width when collapsed.
+  - **HTML5 Fullscreen Mode**: True distraction-free fullscreen viewer (`Maximize2` / `Minimize2` and `F11` shortcut).
+  - **Lossless Image Rotation**: Rotate left 90° button (`RotateCcw`) invoking server-side `sharp` rotation and auto-invalidating thumbnail cache (`invalidateThumbnail`).
+  - **Direct File Download**: One-click download button in action panel (`Download`).
+  - **Favorite Action Relocation**: Shifted Favorite button from header to unified bottom action grid.
+  - **Unified "Move" Dropdown**: Consolidated dropdown (`Переместить ▾`) supporting Secret Vault transfer (`mov_to_vault_button_id` with 6-digit PIN gate), Move to folder on disk with interactive dialog, and Add to Virtual Album.
+  - **File Rename & Delete Modals**: Interactive rename and delete dialogs with sidecar and SQLite database synchronization.
+  - **AI Analysis Lifecycle Controls**: Pause, Resume, and Stop/Cancel controls in both global `StatusBar` and `UserSettingsScreen`.
+  - **AI Gemini Fallback Setting**: Persistent `ai_gemini_fallback_enabled` option allowing automatic fallback to Gemini 2.5/3.8 when local LM Studio is offline or encounters errors.
+- **FEAT-028: Specialized AI Media Classification & Gallery Category Filtering**:
+  - **8 Taxonomy Categories**: `family_memories`, `food`, `nature`, `animals`, `documents`, `business_card`, `dashcam`, `other`.
+  - **People Primacy Rule (Priority 1)**: Media with detected or named faces automatically prioritizes as `family_memories`.
+  - **Category Filter Chips Bar**: Interactive pill bar (`CategoryFilterChips`) above the gallery grid with real-time file counters, category icons, and localized labels.
+  - **Metadata Sidebar Category Badge**: Visual taxonomy pill in `MediaViewerModal` header showing category icon, Russian and English names.
+  - **Backend & Database Schema**: Added `content_type` and `content_type_ru` columns to SQLite `media_items` table with sidecar synchronization.
+
+### Fixed
+- **BUG-014: Streaming Socket Timeout & Local Model Repetition Loop**:
+  - Added `ffmpeg` and `perl` packages to production Alpine Docker container.
+  - Extended video streaming download timeout to 300 seconds with 3-attempt exponential backoff retry.
+  - Implemented frequency/presence penalties (0.3) in LM Studio requests and runaway repetition phrase collapsing regex.
+  - Added robust truncated JSON repair (`_repair_truncated_json`) and auto-closing braces/brackets.
+
+---
+
 ## [2.0.0] - 2026-10-16
 
 ### Added
