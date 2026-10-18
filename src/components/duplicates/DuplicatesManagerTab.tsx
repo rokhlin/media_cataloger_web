@@ -11,6 +11,7 @@ import { useAuth } from '../../services/authContext';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import LibraryOrganizationPanel from './LibraryOrganizationPanel';
 import DuplicateDetectionRules from './DuplicateDetectionRules';
+import FolderAnalysisPanel from './FolderAnalysisPanel';
 import {
   ChevronDown,
   FolderCog,
@@ -21,6 +22,7 @@ import {
   Zap,
   CheckCheck,
   XCircle,
+  Sparkles,
 } from 'lucide-react';
 import './DuplicatesManagerTab.css';
 
@@ -78,6 +80,28 @@ export default function DuplicatesManagerTab({
   // Accordion sections state
   const [isOrganizeOpen, setIsOrganizeOpen] = useState(true);
   const [isDuplicatesOpen, setIsDuplicatesOpen] = useState(true);
+  const [utilitiesSubTab, setUtilitiesSubTab] = useState<'duplicates' | 'analysis'>('duplicates');
+
+  // Unmark a file as duplicate
+  const handleUnmarkDuplicate = async (filePath: string) => {
+    try {
+      const res = await authFetch('/api/duplicates/unmark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath }),
+      });
+      if (res.ok) {
+        loadData();
+        mediaCacheService.clearCache();
+        if (onRefreshMedia) onRefreshMedia();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || 'Failed to unmark duplicate');
+      }
+    } catch (e: any) {
+      alert(`Error unmarking duplicate: ${e.message}`);
+    }
+  };
 
   // Fetch groups & summary
   const loadData = useCallback(async () => {
@@ -329,8 +353,43 @@ export default function DuplicatesManagerTab({
 
   return (
     <div className="duplicates-manager-container space-y-6 max-w-7xl mx-auto p-4 md:p-6 animate-in fade-in duration-300">
-      {/* Collapsible Section 1: Media Library Organization */}
-      <div className="organize-accordion-section bg-card border border-border/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200">
+      {/* Utilities Hub Subtab Navigation */}
+      <div className="flex items-center gap-2.5 pb-2 border-b border-border/80 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setUtilitiesSubTab('duplicates')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+            utilitiesSubTab === 'duplicates'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/70 hover:bg-muted hover:text-foreground'
+          }`}
+          id="btn-subtab-duplicates"
+        >
+          <CopyCheck size={15} />
+          <span>{t('sectionDuplicatesManager' as any) || 'Поиск дубликатов'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setUtilitiesSubTab('analysis')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+            utilitiesSubTab === 'analysis'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/70 hover:bg-muted hover:text-foreground'
+          }`}
+          id="btn-subtab-analysis"
+        >
+          <Sparkles size={15} />
+          <span>{t('sectionMediaAnalysis' as any) || 'Анализ медиа'}</span>
+        </button>
+      </div>
+
+      {utilitiesSubTab === 'analysis' ? (
+        <FolderAnalysisPanel configuredFolders={activeInputFolders} onRefreshMedia={onRefreshMedia} />
+      ) : (
+        <>
+          {/* Collapsible Section 1: Media Library Organization */}
+          <div className="organize-accordion-section bg-card border border-border/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200">
         <div
           className="organize-accordion-header flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors select-none"
           onClick={() => setIsOrganizeOpen((prev) => !prev)}
@@ -724,6 +783,18 @@ export default function DuplicatesManagerTab({
                               {dup.similarityToPrimary ? `${Math.round(dup.similarityToPrimary * 100)}%` : 'Duplicate'}
                             </strong>
                           </div>
+
+                          <button
+                            type="button"
+                            className="mt-2 w-full py-1.5 px-2 text-[11px] font-semibold rounded-lg border border-border/80 bg-muted/40 hover:bg-muted text-foreground transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                            title="Исключить из дубликатов и запланировать индивидуальный анализ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUnmarkDuplicate(dup.filePath);
+                            }}
+                          >
+                            <span>Это не дубликат</span>
+                          </button>
                         </div>
                       </div>
                     );
@@ -776,6 +847,8 @@ export default function DuplicatesManagerTab({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Single Item Full Preview Lightbox Modal */}
       {previewItem && (

@@ -108,6 +108,8 @@ export interface MediaFileItem {
   similarity_group_id?: string;
   similar_files_count?: number;
   is_primary_in_group?: boolean;
+  is_burst_duplicate?: boolean;
+  burst_primary?: string;
 }
 
 export interface GalleryMediaFile extends MediaFileItem {

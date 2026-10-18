@@ -32,8 +32,6 @@ import {
   Mail,
   Languages,
   AlertCircle,
-  Pause,
-  Square,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -101,10 +99,9 @@ export const UserSettingsScreen: React.FC = () => {
   const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
   const [uiPublicUrl, setUiPublicUrl] = useState('');
   const [aiGeminiFallbackEnabled, setAiGeminiFallbackEnabled] = useState(true);
+  const [photoPriority, setPhotoPriority] = useState<boolean>(true);
+  const [burstWindowSeconds, setBurstWindowSeconds] = useState<number>(5.0);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
-  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [pipelineFeedback, setPipelineFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Storage Telemetry State
   const [storageTelemetry, setStorageTelemetry] = useState<{
@@ -219,6 +216,12 @@ export const UserSettingsScreen: React.FC = () => {
           setAiGeminiFallbackEnabled(Boolean(data.ai_gemini_fallback_enabled));
         } else if (data?.fallback_to_gemini !== undefined) {
           setAiGeminiFallbackEnabled(Boolean(data.fallback_to_gemini));
+        }
+        if (data?.photo_priority !== undefined) {
+          setPhotoPriority(Boolean(data.photo_priority));
+        }
+        if (data?.burst_window_seconds !== undefined) {
+          setBurstWindowSeconds(Number(data.burst_window_seconds));
         }
       })
       .catch(() => {});
@@ -404,102 +407,6 @@ export const UserSettingsScreen: React.FC = () => {
       alert(`Ошибка обрезки фото: ${err.message}`);
     } finally {
       setIsUploadingPhoto(false);
-    }
-  };
-
-  const handleTriggerAnalysis = async (force: boolean) => {
-    const modes: string[] = [];
-    if (aiFaceClustering) modes.push('faces');
-    if (aiClipSearch || aiOcrRecognition) modes.push('vision');
-
-    if (modes.length === 0) {
-      alert(isRu ? 'Пожалуйста, выберите хотя бы один модуль анализа (Кластеризация лиц, Семантический поиск или OCR).' : 'Please select at least one analysis module (Face clustering, Semantic search, or OCR).');
-      return;
-    }
-
-    setIsRunningPipeline(true);
-    setPipelineFeedback(null);
-    try {
-      const res = await authFetch(`/api/run?force=${force}&modes=${encodeURIComponent(modes.join(','))}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modes,
-          force,
-          ocr: aiOcrRecognition,
-          vision: aiClipSearch || aiOcrRecognition,
-          faces: aiFaceClustering,
-        }),
-      });
-
-      if (res.ok) {
-        window.dispatchEvent(new CustomEvent('pipeline_started', { detail: { force, modes } }));
-        setPipelineFeedback({
-          type: 'success',
-          message: isRu
-            ? (force
-              ? `Запущен полный переанализ всех файлов (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`
-              : `Запущен выборочный анализ файлов без метаданных (${modes.join(', ')}). Обработка выполняется в фоновом режиме.`)
-            : (force
-              ? `Full re-analysis of all files (${modes.join(', ')}) started in background.`
-              : `Selective analysis of unanalyzed files (${modes.join(', ')}) started in background.`),
-        });
-      } else {
-        setIsRunningPipeline(false);
-        const err = await res.json().catch(() => ({}));
-        setPipelineFeedback({
-          type: 'error',
-          message: err.message || (isRu ? 'Ошибка запуска конвейера анализа' : 'Failed to start analysis pipeline'),
-        });
-      }
-    } catch (e: any) {
-      setIsRunningPipeline(false);
-      setPipelineFeedback({
-        type: 'error',
-        message: e.message || (isRu ? 'Ошибка сети при запуске анализа' : 'Network error when starting analysis'),
-      });
-    } finally {
-      setTimeout(() => setPipelineFeedback(null), 8000);
-    }
-  };
-
-  const handleTogglePause = async () => {
-    try {
-      const endpoint = isPaused ? '/api/resume' : '/api/pause';
-      const res = await authFetch(endpoint, { method: 'POST' });
-      if (res.ok) {
-        setIsPaused(!isPaused);
-        setPipelineFeedback({
-          type: 'success',
-          message: isPaused
-            ? (isRu ? 'Конвейер анализа возобновлен' : 'Analysis pipeline resumed')
-            : (isRu ? 'Конвейер анализа приостановлен' : 'Analysis pipeline paused'),
-        });
-      }
-    } catch {
-      setPipelineFeedback({
-        type: 'error',
-        message: isRu ? 'Ошибка изменения состояния очереди' : 'Failed to change queue status',
-      });
-    }
-  };
-
-  const handleStopPipeline = async () => {
-    try {
-      const res = await authFetch('/api/stop', { method: 'POST' });
-      if (res.ok) {
-        setIsRunningPipeline(false);
-        setIsPaused(false);
-        setPipelineFeedback({
-          type: 'success',
-          message: isRu ? 'Конвейер анализа успешно остановлен' : 'Analysis pipeline stopped',
-        });
-      }
-    } catch {
-      setPipelineFeedback({
-        type: 'error',
-        message: isRu ? 'Ошибка остановки конвейера' : 'Failed to stop pipeline',
-      });
     }
   };
 
@@ -702,6 +609,8 @@ export const UserSettingsScreen: React.FC = () => {
           ui_public_url: uiPublicUrl.trim(),
           ai_gemini_fallback_enabled: aiGeminiFallbackEnabled,
           fallback_to_gemini: aiGeminiFallbackEnabled,
+          photo_priority: photoPriority,
+          burst_window_seconds: burstWindowSeconds,
         }),
       });
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
@@ -1489,13 +1398,38 @@ export const UserSettingsScreen: React.FC = () => {
                 className="rounded text-primary focus:ring-primary"
               />
               <span className="text-foreground font-medium text-xs">
-                OCR распознавание текста и надписей на изображениях
+                {isRu ? 'OCR распознавание текста и надписей на изображениях' : 'OCR text recognition on images'}
               </span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={photoPriority}
+                onChange={(e) => setPhotoPriority(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span className="text-foreground font-medium text-xs">
+                {isRu ? 'Приоритет обработки фото перед видео (Photo-First Queue)' : 'Photo priority before video in processing queue'}
+              </span>
+            </label>
+            <div className="flex items-center justify-between text-xs pt-1 max-w-sm">
+              <label className="text-foreground font-medium">
+                {isRu ? 'Окно серийной съёмки (сек, EXIF)' : 'Burst window threshold (seconds, EXIF)'}:
+              </label>
+              <input
+                type="number"
+                min="0.5"
+                max="30"
+                step="0.5"
+                value={burstWindowSeconds}
+                onChange={(e) => setBurstWindowSeconds(parseFloat(e.target.value) || 5.0)}
+                className="w-24 px-2.5 py-1 bg-muted/40 border border-border/70 rounded-xl text-xs font-mono text-center outline-none focus:border-primary"
+              />
+            </div>
           </div>
 
-          {/* Action buttons: Save, Force Re-analyze, and Analyze Only Without Metadata */}
-          <div className="pt-3 border-t border-border/50 flex flex-wrap items-center gap-3">
+          {/* Action buttons: Save Settings */}
+          <div className="pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={handleSaveAi}
@@ -1504,63 +1438,29 @@ export const UserSettingsScreen: React.FC = () => {
               <Save size={14} />
               <span>{isRu ? 'Сохранить параметры AI и промпт' : 'Save AI Parameters & Prompt'}</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => handleTriggerAnalysis(true)}
-              disabled={isRunningPipeline}
-              className="flex items-center gap-2 px-4 py-2 border border-rose-500/50 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-              title={isRu ? "Принудительно запустить анализ всех медиафайлов заново, перезаписывая существующие метаданные" : "Force full re-analysis of all media files, overwriting existing metadata"}
-            >
-              <RefreshCw size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
-              <span>{isRu ? 'Переанализировать все файлы (игнорируя метаданные)' : 'Re-analyze all files (ignore metadata)'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTriggerAnalysis(false)}
-              disabled={isRunningPipeline}
-              className="flex items-center gap-2 px-4 py-2 border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-              title={isRu ? "Запустить анализ только по тем файлам, для которых метаданные еще не сформированы" : "Run analysis only for files without existing metadata"}
-            >
-              <Sparkles size={14} className={isRunningPipeline ? 'animate-spin' : ''} />
-              <span>{isRu ? 'Анализировать файлы без метаданных' : 'Analyze files without metadata'}</span>
-            </button>
-
-            {isRunningPipeline && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleTogglePause}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-xs font-semibold hover:bg-amber-500/20 cursor-pointer"
-                >
-                  <Pause size={13} />
-                  <span>{isPaused ? (isRu ? 'Продолжить' : 'Resume') : (isRu ? 'Приостановить' : 'Pause')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStopPipeline}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-xl text-xs font-semibold hover:bg-rose-500/20 cursor-pointer"
-                >
-                  <Square size={13} />
-                  <span>{isRu ? 'Остановить' : 'Stop'}</span>
-                </button>
-              </div>
-            )}
           </div>
 
-          {pipelineFeedback && (
-            <div
-              className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
-                pipelineFeedback.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-500'
-              }`}
-            >
-              <CheckCircle2 size={15} className="shrink-0" />
-              <span>{pipelineFeedback.message}</span>
+          {/* Utilities Redirection Banner */}
+          <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+            <div className="space-y-0.5">
+              <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                <Sparkles size={14} className="text-primary" />
+                <span>{isRu ? 'Запуск анализа и обработка медиа' : 'Run Media Analysis & Processing'}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {isRu
+                  ? 'Выборочный анализ по папкам, полный переанализ и поиск дубликатов перенесены во вкладку «Утилиты»'
+                  : 'Folder-targeted analysis, full re-analysis, and duplicate management are located in the "Utilities" tab'}
+              </p>
             </div>
-          )}
+            <Link
+              to="/duplicates"
+              className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0 shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <span>{isRu ? 'Открыть Утилиты' : 'Open Utilities'}</span>
+              <span>→</span>
+            </Link>
+          </div>
         </div>
       ),
     },

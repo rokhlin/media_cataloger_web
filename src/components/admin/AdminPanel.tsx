@@ -4,6 +4,7 @@ import { useFeatureFlags, normalizeClassName, normalizeButtonId, FlagsManager, D
 import UserManagementTab from './UserManagementTab';
 import AdminGeminiTab from './AdminGeminiTab';
 import AdminBackupTab from './AdminBackupTab';
+import AdminLogsTab from './AdminLogsTab';
 import type { FeatureFlag } from '../../models/featureFlags';
 import type { StatusInfo } from '../../models/status';
 import type { GalleryMediaFile } from '../gallery/MediaGallery';
@@ -48,7 +49,7 @@ export default function AdminPanel({
   } = useFeatureFlags();
 
   // Subtab state
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'gemini' | 'backups'>(
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'flags' | 'users' | 'gemini' | 'backups' | 'logs'>(
     initialSubTab === 'vault' ? 'flags' : (initialSubTab as any)
   );
 
@@ -452,6 +453,19 @@ export default function AdminPanel({
           <span>💾</span>
           <span>{t('adminTabBackups' as any) || 'System Backups'}</span>
         </button>
+        <button
+          type="button"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            activeAdminSubTab === 'logs'
+              ? 'bg-primary text-white border-primary shadow-xs'
+              : 'bg-card text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+          }`}
+          onClick={() => setActiveAdminSubTab('logs')}
+          id="tab-btn-admin-logs"
+        >
+          <span>📋</span>
+          <span>{t('adminTabLogs' as any) || 'Logs & Diagnostics'}</span>
+        </button>
       </div>
 
       {activeAdminSubTab === 'users' ? (
@@ -460,6 +474,8 @@ export default function AdminPanel({
         <AdminGeminiTab />
       ) : activeAdminSubTab === 'backups' ? (
         <AdminBackupTab />
+      ) : activeAdminSubTab === 'logs' ? (
+        <AdminLogsTab />
       ) : (
         <>
           {/* 1. Feature Flags Management Dropdown / Accordion Section */}

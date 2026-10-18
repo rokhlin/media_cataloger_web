@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.3.0] - 2026-10-18
+
+### Added
+- **FEAT-029: Media Analysis Hub & Utilities Restructuring**:
+  - **Utilities Hub (`/duplicates`) Redesign**:
+    - Dual-subtab architecture separating "Поиск дубликатов" (Duplicates Finder) and "Анализ медиа" (Media Analysis Hub).
+    - Multi-folder checklist selection tree with "Выбрать все" / "Снять выбор" batch actions and storage usage metrics.
+    - Two granular execution actions: "Анализ файлов без метаданных" (incremental scan) and "Полный переанализ (игнорируя метаданные)" (full overwrite).
+    - "Очистить память моделей" action invoking `POST /api/cleanup` to reclaim Whisper, InsightFace, PyTorch CUDA memory, and garbage collection on demand.
+    - Live progress monitor tracking scan status, active workers, loaded models, and real-time processing percentages.
+  - **Settings (`UserSettingsScreen.tsx`) Purification**:
+    - Relocated operational scan buttons to Utilities Hub (`/duplicates`) with an informative quick-navigation banner.
+    - Added Photo Priority toggle ("Приоритет обработки фотографий") and Burst Window threshold configuration ("Окно объединения серии снимков (сек)").
+  - **In-App Diagnostic Logs Viewer (`AdminLogsTab.tsx`)**:
+    - Dedicated tab inside `AdminPanel.tsx` with severity level filters (`ALL`, `INFO`, `WARN`, `ERROR`, `DEBUG`), live auto-scroll, clear logs, and "Скачать логи" (Download logs) export.
+  - **"Это не дубликат" ("Not a duplicate") Action & Lightbox Filmstrip Integration**:
+    - "Это не дубликат" action button in `MediaViewerModal` filmstrip carousel and sidebar details card invoking `POST /api/duplicates/unmark`.
+    - Automatically decouples false duplicates/bursts, resets sidecar replication flags, updates reactive viewer state, and triggers standalone AI re-analysis.
+    - "Это не дубликат" direct button on duplicate item cards in `DuplicatesManagerTab.tsx`.
+
+### Fixed
+- **BUG-015: Docker Folder Scan & Reload State Sync Fixes**:
+  - Eliminated race condition on page refresh where clicking "Start Scan" threw a false "Analysis already running" modal error (gracefully transitions to active running status in `App.tsx` and `StatusBar.tsx`).
+  - Seamless state sync and instant IndexedDB cache hydration preventing blank screen flashes.
+
+---
+
 ## [2.2.0] - 2026-10-17
 
 ### Added

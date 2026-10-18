@@ -648,6 +648,14 @@ function AppMain() {
         const countMsg = result.provided_files_count !== undefined ? ` (${result.provided_files_count} files sent to backend)` : '';
         appendConsoleMessage(`Triggered sync successfully: ${result.message || 'Started'}${countMsg}`, 'INFO', 'Pipeline');
         checkStatus();
+      } else if (res.status === 409) {
+        // Pipeline is already running on backend - smoothly sync status without raising a modal error
+        appendConsoleMessage(
+          `Analysis pipeline is already active (${result.message || 'In progress'}). Syncing state...`,
+          'INFO',
+          'Pipeline'
+        );
+        checkStatus();
       } else {
         if (res.status === 401) {
           setIsLoginOpen(true);

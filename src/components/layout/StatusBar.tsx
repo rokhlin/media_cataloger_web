@@ -147,6 +147,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
         setLiveDetail(isRu ? 'Запуск пайплайна сканирования...' : 'Starting scanning pipeline...');
         fetchStatus();
+      } else if (res.status === 409) {
+        // Already running on backend - gracefully sync status without error
+        setBackendStatus('running');
+        setLiveTitle(isRu ? 'Фоновое сканирование медиатеки' : 'Background media library scan');
+        setLiveDetail(isRu ? 'Синхронизация с активным процессом...' : 'Syncing with active running process...');
+        fetchStatus();
       }
     } catch (err) {
       console.error('Failed to trigger scan:', err);

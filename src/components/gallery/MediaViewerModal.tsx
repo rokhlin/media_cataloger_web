@@ -376,6 +376,51 @@ export default function MediaViewerModal({
     document.body.removeChild(a);
   };
 
+  // Action: Unmark as duplicate / burst sibling
+  const [isUnmarkingDuplicate, setIsUnmarkingDuplicate] = useState(false);
+
+  const handleUnmarkDuplicate = async () => {
+    if (!selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    setIsUnmarkingDuplicate(true);
+    try {
+      const fetchFn = authFetch || fetch;
+      const res = await fetchFn('/api/duplicates/unmark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath }),
+      });
+      if (res.ok) {
+        // Exclude current file from effective series group
+        const currentGroup = selectedMedia.similar_group_files || seriesGroupFiles || [];
+        const remainingGroup = currentGroup.filter(
+          (f) => (f.file_path || f.filename) !== filePath
+        );
+        const updated = {
+          ...selectedMedia,
+          is_burst_duplicate: false,
+          burst_primary: undefined,
+          similar_group_files: remainingGroup.length > 1 ? remainingGroup : undefined,
+          similar_files_count: remainingGroup.length > 1 ? remainingGroup.length : undefined,
+          similarity_group_id: undefined,
+        };
+        setSelectedMedia(updated);
+        if (onMediaUpdated) onMediaUpdated(updated);
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath } }));
+        if (onRefresh) onRefresh();
+
+        // Trigger standalone re-analysis if callback available
+        if (onStartSingleAnalysis) {
+          onStartSingleAnalysis(filePath);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to unmark duplicate:', err);
+    } finally {
+      setIsUnmarkingDuplicate(false);
+    }
+  };
+
   // Vault PIN confirmation state
   const [showVaultPinModal, setShowVaultPinModal] = useState(false);
   const [vaultPinInput, setVaultPinInput] = useState('');
@@ -1294,6 +1339,16 @@ export default function MediaViewerModal({
                 <div className="w-full max-w-xl mx-auto mt-2 p-2 rounded-2xl bg-card/80 border border-border/80 backdrop-blur-md shadow-xl flex flex-col gap-1.5 shrink-0 z-10">
                   <div className="flex items-center justify-between text-[11px] px-1 font-semibold text-primary">
                     <span>{t('similarPhotosInGroup') || 'Серия похожих снимков'} ({effectiveGroupFiles.length})</span>
+                    <button
+                      type="button"
+                      onClick={handleUnmarkDuplicate}
+                      disabled={isUnmarkingDuplicate}
+                      className="px-2 py-0.5 rounded-md bg-muted/80 hover:bg-destructive/15 hover:text-destructive text-[10px] font-medium text-muted-foreground border border-border/60 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Исключить данный файл из серии дубликатов и переанализировать отдельно"
+                    >
+                      {isUnmarkingDuplicate ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                      <span>{language === 'ru' ? 'Это не дубликат' : 'Not a duplicate'}</span>
+                    </button>
                   </div>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {effectiveGroupFiles.map((simFile: GalleryMediaFile, idx: number) => {
@@ -1400,6 +1455,27 @@ export default function MediaViewerModal({
                       </span>
                     </div>
                   </div>
+
+                  {(Boolean(selectedMedia.is_burst_duplicate) || Boolean(effectiveGroupFiles && effectiveGroupFiles.length > 1)) && (
+                    <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-2">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] font-semibold text-primary">Серия / Дубликаты</span>
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          {selectedMedia.burst_primary ? `Копия от ${selectedMedia.burst_primary}` : `Группа (${effectiveGroupFiles?.length || selectedMedia.similar_files_count || 2} шт)`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleUnmarkDuplicate}
+                        disabled={isUnmarkingDuplicate}
+                        className="px-2 py-1 rounded-lg bg-card hover:bg-destructive/15 hover:text-destructive border border-border text-[10px] font-medium transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                        title="Исключить файл из дубликатов"
+                      >
+                        {isUnmarkingDuplicate ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                        <span>Это не дубликат</span>
+                      </button>
+                    </div>
+                  )}
 
                   {selectedMedia.media_date && (
                     <div className="flex items-center justify-between gap-2">
