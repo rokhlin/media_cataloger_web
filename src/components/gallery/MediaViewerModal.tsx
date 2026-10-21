@@ -41,7 +41,15 @@ import {
   Minimize2,
   PanelRightClose,
   PanelRightOpen,
+  RotateCw,
+  Crop,
+  Palette,
+  Undo2,
+  Check,
 } from 'lucide-react';
+import SaveChoiceDialog from './SaveChoiceDialog';
+import StylePresetCarousel, { STYLE_PRESETS, type StylePreset } from './StylePresetCarousel';
+import CropFrameOverlay, { type AspectRatioType, type ResolutionOption } from './CropFrameOverlay';
 import { cn } from '../../utils';
 import './MediaViewerModal.css';
 
@@ -222,6 +230,302 @@ export default function MediaViewerModal({
       console.error('Failed to rotate image:', err);
     } finally {
       setIsRotating(false);
+    }
+  };
+
+  // FEAT-030: Zoom & Pan State & Controls
+  const [zoomScale, setZoomScale] = useState(1.0);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [showZoomBadge, setShowZoomBadge] = useState(false);
+  const zoomTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const touchTrackingRef = useRef<{
+    initialDist: number;
+    initialScale: number;
+    startX: number;
+    startY: number;
+  }>({ initialDist: 0, initialScale: 1.0, startX: 0, startY: 0 });
+
+  // Reset zoom on media file switch
+  useEffect(() => {
+    setZoomScale(1.0);
+    setPanX(0);
+    setPanY(0);
+    setIsPanning(false);
+    setIsEditMode(false);
+    setSelectedStylePreset(STYLE_PRESETS[0]);
+    setIsComparingBefore(false);
+    setEditorRotationDeg(0);
+    setCropAspectRatio('1:1');
+    setCropResolution(null);
+    setHasUnsavedEdits(false);
+  }, [selectedMedia?.file_path, selectedMedia?.filename]);
+
+  const triggerZoomBadge = () => {
+    setShowZoomBadge(true);
+    if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+    zoomTimerRef.current = setTimeout(() => setShowZoomBadge(false), 1500);
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => {
+      const next = Math.min(5.0, Number((prev * 1.2).toFixed(2)));
+      triggerZoomBadge();
+      return next;
+    });
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => {
+      const next = Math.max(1.0, Number((prev * 0.83).toFixed(2)));
+      if (next === 1.0) {
+        setPanX(0);
+        setPanY(0);
+      }
+      triggerZoomBadge();
+      return next;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1.0);
+    setPanX(0);
+    setPanY(0);
+    triggerZoomBadge();
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    setZoomScale((prev) => {
+      let next = prev * factor;
+      if (next < 1.0) next = 1.0;
+      if (next > 5.0) next = 5.0;
+      next = Number(next.toFixed(2));
+      if (next === 1.0) {
+        setPanX(0);
+        setPanY(0);
+      }
+      triggerZoomBadge();
+      return next;
+    });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale > 1.0 && e.button === 0) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isPanning) {
+      setPanX(e.clientX - panStart.x);
+      setPanY(e.clientY - panStart.y);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+  };
+
+  const handleDoubleClick = () => {
+    if (zoomScale > 1.0) {
+      handleResetZoom();
+    } else {
+      setZoomScale(2.5);
+      triggerZoomBadge();
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchTrackingRef.current = {
+        initialDist: Math.hypot(dx, dy),
+        initialScale: zoomScale,
+        startX: (e.touches[0].clientX + e.touches[1].clientX) / 2 - panX,
+        startY: (e.touches[0].clientY + e.touches[1].clientY) / 2 - panY,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchTrackingRef.current.initialDist > 0) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const ratio = dist / touchTrackingRef.current.initialDist;
+      let next = touchTrackingRef.current.initialScale * ratio;
+      if (next < 1.0) next = 1.0;
+      if (next > 5.0) next = 5.0;
+      next = Number(next.toFixed(2));
+      setZoomScale(next);
+      triggerZoomBadge();
+
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      setPanX(midX - touchTrackingRef.current.startX);
+      setPanY(midY - touchTrackingRef.current.startY);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchTrackingRef.current.initialDist = 0;
+    if (zoomScale <= 1.0) {
+      setPanX(0);
+      setPanY(0);
+    }
+  };
+
+  // FEAT-030: Dedicated Edit Mode State & Actions
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [activeEditTool, setActiveEditTool] = useState<'style' | 'rotate' | 'crop'>('style');
+  const [selectedStylePreset, setSelectedStylePreset] = useState<StylePreset>(STYLE_PRESETS[0]);
+  const [isComparingBefore, setIsComparingBefore] = useState(false);
+  const [editorRotationDeg, setEditorRotationDeg] = useState(0);
+  const [cropAspectRatio, setCropAspectRatio] = useState<AspectRatioType>('1:1');
+  const [cropResolution, setCropResolution] = useState<ResolutionOption | null>(null);
+  const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
+  const [showSaveChoiceDialog, setShowSaveChoiceDialog] = useState(false);
+  const [isSavingChoice, setIsSavingChoice] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 2800);
+  };
+
+  const handleEnterEditMode = () => {
+    setIsEditMode(true);
+    setActiveEditTool('style');
+    setSelectedStylePreset(STYLE_PRESETS[0]);
+    setIsComparingBefore(false);
+    setEditorRotationDeg(0);
+    setCropAspectRatio('1:1');
+    setCropResolution(null);
+    setHasUnsavedEdits(false);
+  };
+
+  const handleExitEditMode = () => {
+    if (hasUnsavedEdits) {
+      setShowSaveChoiceDialog(true);
+    } else {
+      setIsEditMode(false);
+      setSelectedStylePreset(STYLE_PRESETS[0]);
+      setEditorRotationDeg(0);
+      setHasUnsavedEdits(false);
+    }
+  };
+
+  const handleSelectStylePreset = (preset: StylePreset) => {
+    setSelectedStylePreset(preset);
+    if (preset.id !== 'original') {
+      setHasUnsavedEdits(true);
+      showToast(language === 'ru' ? `Стиль выбран: ${preset.nameRu}` : `Style selected: ${preset.nameEn}`);
+    } else if (editorRotationDeg === 0) {
+      setHasUnsavedEdits(false);
+    }
+  };
+
+  const handleEditorRotate = (delta: number) => {
+    const next = (editorRotationDeg + delta) % 360;
+    setEditorRotationDeg(next);
+    setHasUnsavedEdits(true);
+    showToast(language === 'ru' ? `Поворот: ${next}°` : `Rotation: ${next}°`);
+  };
+
+  const handleSaveClick = () => {
+    setShowSaveChoiceDialog(true);
+  };
+
+  const handleConfirmSaveChoice = async (choice: 'copy' | 'overwrite' | 'cancel') => {
+    if (choice === 'cancel') {
+      setShowSaveChoiceDialog(false);
+      setIsEditMode(false);
+      setSelectedStylePreset(STYLE_PRESETS[0]);
+      setEditorRotationDeg(0);
+      setHasUnsavedEdits(false);
+      showToast(language === 'ru' ? 'Изменения отменены' : 'Changes discarded');
+      return;
+    }
+
+    if (!selectedMedia) return;
+    const filePath = selectedMedia.file_path || selectedMedia.filename;
+    const saveAsCopy = choice === 'copy';
+    const fetchFn = authFetch || fetch;
+    setIsSavingChoice(true);
+
+    try {
+      if (activeEditTool === 'style' && selectedStylePreset.id !== 'original') {
+        const res = await fetchFn('/api/media/edit/style-transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath,
+            presetId: selectedStylePreset.id,
+            prompt: selectedStylePreset.prompt,
+            strength: 0.4,
+            saveAsCopy,
+          }),
+        });
+        if (!res.ok) throw new Error('Style transfer failed');
+        const data = await res.json();
+        showToast(language === 'ru' ? 'Стиль успешно применен и сохранен!' : 'Style successfully saved!');
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.filePath || filePath } }));
+      } else if (activeEditTool === 'rotate' || editorRotationDeg !== 0) {
+        const res = await fetchFn('/api/media/rotate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath,
+            degrees: editorRotationDeg || -90,
+            saveAsCopy,
+          }),
+        });
+        if (!res.ok) throw new Error('Rotation failed');
+        const data = await res.json();
+        showToast(language === 'ru' ? 'Поворот успешно сохранен!' : 'Rotation saved successfully!');
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.filePath || filePath } }));
+      } else if (activeEditTool === 'crop') {
+        const targetW = cropResolution?.width || imageNaturalDimensions?.width || 1080;
+        const targetH = cropResolution?.height || imageNaturalDimensions?.height || 1080;
+        const res = await fetchFn('/api/media/edit/crop-scale', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath,
+            crop: { left: 0, top: 0, width: targetW, height: targetH },
+            targetResolution: { width: targetW, height: targetH },
+            saveAsCopy,
+          }),
+        });
+        if (!res.ok) throw new Error('Crop & scale failed');
+        const data = await res.json();
+        showToast(language === 'ru' ? 'Кадрирование успешно сохранено!' : 'Crop saved successfully!');
+        window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.filePath || filePath } }));
+      }
+
+      setShowSaveChoiceDialog(false);
+      setIsEditMode(false);
+      setSelectedStylePreset(STYLE_PRESETS[0]);
+      setEditorRotationDeg(0);
+      setHasUnsavedEdits(false);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error('Failed to save edit choice:', err);
+      showToast(language === 'ru' ? `Ошибка сохранения: ${err.message}` : `Save error: ${err.message}`);
+    } finally {
+      setIsSavingChoice(false);
     }
   };
 
@@ -1004,10 +1308,27 @@ export default function MediaViewerModal({
         if (document.fullscreenElement) {
           return;
         }
-        onClose();
-      } else if (e.key === 'ArrowLeft' && onPrev && hasPrev) {
+        if (isEditMode) {
+          if (hasUnsavedEdits) {
+            setShowSaveChoiceDialog(true);
+          } else {
+            setIsEditMode(false);
+          }
+        } else {
+          onClose();
+        }
+      } else if (e.key === 'ArrowUp' || e.key === '+') {
+        e.preventDefault();
+        handleZoomIn();
+      } else if (e.key === 'ArrowDown' || e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        handleResetZoom();
+      } else if (!isEditMode && e.key === 'ArrowLeft' && onPrev && hasPrev) {
         onPrev();
-      } else if (e.key === 'ArrowRight' && onNext && hasNext) {
+      } else if (!isEditMode && e.key === 'ArrowRight' && onNext && hasNext) {
         onNext();
       }
     };
@@ -1020,6 +1341,8 @@ export default function MediaViewerModal({
     onNext,
     hasPrev,
     hasNext,
+    isEditMode,
+    hasUnsavedEdits,
     showVaultPinModal,
     isAddingPerson,
     reassigningFaceId,
@@ -1110,101 +1433,160 @@ export default function MediaViewerModal({
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              {/* Language switcher */}
-              <div className="flex items-center rounded-xl bg-muted/40 p-0.5 border border-border/60 text-xs mr-1 sm:mr-2">
+            {isEditMode ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                  <Sparkles size={13} className="text-purple-400" />
+                  <span>{language === 'ru' ? 'Редактирование' : 'Editing'}</span>
+                </span>
+
                 <button
                   type="button"
-                  onClick={() => setLightboxLang('ru')}
-                  className={cn(
-                    'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
-                    activeDetailLang === 'ru'
-                      ? 'bg-card text-primary shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
+                  onClick={handleExitEditMode}
+                  className="px-3 py-1.5 rounded-xl border border-border/80 hover:bg-muted text-xs font-semibold text-muted-foreground transition-colors"
                 >
-                  RU
+                  {language === 'ru' ? 'Отмена' : 'Cancel'}
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => setLightboxLang('en')}
-                  className={cn(
-                    'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
-                    activeDetailLang === 'en'
-                      ? 'bg-card text-primary shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
+                  onClick={handleSaveClick}
+                  className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
                 >
-                  EN
+                  <Check size={14} />
+                  <span>{language === 'ru' ? 'Сохранить' : 'Save'}</span>
+                </button>
+
+                {/* Fullscreen toggle (FEAT-027) */}
+                <button
+                  type="button"
+                  onClick={handleToggleFullscreen}
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                  title={isFullscreen ? 'Выйти из полноэкранного режима (Esc / F11)' : 'Полноэкранный режим (F11)'}
+                >
+                  {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
+
+                {/* Close with unsaved changes prompt */}
+                <button
+                  type="button"
+                  onClick={handleExitEditMode}
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition-colors ml-1"
+                  title={t('closeTooltip') || 'Закрыть'}
+                >
+                  <X size={16} />
                 </button>
               </div>
-
-              {/* Prev / Next navigation */}
-              {onPrev && (
-                <button
-                  type="button"
-                  onClick={onPrev}
-                  disabled={isPrevDisabled}
-                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title={t('prevImageTooltip') || 'Предыдущее'}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-              )}
-
-              {totalFiles > 0 && currentIndex >= 0 && (
-                <span className="text-[11px] font-mono font-medium text-muted-foreground px-1">
-                  {currentIndex + 1} / {totalFiles}
-                </span>
-              )}
-
-              {onNext && (
-                <button
-                  type="button"
-                  onClick={onNext}
-                  disabled={isNextDisabled}
-                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title={t('nextImageTooltip') || 'Следующее'}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              )}
-
-              {/* Fullscreen toggle (FEAT-027) */}
-              <button
-                type="button"
-                onClick={handleToggleFullscreen}
-                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                title={isFullscreen ? 'Выйти из полноэкранного режима (Esc / F11)' : 'Полноэкранный режим (F11)'}
-              >
-                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </button>
-
-              {/* Sidebar toggle (FEAT-027) */}
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className={cn(
-                  'w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center transition-colors',
-                  isSidebarCollapsed
-                    ? 'text-primary bg-primary/10 border-primary/30'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+            ) : (
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                {/* FEAT-030: Dedicated Edit Mode Trigger */}
+                {!selectedMedia.is_video && canEdit && (
+                  <button
+                    type="button"
+                    onClick={handleEnterEditMode}
+                    className="px-3 py-1.5 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs mr-1"
+                    title="Редактировать изображение"
+                  >
+                    <Pencil size={13} />
+                    <span>{language === 'ru' ? 'Редактировать' : 'Edit'}</span>
+                  </button>
                 )}
-                title={isSidebarCollapsed ? 'Показать панель сведений (Ctrl+B)' : 'Скрыть панель сведений (Ctrl+B)'}
-              >
-                {isSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
-              </button>
 
-              {/* Close */}
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition-colors ml-1"
-                title={t('closeTooltip') || 'Закрыть'}
-              >
-                <X size={16} />
-              </button>
-            </div>
+                {/* Language switcher */}
+                <div className="flex items-center rounded-xl bg-muted/40 p-0.5 border border-border/60 text-xs mr-1 sm:mr-2">
+                  <button
+                    type="button"
+                    onClick={() => setLightboxLang('ru')}
+                    className={cn(
+                      'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
+                      activeDetailLang === 'ru'
+                        ? 'bg-card text-primary shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    RU
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxLang('en')}
+                    className={cn(
+                      'px-2 py-1 rounded-lg font-semibold text-[11px] transition-all',
+                      activeDetailLang === 'en'
+                        ? 'bg-card text-primary shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    EN
+                  </button>
+                </div>
+
+                {/* Prev / Next navigation */}
+                {onPrev && (
+                  <button
+                    type="button"
+                    onClick={onPrev}
+                    disabled={isPrevDisabled}
+                    className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title={t('prevImageTooltip') || 'Предыдущее'}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                )}
+
+                {totalFiles > 0 && currentIndex >= 0 && (
+                  <span className="text-[11px] font-mono font-medium text-muted-foreground px-1">
+                    {currentIndex + 1} / {totalFiles}
+                  </span>
+                )}
+
+                {onNext && (
+                  <button
+                    type="button"
+                    onClick={onNext}
+                    disabled={isNextDisabled}
+                    className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title={t('nextImageTooltip') || 'Следующее'}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                )}
+
+                {/* Fullscreen toggle (FEAT-027) */}
+                <button
+                  type="button"
+                  onClick={handleToggleFullscreen}
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                  title={isFullscreen ? 'Выйти из полноэкранного режима (Esc / F11)' : 'Полноэкранный режим (F11)'}
+                >
+                  {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
+
+                {/* Sidebar toggle (FEAT-027) */}
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  className={cn(
+                    'w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center transition-colors',
+                    isSidebarCollapsed
+                      ? 'text-primary bg-primary/10 border-primary/30'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                  )}
+                  title={isSidebarCollapsed ? 'Показать панель сведений (Ctrl+B)' : 'Скрыть панель сведений (Ctrl+B)'}
+                >
+                  {isSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+                </button>
+
+                {/* Close */}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-xl border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition-colors ml-1"
+                  title={t('closeTooltip') || 'Закрыть'}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
           </header>
 
           {/* Main Body Grid */}
@@ -1249,15 +1631,34 @@ export default function MediaViewerModal({
                     )}
                   </div>
                 ) : (
-                  <div className="relative inline-flex items-center justify-center max-w-full max-h-full">
+                  <div
+                    className={cn(
+                      'relative inline-flex items-center justify-center max-w-full max-h-full select-none',
+                      zoomScale > 1.0 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+                    )}
+                    onWheel={handleWheel}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    onDoubleClick={handleDoubleClick}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    style={{
+                      transform: `translate(${panX}px, ${panY}px) scale(${zoomScale}) rotate(${((rotationDeg || 0) + (isEditMode ? editorRotationDeg : 0)) % 360}deg)`,
+                      transition: isPanning ? 'none' : 'transform 0.15s ease-out',
+                      willChange: 'transform',
+                    }}
+                  >
                     <img
                       src={mainImageSrc}
                       alt={selectedMedia.filename}
                       style={{
-                        transform: rotationDeg !== 0 ? `rotate(${rotationDeg}deg)` : undefined,
-                        transition: 'transform 0.25s ease-out',
+                        filter: isComparingBefore ? 'none' : (isEditMode ? selectedStylePreset.cssFilter : undefined),
+                        transition: 'filter 0.2s ease',
                       }}
-                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl transition-all"
+                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl pointer-events-none"
                       onLoad={(e) => {
                         const target = e.currentTarget;
                         setImageNaturalDimensions({
@@ -1273,8 +1674,8 @@ export default function MediaViewerModal({
                       }}
                     />
 
-                    {/* Interactive green highlight for selected face */}
-                    {(() => {
+                    {/* Interactive green highlight for selected face (only in normal view when not zoomed) */}
+                    {!isEditMode && zoomScale === 1.0 && (() => {
                       if (!selectedFaceId || !imageNaturalDimensions?.width || !imageNaturalDimensions?.height) {
                         return null;
                       }
@@ -1324,22 +1725,56 @@ export default function MediaViewerModal({
                 )}
               </div>
 
+              {/* Floating Zoom Level Badge */}
+              {(showZoomBadge || zoomScale > 1.0) && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/85 backdrop-blur-md border border-slate-700/80 text-xs font-mono font-bold text-sky-400 flex items-center gap-2 shadow-2xl animate-in fade-in duration-150">
+                  <span>{Math.round(zoomScale * 100)}%</span>
+                  {zoomScale > 1.0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetZoom}
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 transition-colors cursor-pointer"
+                      title="Сбросить масштаб (1.0x)"
+                    >
+                      100%
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Crop Frame Overlay & Rule-of-Thirds Grid */}
+              {isEditMode && activeEditTool === 'crop' && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
+                  <div
+                    className="crop-frame-box"
+                    style={{
+                      width: cropAspectRatio === '1:1' ? 440 : cropAspectRatio === '3:4' ? 360 : cropAspectRatio === '4:3' ? 480 : cropAspectRatio === '16:9' ? 560 : cropAspectRatio === '9:16' ? 315 : 520,
+                      height: cropAspectRatio === '1:1' ? 440 : cropAspectRatio === '3:4' ? 480 : cropAspectRatio === '4:3' ? 360 : cropAspectRatio === '16:9' ? 315 : cropAspectRatio === '9:16' ? 560 : 390,
+                    }}
+                  >
+                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-primary text-white text-[11px] font-mono font-bold whitespace-nowrap shadow-md">
+                      {cropAspectRatio} {cropResolution ? `(${cropResolution.width} × ${cropResolution.height})` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Navigation overlays */}
-              {onPrev && hasPrev && (
+              {!isEditMode && onPrev && hasPrev && (
                 <button
                   type="button"
                   onClick={onPrev}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg cursor-pointer"
                   title="Предыдущее (Стрелка влево)"
                 >
                   <ChevronLeft size={22} />
                 </button>
               )}
-              {onNext && hasNext && (
+              {!isEditMode && onNext && hasNext && (
                 <button
                   type="button"
                   onClick={onNext}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-black/60 hover:bg-black/90 border border-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xs shadow-lg cursor-pointer"
                   title="Следующее (Стрелка вправо)"
                 >
                   <ChevronRight size={22} />
@@ -1347,7 +1782,7 @@ export default function MediaViewerModal({
               )}
 
               {/* Similar & Burst Series Minimap Filmstrip */}
-              {effectiveGroupFiles && effectiveGroupFiles.length > 1 && (
+              {!isEditMode && effectiveGroupFiles && effectiveGroupFiles.length > 1 && (
                 <div className="w-full max-w-xl mx-auto mt-2 p-2 rounded-2xl bg-card/80 border border-border/80 backdrop-blur-md shadow-xl flex flex-col gap-1.5 shrink-0 z-10">
                   <div className="flex items-center justify-between text-[11px] px-1 font-semibold text-primary">
                     <span>{t('similarPhotosInGroup') || 'Серия похожих снимков'} ({effectiveGroupFiles.length})</span>
@@ -1407,10 +1842,151 @@ export default function MediaViewerModal({
                   </div>
                 </div>
               )}
+
+              {/* FEAT-030: Bottom Editing Toolbar */}
+              {isEditMode && (
+                <div className="absolute bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 p-3 sm:p-4 z-40 flex flex-col gap-3 shadow-2xl animate-in slide-in-from-bottom duration-200">
+                  {/* Tool Selection Tabs */}
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditTool('style')}
+                        className={cn(
+                          'px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer',
+                          activeEditTool === 'style'
+                            ? 'bg-primary/20 text-primary border border-primary/40 shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-slate-800/60'
+                        )}
+                      >
+                        <Palette size={14} />
+                        <span>{language === 'ru' ? 'AI Стилизация' : 'AI Styles'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditTool('rotate')}
+                        className={cn(
+                          'px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer',
+                          activeEditTool === 'rotate'
+                            ? 'bg-primary/20 text-primary border border-primary/40 shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-slate-800/60'
+                        )}
+                      >
+                        <RotateCw size={14} />
+                        <span>{language === 'ru' ? 'Поворот 90°' : 'Rotate 90°'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditTool('crop')}
+                        className={cn(
+                          'px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer',
+                          activeEditTool === 'crop'
+                            ? 'bg-primary/20 text-primary border border-primary/40 shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-slate-800/60'
+                        )}
+                      >
+                        <Crop size={14} />
+                        <span>{language === 'ru' ? 'Кадрирование' : 'Crop & Scale'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleExitEditMode}
+                        className="px-3 py-1.5 rounded-xl border border-border/80 hover:bg-muted text-xs font-semibold text-muted-foreground transition-colors cursor-pointer"
+                      >
+                        {language === 'ru' ? 'Отмена' : 'Cancel'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveClick}
+                        className="px-4 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check size={14} />
+                        <span>{language === 'ru' ? 'Сохранить' : 'Save'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subpanels */}
+                  <div className="w-full">
+                    {activeEditTool === 'style' && (
+                      <StylePresetCarousel
+                        selectedPresetId={selectedStylePreset.id}
+                        onSelectPreset={handleSelectStylePreset}
+                        isComparingBefore={isComparingBefore}
+                        onStartCompare={() => setIsComparingBefore(true)}
+                        onEndCompare={() => setIsComparingBefore(false)}
+                      />
+                    )}
+
+                    {activeEditTool === 'rotate' && (
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditorRotate(-90)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <RotateCcw size={14} />
+                            <span>{language === 'ru' ? '90° влево' : '90° Left'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditorRotate(90)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <RotateCw size={14} />
+                            <span>{language === 'ru' ? '90° вправо' : '90° Right'}</span>
+                          </button>
+                          {editorRotationDeg !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditorRotationDeg(0);
+                                if (selectedStylePreset.id === 'original') setHasUnsavedEdits(false);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-muted/60 hover:bg-muted text-xs text-muted-foreground flex items-center gap-1 cursor-pointer"
+                              title="Сбросить поворот"
+                            >
+                              <Undo2 size={13} />
+                              <span>{language === 'ru' ? 'Сброс' : 'Reset'}</span>
+                            </button>
+                          )}
+                        </div>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {language === 'ru' ? 'Текущий угол:' : 'Current angle:'}{' '}
+                          <strong className="text-primary font-bold">{editorRotationDeg}°</strong>
+                        </span>
+                      </div>
+                    )}
+
+                    {activeEditTool === 'crop' && (
+                      <CropFrameOverlay
+                        aspectRatio={cropAspectRatio}
+                        onSelectAspectRatio={(ratio) => {
+                          setCropAspectRatio(ratio);
+                          setHasUnsavedEdits(true);
+                        }}
+                        selectedResolution={cropResolution}
+                        onSelectResolution={(res) => {
+                          setCropResolution(res);
+                          setHasUnsavedEdits(true);
+                        }}
+                        naturalWidth={imageNaturalDimensions?.width || 1920}
+                        naturalHeight={imageNaturalDimensions?.height || 1080}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Sidebar / Info Panel (Collapsible per FEAT-027) */}
-            {!isSidebarCollapsed && (
+            {/* Sidebar / Info Panel (Collapsible per FEAT-027, hidden in Edit Mode per FEAT-030) */}
+            {!isEditMode && !isSidebarCollapsed && (
               <div className="w-full md:w-80 lg:w-96 border-t md:border-t-0 md:border-l border-border/80 bg-card/60 backdrop-blur-md flex flex-col overflow-y-auto text-xs divide-y divide-border/60 shrink-0">
                 {/* File details card */}
                 <div className="p-4 space-y-3">
@@ -2333,6 +2909,23 @@ export default function MediaViewerModal({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Universal 3-Option Save Choice Dialog (FEAT-030) */}
+      <SaveChoiceDialog
+        isOpen={showSaveChoiceDialog}
+        onClose={() => setShowSaveChoiceDialog(false)}
+        onConfirm={handleConfirmSaveChoice}
+        fileName={selectedMedia?.filename}
+        isSaving={isSavingChoice}
+      />
+
+      {/* Floating Notification Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] px-4 py-2 rounded-2xl bg-slate-900/95 text-slate-100 border border-slate-700 shadow-2xl text-xs font-semibold backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-bottom duration-200">
+          <Sparkles size={14} className="text-primary" />
+          <span>{toastMessage}</span>
         </div>
       )}
     </>

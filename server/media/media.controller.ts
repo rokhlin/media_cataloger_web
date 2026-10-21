@@ -7,7 +7,7 @@ import * as path from 'path';
 import { MediaService } from './media.service.js';
 import { ThumbnailService } from './thumbnail.service.js';
 import { VaultService } from '../vault/vault.service.js';
-import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto, UpdateMediaMetadataDto } from './dto/media.dto.js';
+import { AddPersonToFileDto, RemoveFaceFromFileDto, ListMediaFilesQueryDto, UpdateMediaMetadataDto, CropScaleMediaDto, StyleTransferMediaDto } from './dto/media.dto.js';
 
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -359,11 +359,29 @@ export class MediaController {
 
   @Post('rotate')
   @ApiOperation({ summary: 'Rotate image counter-clockwise or clockwise on disk' })
-  async rotateMediaFile(@Body() body: { filePath: string; degrees?: number }) {
+  async rotateMediaFile(@Body() body: { filePath: string; degrees?: number; saveAsCopy?: boolean }) {
     if (!body?.filePath) {
       throw new BadRequestException('Missing filePath');
     }
-    return this.mediaService.rotateImage(body.filePath, body.degrees ?? -90);
+    return this.mediaService.rotateImage(body.filePath, body.degrees ?? -90, body.saveAsCopy ?? false);
+  }
+
+  @Post('edit/crop-scale')
+  @ApiOperation({ summary: 'Crop and downscale image according to aspect ratio and target resolution' })
+  async cropAndScaleMediaFile(@Body() body: CropScaleMediaDto) {
+    if (!body?.filePath) {
+      throw new BadRequestException('Missing filePath');
+    }
+    return this.mediaService.cropAndScaleImage(body);
+  }
+
+  @Post('edit/style-transfer')
+  @ApiOperation({ summary: 'Apply artistic style transfer to image with AI or local filter' })
+  async applyStyleTransferMediaFile(@Body() body: StyleTransferMediaDto) {
+    if (!body?.filePath || !body?.presetId) {
+      throw new BadRequestException('Missing filePath or presetId');
+    }
+    return this.mediaService.applyStyleTransfer(body);
   }
 
   @Post('rename')

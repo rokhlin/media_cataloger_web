@@ -136,4 +136,51 @@ export class UpdateMediaMetadataDto {
   tags?: string[] | string;
 }
 
+export class CropScaleMediaDto {
+  @ApiProperty({ description: 'File path or filename of the media item' })
+  @IsString()
+  @IsNotEmpty()
+  filePath: string;
+
+  @ApiProperty({ required: false, description: 'Crop bounding box in pixels' })
+  crop?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+
+  @ApiProperty({ required: false, description: 'Target resolution for downscaling' })
+  targetResolution?: {
+    width?: number;
+    height?: number;
+  };
+
+  @ApiProperty({ required: false, description: 'Rotation angle in degrees (0, 90, 180, 270)' })
+  rotation?: number;
+
+  @ApiProperty({ required: false, description: 'Save as copy (true) or overwrite original (false)', default: true })
+  saveAsCopy?: boolean;
+}
+
+export class StyleTransferMediaDto {
+  @ApiProperty({ description: 'File path or filename of the media item' })
+  @IsString()
+  @IsNotEmpty()
+  filePath: string;
+
+  @ApiProperty({ description: 'Preset ID (e.g. hollywood_warm, kodak_gold_200, etc.)' })
+  @IsString()
+  @IsNotEmpty()
+  presetId: string;
+
+  @ApiProperty({ required: false, description: 'Custom or preset prompt' })
+  prompt?: string;
+
+  @ApiProperty({ required: false, description: 'Transformation strength (0.0 to 1.0)', default: 0.4 })
+  strength?: number;
+
+  @ApiProperty({ required: false, description: 'Save as copy (true) or overwrite original (false)', default: true })
+  saveAsCopy?: boolean;
+}
 
