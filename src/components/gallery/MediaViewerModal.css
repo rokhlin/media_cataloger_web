@@ -52,3 +52,24 @@
     box-shadow: 0 0 20px rgba(52, 211, 153, 0.8), inset 0 0 12px rgba(52, 211, 153, 0.35);
   }
 }
+
+/* Crop Frame Overlay & Rule-of-Thirds Grid */
+.crop-frame-box {
+  position: relative;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.crop-frame-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px);
+  background-size: 33.333% 33.333%;
+  pointer-events: none;
+}
+

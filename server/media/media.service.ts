@@ -2174,7 +2174,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async rotateImage(targetPath: string, degrees: number = -90): Promise<{ success: boolean; filePath: string }> {
+  async rotateImage(targetPath: string, degrees: number = -90, saveAsCopy: boolean = false): Promise<{ success: boolean; filePath: string; filename: string; isCopy: boolean }> {
     const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
     if (!fs.existsSync(resolved)) {
       throw new NotFoundException(`File not found: ${targetPath}`);
@@ -2184,18 +2184,34 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(`Cannot rotate non-image file: ${resolved}`);
     }
 
-    const tempFile = `${resolved}.tmp_rotate_${Date.now()}`;
+    let destPath = resolved;
+    if (saveAsCopy) {
+      const dir = path.dirname(resolved);
+      const base = path.basename(resolved, ext);
+      let candidate = path.join(dir, `${base}_edited${ext}`);
+      let counter = 1;
+      while (fs.existsSync(candidate)) {
+        candidate = path.join(dir, `${base}_edited_${counter}${ext}`);
+        counter++;
+      }
+      destPath = candidate;
+    }
+
+    const tempFile = `${destPath}.tmp_rotate_${Date.now()}`;
     await sharp(resolved, { failOn: 'none' })
       .rotate(degrees)
       .toFile(tempFile);
-    await fs.promises.rename(tempFile, resolved);
+    await fs.promises.rename(tempFile, destPath);
 
     if (this.thumbnailService) {
-      await this.thumbnailService.invalidateThumbnail(resolved);
+      await this.thumbnailService.invalidateThumbnail(destPath);
+      if (destPath !== resolved) {
+        await this.thumbnailService.invalidateThumbnail(resolved);
+      }
     }
 
-    const stat = fs.statSync(resolved);
-    if (this.cachedMediaList) {
+    const stat = fs.statSync(destPath);
+    if (!saveAsCopy && this.cachedMediaList) {
       const idx = this.cachedMediaList.findIndex(
         (f) => f.file_path === resolved || f.filename === path.basename(resolved)
       );
@@ -2205,8 +2221,244 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    return { success: true, filePath: resolved };
+    return { success: true, filePath: destPath, filename: path.basename(destPath), isCopy: saveAsCopy };
   }
+
+  async cropAndScaleImage(options: {
+    filePath: string;
+    crop?: { left: number; top: number; width: number; height: number };
+    targetResolution?: { width?: number; height?: number };
+    rotation?: number;
+    saveAsCopy?: boolean;
+  }): Promise<{ success: boolean; filePath: string; filename: string; isCopy: boolean }> {
+    const resolved = this.resolveMediaFilePath(options.filePath) || options.filePath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${options.filePath}`);
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    if (!this.config.supportedPhotoExts.has(ext)) {
+      throw new BadRequestException(`Cannot crop non-image file: ${resolved}`);
+    }
+
+    const saveAsCopy = options.saveAsCopy !== false;
+    let targetPath = resolved;
+
+    if (saveAsCopy) {
+      const dir = path.dirname(resolved);
+      const base = path.basename(resolved, ext);
+      let candidate = path.join(dir, `${base}_edited${ext}`);
+      let counter = 1;
+      while (fs.existsSync(candidate)) {
+        candidate = path.join(dir, `${base}_edited_${counter}${ext}`);
+        counter++;
+      }
+      targetPath = candidate;
+    }
+
+    const tempFile = `${targetPath}.tmp_crop_${Date.now()}`;
+    let pipeline = sharp(resolved, { failOn: 'none' });
+    const meta = await pipeline.metadata();
+
+    if (options.rotation && options.rotation % 360 !== 0) {
+      pipeline = pipeline.rotate(options.rotation);
+    }
+
+    if (options.crop && options.crop.width > 0 && options.crop.height > 0) {
+      const imgW = meta.width || 1000;
+      const imgH = meta.height || 1000;
+      const left = Math.max(0, Math.min(Math.round(options.crop.left), imgW - 1));
+      const top = Math.max(0, Math.min(Math.round(options.crop.top), imgH - 1));
+      const width = Math.max(1, Math.min(Math.round(options.crop.width), imgW - left));
+      const height = Math.max(1, Math.min(Math.round(options.crop.height), imgH - top));
+
+      pipeline = pipeline.extract({ left, top, width, height });
+    }
+
+    if (options.targetResolution?.width && options.targetResolution?.height) {
+      pipeline = pipeline.resize(options.targetResolution.width, options.targetResolution.height, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+    }
+
+    await pipeline.toFile(tempFile);
+    await fs.promises.rename(tempFile, targetPath);
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(targetPath);
+      if (!saveAsCopy) {
+        await this.thumbnailService.invalidateThumbnail(resolved);
+      }
+    }
+
+    const stat = fs.statSync(targetPath);
+    const targetFilename = path.basename(targetPath);
+
+    if (saveAsCopy) {
+      try {
+        const db = this.db.getDb();
+        db.prepare(`
+          INSERT INTO media_items (
+            file_path, file_name, file_size, mtime, media_type, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, 'image', 'PROCESSED', datetime('now', 'localtime'), datetime('now', 'localtime'))
+        `).run(targetPath, targetFilename, stat.size, stat.mtimeMs / 1000);
+      } catch (e) {
+        this.logger.warn(`Could not insert copied item into DB: ${e}`);
+      }
+      this.filePathMap.set(targetPath, targetPath);
+      this.filePathMap.set(targetPath.toLowerCase(), targetPath);
+      if (this.cachedMediaList) {
+        this.cachedMediaList.unshift({
+          file_path: targetPath,
+          filename: targetFilename,
+          file_size: stat.size,
+          mtime: stat.mtimeMs / 1000,
+          media_type: 'image',
+          status: 'PROCESSED',
+        });
+      }
+    } else {
+      try {
+        const db = this.db.getDb();
+        db.prepare(`
+          UPDATE media_items SET file_size = ?, mtime = ?, updated_at = datetime('now', 'localtime') WHERE file_path = ?
+        `).run(stat.size, stat.mtimeMs / 1000, resolved);
+      } catch {}
+      if (this.cachedMediaList) {
+        const idx = this.cachedMediaList.findIndex(f => f.file_path === resolved);
+        if (idx !== -1) {
+          this.cachedMediaList[idx].file_size = stat.size;
+          this.cachedMediaList[idx].mtime = stat.mtimeMs / 1000;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      filePath: targetPath,
+      filename: targetFilename,
+      isCopy: saveAsCopy,
+    };
+  }
+
+  async applyStyleTransfer(options: {
+    filePath: string;
+    presetId: string;
+    prompt?: string;
+    strength?: number;
+    saveAsCopy?: boolean;
+  }): Promise<{ success: boolean; filePath: string; filename: string; isCopy: boolean; presetId: string }> {
+    const resolved = this.resolveMediaFilePath(options.filePath) || options.filePath;
+    if (!fs.existsSync(resolved)) {
+      throw new NotFoundException(`File not found: ${options.filePath}`);
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    if (!this.config.supportedPhotoExts.has(ext)) {
+      throw new BadRequestException(`Cannot apply style to non-image file: ${resolved}`);
+    }
+
+    const saveAsCopy = options.saveAsCopy !== false;
+    let targetPath = resolved;
+
+    if (saveAsCopy) {
+      const dir = path.dirname(resolved);
+      const base = path.basename(resolved, ext);
+      let candidate = path.join(dir, `${base}_edited${ext}`);
+      let counter = 1;
+      while (fs.existsSync(candidate)) {
+        candidate = path.join(dir, `${base}_edited_${counter}${ext}`);
+        counter++;
+      }
+      targetPath = candidate;
+    }
+
+    const tempFile = `${targetPath}.tmp_style_${Date.now()}`;
+    let pipeline = sharp(resolved, { failOn: 'none' });
+
+    const preset = options.presetId?.toLowerCase() || '';
+    if (preset.includes('tri_x') || preset.includes('b&w') || preset.includes('monochrome') || preset.includes('bw')) {
+      pipeline = pipeline.grayscale().linear(1.3, -15);
+    } else if (preset.includes('hollywood') || preset.includes('warm')) {
+      pipeline = pipeline.modulate({ saturation: 1.3, brightness: 1.05 }).tint({ r: 245, g: 215, b: 175 });
+    } else if (preset.includes('sci_fi') || preset.includes('teal')) {
+      pipeline = pipeline.modulate({ saturation: 1.2, brightness: 0.95 }).tint({ r: 160, g: 220, b: 240 });
+    } else if (preset.includes('kodak_gold')) {
+      pipeline = pipeline.modulate({ saturation: 1.25, brightness: 1.05 }).tint({ r: 250, g: 225, b: 180 });
+    } else if (preset.includes('fujifilm')) {
+      pipeline = pipeline.modulate({ saturation: 0.95, brightness: 1.08 }).tint({ r: 220, g: 240, b: 235 });
+    } else if (preset.includes('disposable') || preset.includes('90s')) {
+      pipeline = pipeline.modulate({ saturation: 1.2, brightness: 1.1 }).linear(1.2, -10);
+    } else if (preset.includes('rembrandt')) {
+      pipeline = pipeline.modulate({ saturation: 1.1, brightness: 0.88 }).linear(1.35, -25);
+    } else if (preset.includes('oil')) {
+      pipeline = pipeline.modulate({ saturation: 1.35, brightness: 1.0 }).tint({ r: 240, g: 210, b: 160 });
+    } else if (preset.includes('cyberpunk') || preset.includes('neon')) {
+      pipeline = pipeline.modulate({ saturation: 1.6, brightness: 1.05 }).tint({ r: 230, g: 150, b: 255 });
+    } else {
+      pipeline = pipeline.modulate({ saturation: 1.15, brightness: 1.02 });
+    }
+
+    await pipeline.toFile(tempFile);
+    await fs.promises.rename(tempFile, targetPath);
+
+    if (this.thumbnailService) {
+      await this.thumbnailService.invalidateThumbnail(targetPath);
+      if (!saveAsCopy) {
+        await this.thumbnailService.invalidateThumbnail(resolved);
+      }
+    }
+
+    const stat = fs.statSync(targetPath);
+    const targetFilename = path.basename(targetPath);
+
+    if (saveAsCopy) {
+      try {
+        const db = this.db.getDb();
+        db.prepare(`
+          INSERT INTO media_items (
+            file_path, file_name, file_size, mtime, media_type, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, 'image', 'PROCESSED', datetime('now', 'localtime'), datetime('now', 'localtime'))
+        `).run(targetPath, targetFilename, stat.size, stat.mtimeMs / 1000);
+      } catch (e) {
+        this.logger.warn(`Could not insert copied style item into DB: ${e}`);
+      }
+      this.filePathMap.set(targetPath, targetPath);
+      this.filePathMap.set(targetPath.toLowerCase(), targetPath);
+      if (this.cachedMediaList) {
+        this.cachedMediaList.unshift({
+          file_path: targetPath,
+          filename: targetFilename,
+          file_size: stat.size,
+          mtime: stat.mtimeMs / 1000,
+          media_type: 'image',
+          status: 'PROCESSED',
+        });
+      }
+    } else {
+      try {
+        const db = this.db.getDb();
+        db.prepare(`
+          UPDATE media_items SET file_size = ?, mtime = ?, updated_at = datetime('now', 'localtime') WHERE file_path = ?
+        `).run(stat.size, stat.mtimeMs / 1000, resolved);
+      } catch {}
+      if (this.cachedMediaList) {
+        const idx = this.cachedMediaList.findIndex(f => f.file_path === resolved);
+        if (idx !== -1) {
+          this.cachedMediaList[idx].file_size = stat.size;
+          this.cachedMediaList[idx].mtime = stat.mtimeMs / 1000;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      filePath: targetPath,
+      filename: targetFilename,
+      isCopy: saveAsCopy,
+      presetId: options.presetId,
+    };
+  }
+
 
   async renameMediaFile(targetPath: string, newFilename: string): Promise<{ success: boolean; oldPath: string; newPath: string; newFilename: string }> {
     const resolved = this.resolveMediaFilePath(targetPath) || targetPath;
