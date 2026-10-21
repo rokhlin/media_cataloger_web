@@ -634,6 +634,15 @@ export default function MediaViewerModal({
     }
   };
 
+  // Automatically fetch fresh AI metadata and sidecar analysis when opening modal or switching files
+  useEffect(() => {
+    if (!isOpen || !selectedMedia) return;
+    const target = selectedMedia.file_path || selectedMedia.filename;
+    if (target) {
+      fetchCurrentMediaDetails(target);
+    }
+  }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename]);
+
   // Fetch detected faces for current file
   useEffect(() => {
     if (!isOpen || !selectedMedia) {
@@ -657,7 +666,10 @@ export default function MediaViewerModal({
       try {
         const filePath = selectedMedia.file_path || selectedMedia.filename;
         const fetchFn = authFetch || fetch;
-        const res = await fetchFn(`/api/faces/detect?file=${encodeURIComponent(filePath)}${vaultTokenQuery}`);
+        let res = await fetchFn(`/api/media/faces-for-file?file=${encodeURIComponent(filePath)}${vaultTokenQuery}`);
+        if (!res.ok) {
+          res = await fetchFn(`/api/faces/detect?file=${encodeURIComponent(filePath)}${vaultTokenQuery}`);
+        }
         if (res.ok && isMounted) {
           const data = await res.json();
           const rawFaces: DetectedFaceRecord[] = Array.isArray(data) ? data : (data?.faces || []);
