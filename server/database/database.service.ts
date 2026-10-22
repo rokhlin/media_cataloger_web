@@ -2378,7 +2378,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       `).all() as any[];
       return rows.map((r) => ({
         filePath: r.file_path,
-        folder: r.folder || path.dirname(r.file_path),
+        folder: r.folder || path.posix.dirname((r.file_path || '').replace(/\\/g, '/')),
       }));
     } catch {
       return [];

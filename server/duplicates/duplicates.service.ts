@@ -81,6 +81,21 @@ export interface DuplicateScanStatus {
   error?: string | null;
 }
 
+function getCrossPlatformDirname(filePath: string): string {
+  const norm = (filePath || '').replace(/\\/g, '/');
+  return path.posix.dirname(norm);
+}
+
+function getCrossPlatformBasename(filePath: string, ext?: string): string {
+  const norm = (filePath || '').replace(/\\/g, '/');
+  return path.posix.basename(norm, ext);
+}
+
+function getCrossPlatformExtname(filePath: string): string {
+  const norm = (filePath || '').replace(/\\/g, '/');
+  return path.posix.extname(norm);
+}
+
 @Injectable()
 export class DuplicatesService {
   private readonly logger = new Logger(DuplicatesService.name);
@@ -157,12 +172,12 @@ export class DuplicatesService {
   ): Promise<DuplicateGroup[]> {
     const rawHashes = this.db.getAllMediaHashes();
     const items: DuplicateItemInfo[] = rawHashes.map((h: any) => {
-      const ext = path.extname(h.file_path).toLowerCase();
+      const ext = getCrossPlatformExtname(h.file_path).toLowerCase();
       const isImg = Boolean((h.width && h.height) || this.config.supportedPhotoExts.has(ext));
       return {
         filePath: h.file_path,
-        filename: path.basename(h.file_path),
-        folder: path.dirname(h.file_path),
+        filename: getCrossPlatformBasename(h.file_path),
+        folder: getCrossPlatformDirname(h.file_path),
         fileSize: h.file_size,
         mtime: h.mtime,
         width: h.width,
@@ -431,7 +446,7 @@ export class DuplicatesService {
       this.scanStatus.current = Math.min(i + batch.length, targetFiles.length);
       this.scanStatus.percent = Math.round((this.scanStatus.current / targetFiles.length) * 100);
       if (batch.length > 0) {
-        this.scanStatus.currentFile = path.basename(batch[batch.length - 1].filePath);
+        this.scanStatus.currentFile = getCrossPlatformBasename(batch[batch.length - 1].filePath);
       }
 
       // Yield event loop to allow UI responsiveness and GC cleanup on low-power CPU
@@ -454,7 +469,7 @@ export class DuplicatesService {
       const stat = await fs.promises.stat(filePath);
       const fileSize = stat.size;
       const mtime = stat.mtimeMs / 1000;
-      const ext = path.extname(filePath).toLowerCase();
+      const ext = getCrossPlatformExtname(filePath).toLowerCase();
       const isImage = this.config.supportedPhotoExts.has(ext);
       const isVideo = this.config.supportedVideoExts.has(ext);
 
@@ -463,8 +478,8 @@ export class DuplicatesService {
       if (cached && cached.content_hash && cached.phash && (!cached.file_size || cached.file_size === fileSize)) {
         return {
           filePath,
-          filename: path.basename(filePath),
-          folder: path.dirname(filePath),
+          filename: getCrossPlatformBasename(filePath),
+          folder: getCrossPlatformDirname(filePath),
           fileSize,
           mtime,
           width: cached.width || null,
@@ -540,8 +555,8 @@ export class DuplicatesService {
 
       return {
         filePath,
-        filename: path.basename(filePath),
-        folder: path.dirname(filePath),
+        filename: getCrossPlatformBasename(filePath),
+        folder: getCrossPlatformDirname(filePath),
         fileSize,
         mtime,
         width,
@@ -891,7 +906,7 @@ export class DuplicatesService {
     const folders = Array.from(new Set(burst.map((m) => m.folder)));
 
     groups.push({
-      id: `burst_${path.basename(primary.filePath, path.extname(primary.filePath))}`,
+      id: `burst_${getCrossPlatformBasename(primary.filePath, getCrossPlatformExtname(primary.filePath))}`,
       matchType: 'burst',
       similarity: parseFloat(minSim.toFixed(2)),
       primaryFile: primary,
@@ -933,8 +948,8 @@ export class DuplicatesService {
     if (!item) return item;
     return {
       filePath: item.filePath || item.file_path,
-      filename: item.filename || path.basename(item.filePath || item.file_path || ''),
-      folder: item.folder || path.dirname(item.filePath || item.file_path || ''),
+      filename: item.filename || getCrossPlatformBasename(item.filePath || item.file_path || ''),
+      folder: item.folder || getCrossPlatformDirname(item.filePath || item.file_path || ''),
       fileSize: item.fileSize !== undefined ? item.fileSize : item.file_size || 0,
       mtime: item.mtime || 0,
       width: item.width || null,
