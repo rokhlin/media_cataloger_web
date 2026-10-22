@@ -552,12 +552,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       INSERT INTO media_metadata (
         media_id, summary, summary_ru, description, description_ru, environment, lighting, lighting_ru,
         weather, weather_ru, time_of_day, time_of_day_ru, ocr_text, exif_analysis, exif_analysis_ru,
-        transcription, transcription_ru, timeline_events, camera_make, camera_model, location_name
+        transcription, transcription_ru, timeline_events, camera_make, camera_model, location_name,
+        latitude, longitude
       )
       VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?,
+        ?, ?
       )
       ON CONFLICT(media_id) DO UPDATE SET
         summary = COALESCE(excluded.summary, media_metadata.summary),
@@ -579,7 +581,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         timeline_events = COALESCE(excluded.timeline_events, media_metadata.timeline_events),
         camera_make = COALESCE(excluded.camera_make, media_metadata.camera_make),
         camera_model = COALESCE(excluded.camera_model, media_metadata.camera_model),
-        location_name = COALESCE(excluded.location_name, media_metadata.location_name)
+        location_name = COALESCE(excluded.location_name, media_metadata.location_name),
+        latitude = COALESCE(excluded.latitude, media_metadata.latitude),
+        longitude = COALESCE(excluded.longitude, media_metadata.longitude)
     `);
 
     const transaction = db.transaction(() => {
@@ -605,7 +609,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         metadata.timeline_events ? (typeof metadata.timeline_events === 'string' ? metadata.timeline_events : JSON.stringify(metadata.timeline_events)) : null,
         metadata.camera_make || null,
         metadata.camera_model || null,
-        metadata.location_name || null
+        metadata.location_name || null,
+        metadata.latitude !== undefined && metadata.latitude !== null ? Number(metadata.latitude) : null,
+        metadata.longitude !== undefined && metadata.longitude !== null ? Number(metadata.longitude) : null
       );
     });
 
@@ -848,7 +854,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           md.timeline_events,
           md.camera_make,
           md.camera_model,
-          md.location_name
+          md.location_name,
+          md.latitude,
+          md.longitude
         FROM media_items m
         LEFT JOIN media_metadata md ON m.id = md.media_id
         ORDER BY m.media_date DESC, m.mtime DESC
@@ -905,7 +913,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         'environment', 'lighting', 'lighting_ru', 'weather', 'weather_ru',
         'time_of_day', 'time_of_day_ru', 'ocr_text', 'exif_analysis', 'exif_analysis_ru',
         'transcription', 'transcription_ru', 'timeline_events',
-        'camera_make', 'camera_model', 'lens_model', 'location_name', 'tags'
+        'camera_make', 'camera_model', 'lens_model', 'location_name', 'latitude', 'longitude', 'tags'
       ];
 
       const setClauses: string[] = [];

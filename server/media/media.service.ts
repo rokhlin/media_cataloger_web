@@ -116,7 +116,9 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         timeline_events: r.timeline_events,
         camera_make: r.camera_make,
         camera_model: r.camera_model,
-        location_name: r.location_name,
+        location_name: r.location_name || null,
+        latitude: r.latitude !== undefined && r.latitude !== null ? Number(r.latitude) : null,
+        longitude: r.longitude !== undefined && r.longitude !== null ? Number(r.longitude) : null,
         content_type: r.content_type || null,
         content_type_ru: r.content_type_ru || null,
         face_count: fileFaces.length || faceCounts[r.file_path] || 0,
@@ -863,6 +865,9 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       let captureDate: string | null = null;
       let mediaDate: string | null = null;
       const m = dbMetadata[filePath] || dbMetadata[baseName.toLowerCase()];
+      let locationName: string | null = m?.location_name || null;
+      let latitude: number | null = m?.latitude !== undefined && m?.latitude !== null ? Number(m.latitude) : null;
+      let longitude: number | null = m?.longitude !== undefined && m?.longitude !== null ? Number(m.longitude) : null;
       if (m) {
         mediaDate = m.media_date || null;
         captureDate = (m as any).capture_date || m.media_date || null;
@@ -924,6 +929,18 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
 
           if (sdata.media_date) mediaDate = sdata.media_date;
           else if (captureDate && !mediaDate) mediaDate = captureDate;
+
+          const rawLat = sdata.latitude ?? sdata.gps?.latitude ?? sdata.exif?.latitude ?? sdata.exif?.gps?.latitude ?? ga.latitude ?? ga.gps?.latitude;
+          const rawLon = sdata.longitude ?? sdata.gps?.longitude ?? sdata.exif?.longitude ?? sdata.exif?.gps?.longitude ?? ga.longitude ?? ga.gps?.longitude;
+          if (rawLat !== undefined && rawLat !== null && !isNaN(Number(rawLat))) {
+            latitude = Number(rawLat);
+          }
+          if (rawLon !== undefined && rawLon !== null && !isNaN(Number(rawLon))) {
+            longitude = Number(rawLon);
+          }
+          if (sdata.location_name || sdata.city || ga.location_name || ga.city) {
+            locationName = sdata.location_name || sdata.city || ga.location_name || ga.city;
+          }
 
           // If faces are missing from DB, extract them from sidecar JSON
           const rawSidecarFaces = sdata.faces || sdata.detected_faces || ga.faces || ga.detected_faces || [];
@@ -1018,9 +1035,11 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
               transcription: transcription,
               transcription_ru: transcriptionRu,
               timeline_events: timelineEvents,
-              camera_make: sdata.exif?.camera_make || null,
-              camera_model: sdata.camera_model || null,
-              location_name: sdata.location_name || null,
+              camera_make: sdata.exif?.camera_make || m?.camera_make || null,
+              camera_model: sdata.camera_model || m?.camera_model || null,
+              location_name: locationName,
+              latitude: latitude,
+              longitude: longitude,
             });
           } catch {
             // ignore persistence failures during scan
@@ -1083,6 +1102,11 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         faces: dedupFaces,
         face_names: faceNames,
         has_unassigned_faces: hasUnassigned,
+        camera_make: sdata?.exif?.camera_make || m?.camera_make || null,
+        camera_model: sdata?.camera_model || m?.camera_model || null,
+        location_name: locationName,
+        latitude: latitude,
+        longitude: longitude,
         is_vault: this.isVaultPath(filePath),
         error_message: syncRec ? syncRec.error_message : null,
       };
@@ -1547,6 +1571,9 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     let descRu: string | null = dbMeta?.description_ru || null;
     let summ: string | null = dbMeta?.summary || null;
     let summRu: string | null = dbMeta?.summary_ru || null;
+    let locationName: string | null = dbMeta?.location_name || null;
+    let latitude: number | null = dbMeta?.latitude !== undefined && dbMeta?.latitude !== null ? Number(dbMeta.latitude) : null;
+    let longitude: number | null = dbMeta?.longitude !== undefined && dbMeta?.longitude !== null ? Number(dbMeta.longitude) : null;
     let environment: string | null = dbMeta?.environment || null;
     let lighting: string | null = dbMeta?.lighting || null;
     let lightingRu: string | null = dbMeta?.lighting_ru || null;
@@ -1571,11 +1598,12 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Invalidate sidecar cache for this file to ensure freshest read
+    let sdata: any = null;
     const resolvedSidecar = this.findSidecarFile(resolved, undefined, sidecar);
     if (resolvedSidecar) {
       this.sidecarCache.delete(resolvedSidecar);
       sidecar = resolvedSidecar;
-      const sdata = this.readParsedSidecar(resolvedSidecar);
+      sdata = this.readParsedSidecar(resolvedSidecar);
       if (sdata) {
         const ga = sdata.gemini_analysis || sdata.analysis || sdata.metadata || {};
         if (ga.description || sdata.description) desc = ga.description || sdata.description;
@@ -1597,6 +1625,18 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         if (ga.content_type || sdata.content_type) contentType = ga.content_type || sdata.content_type;
         if (ga.content_type_ru || sdata.content_type_ru) contentTypeRu = ga.content_type_ru || sdata.content_type_ru;
         if (ga.timeline_events || sdata.timeline_events) timelineEvents = ga.timeline_events || sdata.timeline_events;
+
+        const rawLat = sdata.latitude ?? sdata.gps?.latitude ?? sdata.exif?.latitude ?? sdata.exif?.gps?.latitude ?? ga.latitude ?? ga.gps?.latitude;
+        const rawLon = sdata.longitude ?? sdata.gps?.longitude ?? sdata.exif?.longitude ?? sdata.exif?.gps?.longitude ?? ga.longitude ?? ga.gps?.longitude;
+        if (rawLat !== undefined && rawLat !== null && !isNaN(Number(rawLat))) {
+          latitude = Number(rawLat);
+        }
+        if (rawLon !== undefined && rawLon !== null && !isNaN(Number(rawLon))) {
+          longitude = Number(rawLon);
+        }
+        if (sdata.location_name || sdata.city || ga.location_name || ga.city) {
+          locationName = sdata.location_name || sdata.city || ga.location_name || ga.city;
+        }
 
         if (desc || descRu || summ || summRu || status === 'UNPROCESSED') {
           status = 'PROCESSED';
@@ -1664,6 +1704,11 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       faces: dedupFaces,
       face_names: faceNames,
       has_unassigned_faces: hasUnassigned,
+      camera_make: (dbMeta as any)?.camera_make || sdata?.exif?.camera_make || null,
+      camera_model: (dbMeta as any)?.camera_model || sdata?.camera_model || null,
+      location_name: locationName,
+      latitude: latitude,
+      longitude: longitude,
       is_vault: this.isVaultPath(resolved),
       error_message: syncRec ? syncRec.error_message : null,
     };
