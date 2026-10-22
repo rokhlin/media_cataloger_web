@@ -51,9 +51,79 @@ export class CatalogerClientService {
 
     this.logBuffer?.info('Pipeline', `Initiating media catalog synchronization (force=${Boolean(force)}) using UI base URL: ${effectiveUiBase}`);
 
-    const scanned = await this.mediaService.scanInputFolders();
+    let scanned = await this.mediaService.scanInputFolders();
+
+    // 1. Multi-folder targeted filtering if specified by user
+    const targetedFolders: string[] | undefined = customPayload?.folders || customPayload?.folder_paths || (customPayload?.input_folders && customPayload.input_folders.length ? customPayload.input_folders : undefined);
+    if (targetedFolders && Array.isArray(targetedFolders) && targetedFolders.length > 0) {
+      const normTargets = targetedFolders.map(f => {
+        let clean = String(f).replace(/\\/g, '/').trim();
+        while (clean.endsWith('/') && clean.length > 1) {
+          clean = clean.slice(0, -1);
+        }
+        return clean.toLowerCase();
+      });
+
+      scanned = scanned.filter(s => {
+        let fFolder = (s.folder || '').replace(/\\/g, '/').trim().toLowerCase();
+        while (fFolder.endsWith('/') && fFolder.length > 1) fFolder = fFolder.slice(0, -1);
+
+        let fPath = (s.filePath || '').replace(/\\/g, '/').trim().toLowerCase();
+        const fDir = path.dirname(fPath).replace(/\\/g, '/').toLowerCase();
+        const fDirName = path.basename(fDir).toLowerCase();
+        const fFolderBase = path.basename(fFolder).toLowerCase();
+
+        return normTargets.some(nt => {
+          const ntBase = path.basename(nt).toLowerCase();
+          // Exact folder match
+          if (fFolder === nt || fFolder.endsWith('/' + nt)) return true;
+          // Path starts with target folder
+          if (fPath.startsWith(nt + '/') || fPath === nt) return true;
+          // Subfolder / Directory name matches target
+          if (fDir.startsWith(nt + '/') || fDir === nt) return true;
+          if (fDirName === nt || fDirName === ntBase) return true;
+          if (fFolderBase === nt || fFolderBase === ntBase) return true;
+          // Relative path containment
+          if (fPath.includes('/' + nt + '/')) return true;
+          return false;
+        });
+      });
+
+      if (scanned.length === 0) {
+        this.logger.log(`No media files matching selected target folders: ${targetedFolders.join(', ')}`);
+        this.logBuffer?.info('Pipeline', `Target folder filter matched 0 files (${targetedFolders.join(', ')})`);
+        return {
+          status: 'completed',
+          message: `No files found to process in selected folder(s) (${targetedFolders.length} selected).`,
+          total_files: 0,
+          files_count: 0,
+          provided_files_count: 0,
+        };
+      }
+    }
+
+    // 2. Incremental analysis filter ("Анализ файлов без метаданных")
+    if (customPayload?.only_unprocessed || customPayload?.incremental) {
+      scanned = scanned.filter(s => {
+        const sidecar = this.mediaService.findSidecarFile(s.filePath);
+        return !sidecar || !fs.existsSync(sidecar);
+      });
+      if (scanned.length === 0) {
+        this.logger.log('Incremental filter matched 0 unanalyzed files; all files already indexed.');
+        this.logBuffer?.info('Pipeline', 'Incremental analysis filter: all media files in selected scope already have metadata.');
+        return {
+          status: 'completed',
+          message: 'All files in the selected folder(s) already have metadata. No new files to process.',
+          total_files: 0,
+          files_count: 0,
+          provided_files_count: 0,
+        };
+      }
+    }
+
     this.logBuffer?.debug('Pipeline', `Found ${scanned.length} media file(s) across input sources`, {
       inputFolders: execConfig.input_folders,
+      targetedFolders,
       totalFiles: scanned.length,
       effectiveUiBase,
     });
@@ -82,6 +152,8 @@ export class CatalogerClientService {
       force: Boolean(force),
       total_files: files.length,
       files: files,
+      folders: targetedFolders,
+      folder_paths: targetedFolders,
       output_folder: execConfig.output_folder,
       settings: {
         ...execConfig,
