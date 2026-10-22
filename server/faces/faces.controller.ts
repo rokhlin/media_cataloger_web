@@ -13,6 +13,10 @@ import {
   ResetFaceByFilenameDto,
   DeleteFaceDto,
   DeleteFacesBatchDto,
+  RejectAssignmentDto,
+  ResetPrimaryFaceDto,
+  SetPrimaryFaceDto,
+  ManualCropFaceDto,
 } from './dto/faces.dto.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -201,5 +205,33 @@ export class FacesController {
   @ApiOperation({ summary: 'Alias for delete-batch to delete an entire face group' })
   async deleteFaceGroup(@Body() body: DeleteFacesBatchDto) {
     return this.facesService.deleteFacesBatch(body.face_ids);
+  }
+
+  @Public()
+  @Post('reject-assignment')
+  @ApiOperation({ summary: 'Disassociate face from incorrectly recognized person (BUG-017)' })
+  async rejectAssignment(@Body() body: RejectAssignmentDto) {
+    return this.facesService.rejectAssignment(body.face_id, body.name, body.file_path);
+  }
+
+  @Public()
+  @Post('reset-primary')
+  @ApiOperation({ summary: 'Reset person primary photo/avatar back to default placeholder silhouette (BUG-017)' })
+  async resetPrimary(@Body() body: ResetPrimaryFaceDto) {
+    return this.facesService.resetPrimary(body.person_id, body.name);
+  }
+
+  @Public()
+  @Post('set-primary')
+  @ApiOperation({ summary: 'Set person primary photo/avatar to a specific face thumbnail' })
+  async setPrimary(@Body() body: SetPrimaryFaceDto) {
+    return this.facesService.setPrimary(body.person_id, body.name, body.face_id);
+  }
+
+  @Public()
+  @Post('manual-crop')
+  @ApiOperation({ summary: 'Crop and register a manual face for a person from catalog media (BUG-017)' })
+  async manualCrop(@Body() body: ManualCropFaceDto) {
+    return this.facesService.manualCrop(body);
   }
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink, Camera, X, TreePine } from 'lucide-react';
+import { Smile, Merge, Eye, EyeOff, Search, Edit2, Check, UserCheck, RefreshCw, ExternalLink, Camera, X, TreePine, Crop } from 'lucide-react';
 import { cn } from '@/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { PersonProfileModal, type PersonDisplay } from './modals/PersonProfileModal';
+import { ManualFaceCropModal } from '../faces/ManualFaceCropModal';
 
 export const PeopleFacesScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export const PeopleFacesScreen: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [choosingCoverPerson, setChoosingCoverPerson] = useState<PersonDisplay | null>(null);
   const [selectedPersonForProfile, setSelectedPersonForProfile] = useState<PersonDisplay | null>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const loadFaces = async () => {
     setLoading(true);
@@ -149,6 +151,25 @@ export const PeopleFacesScreen: React.FC = () => {
     setChoosingCoverPerson(null);
   };
 
+  const handleResetPrimaryFace = async (person: PersonDisplay) => {
+    setPeople((prev) =>
+      prev.map((p) => (p.id === person.id ? { ...p, avatarUrl: null } : p))
+    );
+    try {
+      await fetch('/api/faces/reset-primary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } : {}),
+        },
+        body: JSON.stringify({ name: person.name, person_id: String(person.id) }),
+      });
+    } catch (e) {
+      console.warn('Failed to reset primary face on backend:', e);
+    }
+    setChoosingCoverPerson(null);
+  };
+
   const toggleVisibility = (id: string | number) => {
     setPeople((prev) =>
       prev.map((p) => (p.id === id ? { ...p, isHidden: !p.isHidden } : p))
@@ -186,6 +207,16 @@ export const PeopleFacesScreen: React.FC = () => {
           >
             <RefreshCw size={14} className={cn(loading && 'animate-spin')} />
             <span>Обновить</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCropModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+            title="Вырезать новое лицо из фотографии вручную"
+          >
+            <Crop size={14} />
+            <span>Вырезать лицо из фото</span>
           </button>
 
           {people.length > 0 && (
@@ -447,7 +478,15 @@ export const PeopleFacesScreen: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-end pt-3 border-t border-border/60">
+            <div className="flex items-center justify-between pt-3 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => handleResetPrimaryFace(choosingCoverPerson)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors"
+                title="Сбросить фото профиля к базовому аватару по умолчанию"
+              >
+                <span>👤 Сбросить по умолчанию</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setChoosingCoverPerson(null)}
@@ -458,6 +497,18 @@ export const PeopleFacesScreen: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Manual Face Crop Modal */}
+      {isCropModalOpen && (
+        <ManualFaceCropModal
+          isOpen={isCropModalOpen}
+          onClose={() => setIsCropModalOpen(false)}
+          knownPersons={people}
+          onSuccess={() => {
+            loadFaces();
+          }}
+        />
       )}
 
       {/* Person Profile Modal */}

@@ -32,6 +32,7 @@ import {
   Mail,
   Languages,
   AlertCircle,
+  Palette,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -85,20 +86,43 @@ export const UserSettingsScreen: React.FC = () => {
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
-  // AI Configuration
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'local'>('gemini');
-  const [aiModel, setAiModel] = useState<'gemini-3.8-flash' | 'gemini-3.1-pro-preview' | 'local-model' | string>('gemini-3.8-flash');
+  // AI Configuration - Decoupled (FEAT-031)
+  // Block 1: Media Analysis & Vision
+  const [analysisProvider, setAnalysisProvider] = useState<'gemini' | 'local'>('gemini');
+  const [analysisModel, setAnalysisModel] = useState<string>('gemini-3.8-flash');
+  const [analysisFallbackEnabled, setAnalysisFallbackEnabled] = useState(true);
+  const [analysisMaxWorkers, setAnalysisMaxWorkers] = useState(3);
+  const [isCustomAnalysisModel, setIsCustomAnalysisModel] = useState(false);
+
+  // Block 2: Image Editing Suite & Stylization
+  const [editingProvider, setEditingProvider] = useState<'gemini' | 'local'>('gemini');
+  const [editingModel, setEditingModel] = useState<string>('gemini-nano-banana');
+  const [editingFallbackEnabled, setEditingFallbackEnabled] = useState(true);
+  const [editingStyleStrength, setEditingStyleStrength] = useState<number>(0.40);
+  const [editingPreserveFaces, setEditingPreserveFaces] = useState(true);
+  const [isCustomEditingModel, setIsCustomEditingModel] = useState(false);
+
+  // Backward compatibility aliases
+  const aiProvider = analysisProvider;
+  const setAiProvider = setAnalysisProvider;
+  const aiModel = analysisModel;
+  const setAiModel = setAnalysisModel;
+  const maxWorkers = analysisMaxWorkers;
+  const setMaxWorkers = setAnalysisMaxWorkers;
+  const aiGeminiFallbackEnabled = analysisFallbackEnabled;
+  const setAiGeminiFallbackEnabled = setAnalysisFallbackEnabled;
+  const isCustomLocalModel = isCustomAnalysisModel;
+  const setIsCustomLocalModel = setIsCustomAnalysisModel;
+
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [aiFaceClustering, setAiFaceClustering] = useState(true);
   const [aiClipSearch, setAiClipSearch] = useState(true);
   const [aiOcrRecognition, setAiOcrRecognition] = useState(true);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
-  const [maxWorkers, setMaxWorkers] = useState(3);
   const [visionPromptTemplate, setVisionPromptTemplate] = useState('');
   const [defaultVisionPromptTemplate, setDefaultVisionPromptTemplate] = useState('');
   const [uiPublicUrl, setUiPublicUrl] = useState('');
-  const [aiGeminiFallbackEnabled, setAiGeminiFallbackEnabled] = useState(true);
   const [photoPriority, setPhotoPriority] = useState<boolean>(true);
   const [burstWindowSeconds, setBurstWindowSeconds] = useState<number>(5.0);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
@@ -122,6 +146,7 @@ export const UserSettingsScreen: React.FC = () => {
     id: string;
     name: string;
     isVision: boolean;
+    isGenerative?: boolean;
     isLoaded: boolean;
     arch?: string;
     size?: string;
@@ -130,7 +155,6 @@ export const UserSettingsScreen: React.FC = () => {
   const [loadingLocalModels, setLoadingLocalModels] = useState(false);
   const [localModelsError, setLocalModelsError] = useState<string | null>(null);
   const [isLmStudioConnected, setIsLmStudioConnected] = useState<boolean | null>(null);
-  const [isCustomLocalModel, setIsCustomLocalModel] = useState(false);
   const [loadingModelIntoRam, setLoadingModelIntoRam] = useState(false);
   const [preloadStatus, setPreloadStatus] = useState<string | null>(null);
 
@@ -192,17 +216,42 @@ export const UserSettingsScreen: React.FC = () => {
         if (data?.gemini_api_key) {
           setGeminiApiKey(data.gemini_api_key);
         }
-        const prov = data?.model_provider || data?.ai_provider;
+        const prov = data?.ai_analysis_provider || data?.model_provider || data?.ai_provider;
         if (prov) {
-          setAiProvider(prov);
+          setAnalysisProvider(prov);
         }
-        const mod = data?.gemini_model || data?.local_model_name || data?.ai_model;
+        const mod = data?.ai_analysis_model || data?.gemini_model || data?.local_model_name || data?.ai_model;
         if (mod) {
-          setAiModel(mod);
+          setAnalysisModel(mod);
         }
-        if (data?.gemini_max_workers) {
-          setMaxWorkers(Number(data.gemini_max_workers));
+        if (data?.ai_analysis_max_workers !== undefined) {
+          setAnalysisMaxWorkers(Number(data.ai_analysis_max_workers));
+        } else if (data?.gemini_max_workers) {
+          setAnalysisMaxWorkers(Number(data.gemini_max_workers));
         }
+        if (data?.ai_analysis_fallback_enabled !== undefined) {
+          setAnalysisFallbackEnabled(Boolean(data.ai_analysis_fallback_enabled));
+        } else if (data?.fallback_to_gemini !== undefined) {
+          setAnalysisFallbackEnabled(Boolean(data.fallback_to_gemini));
+        }
+
+        // Block 2: Image Editing Suite
+        if (data?.ai_editing_provider) {
+          setEditingProvider(data.ai_editing_provider);
+        }
+        if (data?.ai_editing_model) {
+          setEditingModel(data.ai_editing_model);
+        }
+        if (data?.ai_editing_fallback_enabled !== undefined) {
+          setEditingFallbackEnabled(Boolean(data.ai_editing_fallback_enabled));
+        }
+        if (data?.ai_editing_style_strength !== undefined) {
+          setEditingStyleStrength(Number(data.ai_editing_style_strength));
+        }
+        if (data?.ai_editing_preserve_faces !== undefined) {
+          setEditingPreserveFaces(Boolean(data.ai_editing_preserve_faces));
+        }
+
         if (data?.vision_prompt_template) {
           setVisionPromptTemplate(data.vision_prompt_template);
         }
@@ -211,11 +260,6 @@ export const UserSettingsScreen: React.FC = () => {
         }
         if (data?.ui_public_url) {
           setUiPublicUrl(data.ui_public_url);
-        }
-        if (data?.ai_gemini_fallback_enabled !== undefined) {
-          setAiGeminiFallbackEnabled(Boolean(data.ai_gemini_fallback_enabled));
-        } else if (data?.fallback_to_gemini !== undefined) {
-          setAiGeminiFallbackEnabled(Boolean(data.fallback_to_gemini));
         }
         if (data?.photo_priority !== undefined) {
           setPhotoPriority(Boolean(data.photo_priority));
@@ -599,22 +643,33 @@ export const UserSettingsScreen: React.FC = () => {
         },
         body: JSON.stringify({
           gemini_api_key: geminiApiKey.trim(),
-          model_provider: aiProvider,
-          gemini_model: aiModel,
-          local_model_name: aiModel,
-          ai_provider: aiProvider,
-          ai_model: aiModel,
-          gemini_max_workers: maxWorkers,
+          model_provider: analysisProvider,
+          gemini_model: analysisModel,
+          local_model_name: analysisModel,
+          ai_provider: analysisProvider,
+          ai_model: analysisModel,
+          gemini_max_workers: analysisMaxWorkers,
           vision_prompt_template: visionPromptTemplate.trim(),
           ui_public_url: uiPublicUrl.trim(),
-          ai_gemini_fallback_enabled: aiGeminiFallbackEnabled,
-          fallback_to_gemini: aiGeminiFallbackEnabled,
+          ai_gemini_fallback_enabled: analysisFallbackEnabled,
+          fallback_to_gemini: analysisFallbackEnabled,
           photo_priority: photoPriority,
           burst_window_seconds: burstWindowSeconds,
+
+          // Decoupled AI Settings (FEAT-031)
+          ai_analysis_provider: analysisProvider,
+          ai_analysis_model: analysisModel,
+          ai_analysis_fallback_enabled: analysisFallbackEnabled,
+          ai_analysis_max_workers: analysisMaxWorkers,
+          ai_editing_provider: editingProvider,
+          ai_editing_model: editingModel,
+          ai_editing_fallback_enabled: editingFallbackEnabled,
+          ai_editing_style_strength: editingStyleStrength,
+          ai_editing_preserve_faces: editingPreserveFaces,
         }),
       });
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
-      setAiStatus('Параметры AI, промпт и лимит параллельных потоков сохранены');
+      setAiStatus('Параметры AI (Анализ медиа и Стилизация) сохранены');
     } catch {
       window.dispatchEvent(new CustomEvent('ai_settings_updated'));
       setAiStatus('Параметры AI сохранены локально');
@@ -1017,10 +1072,23 @@ export const UserSettingsScreen: React.FC = () => {
             </div>
           )}
 
+          {/* FEAT-031: Block 1 - Media Analysis & Vision */}
+          <div className="flex items-center justify-between pb-2 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <Eye size={16} className="text-primary" />
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                {isRu ? 'Блок 1: Анализ медиафайлов и распознавание' : 'Block 1: Media Analysis & Vision'}
+              </h4>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
+              FEAT-031
+            </span>
+          </div>
+
           {/* Provider Selection */}
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-2">
-              Основной движок анализа изображений
+              {isRu ? 'Основной движок анализа изображений' : 'Primary image analysis engine'}
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div
@@ -1332,6 +1400,171 @@ export const UserSettingsScreen: React.FC = () => {
                   {item.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* FEAT-031: Block 2 - Image Editing Suite & Stylization */}
+          <div className="p-4 bg-muted/20 border border-border/60 rounded-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Palette size={16} className="text-primary" />
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  {isRu ? 'Блок 2: AI Редактор изображений и стилизация' : 'Block 2: Image Editing Suite & Stylization'}
+                </h4>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                FEAT-031
+              </span>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              {isRu
+                ? 'Независимый выбор модели и провайдера для фоторедактора, генеративных фильтров и стилизации без влияния на очередь анализа.'
+                : 'Independent model and provider configuration for photo editor, generative filters and style transfer.'}
+            </p>
+
+            {/* Editing Provider Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                onClick={() => setEditingProvider('gemini')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  editingProvider === 'gemini'
+                    ? 'border-primary bg-primary/10 text-foreground shadow-xs'
+                    : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-foreground">
+                  <Sparkles size={14} className="text-primary" />
+                  <span>Google Gemini (Облачная стилизация)</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  gemini-nano-banana / gemini-3.8-flash с сохранением геометрии лиц.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setEditingProvider('local')}
+                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  editingProvider === 'local'
+                    ? 'border-primary bg-primary/10 text-foreground shadow-xs'
+                    : 'border-border/70 bg-card hover:bg-muted/40 text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-foreground">
+                  <Cpu size={14} className="text-[#f3cd03]" />
+                  <span>Локальная диффузия / VLM (LM Studio)</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Локальные модели генерации и стилизации (Janus-Pro, SD, Qwen).
+                </p>
+              </div>
+            </div>
+
+            {/* Editing Model Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  {isRu ? 'Модель стилизации' : 'Stylization Model'}
+                </label>
+                {editingProvider === 'gemini' ? (
+                  <select
+                    value={editingModel}
+                    onChange={(e) => setEditingModel(e.target.value)}
+                    className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                  >
+                    <option value="gemini-nano-banana">gemini-nano-banana (Оптимизирована для фильтров и фотостилей)</option>
+                    <option value="gemini-3.8-flash">gemini-3.8-flash (Мультимодальная фотогенерация)</option>
+                    <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Максимальное качество)</option>
+                  </select>
+                ) : (
+                  <>
+                    {isCustomEditingModel ? (
+                      <input
+                        type="text"
+                        value={editingModel}
+                        onChange={(e) => setEditingModel(e.target.value)}
+                        placeholder="например, janus-pro-7b"
+                        className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary font-mono"
+                      />
+                    ) : (
+                      <select
+                        value={editingModel}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setIsCustomEditingModel(true);
+                          } else {
+                            setEditingModel(e.target.value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-muted/40 border border-border/70 rounded-xl text-xs outline-none focus:border-primary"
+                      >
+                        <option value="">-- Выберите локальную модель для редактирования --</option>
+                        {localModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.isGenerative ? '🎨 ' : m.isVision ? '👁️ ' : '💬 '}
+                            {m.name || m.id}
+                            {m.isLoaded ? ' (● В RAM)' : ''}
+                          </option>
+                        ))}
+                        <option value="__custom__">✏️ Ввести имя модели вручную...</option>
+                      </select>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Style Strength Slider */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-muted-foreground">
+                    {isRu ? 'Интенсивность стилизации (Default Strength)' : 'Default Style Strength'}
+                  </span>
+                  <span className="font-mono text-primary font-bold">
+                    {Math.round(editingStyleStrength * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={editingStyleStrength}
+                  onChange={(e) => setEditingStyleStrength(parseFloat(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {isRu
+                    ? 'Баланс между исходным кадром (0%) и полной заменой стилем (100%). Рекомендуется 40-75%.'
+                    : 'Balance between original image and style transfer. Recommended: 40-75%.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Preserving Face Identity Toggle & Fallback Toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingPreserveFaces}
+                  onChange={(e) => setEditingPreserveFaces(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary h-4 w-4"
+                />
+                <span className="text-xs text-foreground font-medium">
+                  {isRu ? 'Сохранять черты лица человека при стилизации' : 'Preserve human face identity and contours'}
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingFallbackEnabled}
+                  onChange={(e) => setEditingFallbackEnabled(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary h-4 w-4"
+                />
+                <span className="text-xs text-foreground font-medium">
+                  {isRu ? 'Резервная стилизация через Gemini при сбое LM Studio' : 'Fallback to Gemini editing if local model fails'}
+                </span>
+              </label>
             </div>
           </div>
 

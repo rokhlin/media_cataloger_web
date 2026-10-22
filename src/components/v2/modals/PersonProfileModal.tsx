@@ -18,10 +18,13 @@ import {
   Heart,
   AlertCircle,
   Download,
+  Tag,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useNavigate } from 'react-router-dom';
+import { UniversalTagModal } from '../../common/UniversalTagModal';
 
 export interface PersonDisplay {
   id: string | number;
@@ -109,6 +112,10 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Person tags state (FEAT-032)
+  const [personTags, setPersonTags] = useState<string[]>([]);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+
   // Initialize form from person object
   useEffect(() => {
     if (!person || !isOpen) return;
@@ -141,6 +148,16 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
     setSyncTree(true);
     setSaveError(null);
 
+    // Fetch person tags (FEAT-032)
+    fetch(`/api/persons/${encodeURIComponent(String(person.id || person.name))}/tags`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setPersonTags(data.map((item: any) => (typeof item === 'string' ? item : item.tag)).filter(Boolean));
+        }
+      })
+      .catch((err) => console.warn('Failed to load person tags:', err));
+
     // Fetch tree persons list for linking
     setIsLoadingTree(true);
     fetch('/api/family-tree/persons')
@@ -164,6 +181,37 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
       .catch((err) => console.warn('Failed to load tree persons for linking:', err))
       .finally(() => setIsLoadingTree(false));
   }, [person, isOpen]);
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const nextTags = personTags.filter((t) => t !== tagToRemove);
+    setPersonTags(nextTags);
+    try {
+      await fetch(`/api/persons/${encodeURIComponent(String(person?.id || person?.name))}/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: nextTags }),
+      });
+    } catch (e) {
+      console.warn('Failed to update person tags:', e);
+    }
+  };
+
+  const handleAddTag = async (newTag: string) => {
+    const clean = newTag.replace(/^#/, '').trim();
+    if (!clean || personTags.includes(clean)) return;
+    const nextTags = [...personTags, clean];
+    setPersonTags(nextTags);
+    setIsTagModalOpen(false);
+    try {
+      await fetch(`/api/persons/${encodeURIComponent(String(person?.id || person?.name))}/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: nextTags }),
+      });
+    } catch (e) {
+      console.warn('Failed to update person tags:', e);
+    }
+  };
 
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
@@ -721,6 +769,55 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
                   className="w-full h-9 px-3 bg-muted/30 border border-border/70 rounded-xl text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
               </div>
+
+              {/* Person Tags Cloud (FEAT-032) */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Tag size={13} className="text-primary" />
+                    <span>{isRu ? 'Теги персоны' : 'Person Tags'}</span>
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {isRu
+                      ? 'Автоматически наследуются фото с этой персоной'
+                      : 'Automatically inherited by photos with this person'}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 p-3 rounded-2xl bg-muted/20 border border-border/60 min-h-[46px]">
+                  {personTags.length > 0 ? (
+                    personTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="group inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:border-primary/40 transition-colors"
+                      >
+                        <span>#{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="p-0.5 rounded-full hover:bg-primary/20 text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                          title={isRu ? `Удалить тег #${tag}` : `Remove tag #${tag}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">
+                      {isRu ? 'Теги ещё не добавлены' : 'No tags added yet'}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsTagModalOpen(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-dashed border-border/80 transition-colors cursor-pointer"
+                  >
+                    <Plus size={12} />
+                    <span>{isRu ? 'Добавить тег' : 'Add Tag'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1003,6 +1100,20 @@ export const PersonProfileModal: React.FC<PersonProfileModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Universal Tag Modal for Person Profile (FEAT-032) */}
+      {isTagModalOpen && (
+        <UniversalTagModal
+          isOpen={isTagModalOpen}
+          mode="person_add"
+          targetName={composedDisplayName}
+          existingTags={personTags}
+          onClose={() => setIsTagModalOpen(false)}
+          onSubmit={async (val: string) => {
+            await handleAddTag(val);
+          }}
+        />
+      )}
     </div>
   );
 };

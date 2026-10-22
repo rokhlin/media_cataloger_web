@@ -46,10 +46,14 @@ import {
   Palette,
   Undo2,
   Check,
+  UserX,
+  Plus,
+  Tag,
 } from 'lucide-react';
 import SaveChoiceDialog from './SaveChoiceDialog';
 import StylePresetCarousel, { STYLE_PRESETS, type StylePreset } from './StylePresetCarousel';
 import CropFrameOverlay, { type AspectRatioType, type ResolutionOption } from './CropFrameOverlay';
+import { UniversalTagModal } from '../common/UniversalTagModal';
 import { cn } from '../../utils';
 import './MediaViewerModal.css';
 
@@ -1276,6 +1280,112 @@ export default function MediaViewerModal({
     }
   };
 
+  // Reject face assignment (BUG-017)
+  const [, setIsRejectingFace] = useState(false);
+  const handleRejectFace = async (faceId: string, personName?: string, personId?: string) => {
+    if (!faceId) return;
+    setIsRejectingFace(true);
+    try {
+      const fetchFn = authFetch || fetch;
+      await fetchFn('/api/faces/reject-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          face_id: faceId,
+          person_id: personId || personName,
+        }),
+      });
+      setFacesForSelected((prev) =>
+        prev.map((f) => (f.face_id === faceId ? { ...f, name: '', person_id: undefined, confidence: 0 } : f))
+      );
+      if (selectedMedia) {
+        const updatedFaces = (selectedMedia.faces || []).map((f) =>
+          f.face_id === faceId ? { ...f, name: '', person_id: undefined, confidence: 0 } : f
+        );
+        const remainingNames = Array.from(new Set(updatedFaces.map((f) => f.name).filter(Boolean))) as string[];
+        const updated: GalleryMediaFile = {
+          ...selectedMedia,
+          face_names: remainingNames,
+          faces: updatedFaces,
+        };
+        setSelectedMedia(updated);
+        if (onMediaUpdated) onMediaUpdated(updated);
+      }
+      showToast(language === 'ru' ? 'Лицо отвязано от персоны' : 'Face unlinked from person');
+      if (onReloadFaces) onReloadFaces();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to reject face assignment:', err);
+    } finally {
+      setIsRejectingFace(false);
+    }
+  };
+
+  // Media Tags Management (FEAT-032)
+  const [mediaTags, setMediaTags] = useState<Array<{ tag: string; category?: string }>>([]);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (selectedMedia) {
+      const rawTags = selectedMedia.tags || [];
+      const parsed = rawTags.map((t) => {
+        if (typeof t === 'string') {
+          if (t.includes(':')) {
+            const [cat, name] = t.split(':');
+            return { tag: name.trim(), category: cat.trim() };
+          }
+          return { tag: t.trim(), category: 'general' };
+        }
+        return { tag: (t as any).tag || '', category: (t as any).category || 'general' };
+      }).filter((t) => Boolean(t.tag));
+      setMediaTags(parsed);
+    } else {
+      setMediaTags([]);
+    }
+  }, [selectedMedia?.file_path, selectedMedia?.filename, selectedMedia?.tags]);
+
+  const handleAddMediaTag = async (data: { tag: string; category: string }) => {
+    if (!selectedMedia) return;
+    const mediaId = selectedMedia.file_path || selectedMedia.filename;
+    const fetchFn = authFetch || fetch;
+    await fetchFn(`/api/media/${encodeURIComponent(mediaId)}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag: data.tag, category: data.category }),
+    });
+    const cleanTag = data.tag.replace(/^#/, '');
+    setMediaTags((prev) => {
+      if (prev.some((t) => t.tag.toLowerCase() === cleanTag.toLowerCase())) return prev;
+      return [...prev, { tag: cleanTag, category: data.category }];
+    });
+    if (selectedMedia) {
+      const existing = selectedMedia.tags || [];
+      const updatedTags = existing.includes(cleanTag) ? existing : [...existing, cleanTag];
+      const updated: GalleryMediaFile = { ...selectedMedia, tags: updatedTags };
+      setSelectedMedia(updated);
+      if (onMediaUpdated) onMediaUpdated(updated);
+    }
+    showToast(language === 'ru' ? `Тег #${cleanTag} добавлен` : `Tag #${cleanTag} added`);
+  };
+
+  const handleRemoveMediaTag = async (tagToRemove: string) => {
+    if (!selectedMedia) return;
+    const mediaId = selectedMedia.file_path || selectedMedia.filename;
+    const clean = tagToRemove.replace(/^#/, '');
+    const fetchFn = authFetch || fetch;
+    await fetchFn(`/api/media/${encodeURIComponent(mediaId)}/tags/${encodeURIComponent(clean)}`, {
+      method: 'DELETE',
+    });
+    setMediaTags((prev) => prev.filter((t) => t.tag.toLowerCase() !== clean.toLowerCase()));
+    if (selectedMedia) {
+      const updatedTags = (selectedMedia.tags || []).filter((t) => t.toLowerCase() !== clean.toLowerCase());
+      const updated: GalleryMediaFile = { ...selectedMedia, tags: updatedTags };
+      setSelectedMedia(updated);
+      if (onMediaUpdated) onMediaUpdated(updated);
+    }
+    showToast(language === 'ru' ? `Тег #${clean} удален` : `Tag #${clean} removed`);
+  };
+
   const handleMetadataSaved = (updated: GalleryMediaFile) => {
     setSelectedMedia(updated);
     if (onMediaUpdated) onMediaUpdated(updated);
@@ -2176,6 +2286,49 @@ export default function MediaViewerModal({
                 </div>
               )}
 
+              {/* Media Tags (FEAT-032) */}
+              <div className="p-4 space-y-2.5 border-b border-border/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider">
+                    <Tag size={13} className="text-primary" />
+                    <span>Теги</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{mediaTags.length} тегов</span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {mediaTags.map((t) => (
+                    <span
+                      key={t.tag}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium group transition-all"
+                    >
+                      <span>#{t.tag.replace(/^#/, '')}</span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMediaTag(t.tag)}
+                          className="p-0.5 rounded text-blue-400/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                          title="Удалить тег с файла"
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setIsTagModalOpen(true)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/30 hover:bg-muted/60 border border-border/80 text-muted-foreground hover:text-foreground text-xs font-medium transition-all cursor-pointer"
+                    >
+                      <Plus size={11} />
+                      <span>Добавить</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* People & Faces */}
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -2353,6 +2506,17 @@ export default function MediaViewerModal({
 
                               {canManageFaces && (
                                 <>
+                                  {f.name && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRejectFace(f.face_id, f.name, f.person_id)}
+                                      className="p-1 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-muted transition-colors"
+                                      title="Это не этот человек (Отвязать от персоны)"
+                                      id={`btn-reject-face-${f.face_id}`}
+                                    >
+                                      <UserX size={13} />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -2919,6 +3083,14 @@ export default function MediaViewerModal({
         onConfirm={handleConfirmSaveChoice}
         fileName={selectedMedia?.filename}
         isSaving={isSavingChoice}
+      />
+
+      {/* Universal Tag Modal (FEAT-032) */}
+      <UniversalTagModal
+        isOpen={isTagModalOpen}
+        onClose={() => setIsTagModalOpen(false)}
+        mode="viewer_add"
+        onSave={handleAddMediaTag}
       />
 
       {/* Floating Notification Toast */}

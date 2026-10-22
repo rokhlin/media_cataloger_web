@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, BadRequestException } from '@nestjs/common';
 import DatabaseConstructor, { Database } from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -87,7 +87,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       CREATE TABLE IF NOT EXISTS persons (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        avatar_url TEXT,
+        primary_face_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
       );
 
       CREATE TABLE IF NOT EXISTS face_registry (
@@ -178,6 +181,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         UNIQUE(media_id, tag, category),
         FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS person_tags (
+        person_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'general',
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        PRIMARY KEY (person_id, tag)
+      );
+
+      CREATE TABLE IF NOT EXISTS face_rejections (
+        face_id TEXT NOT NULL,
+        rejected_person_id TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        PRIMARY KEY (face_id, rejected_person_id)
       );
 
       CREATE TABLE IF NOT EXISTS users (
@@ -386,6 +404,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      // Migrate persons columns if missing
+      try {
+        const pCols = new Set((this.db.pragma('table_info(persons)') as any[]).map((c: any) => c.name.toLowerCase()));
+        if (!pCols.has('avatar_url')) {
+          this.db.exec('ALTER TABLE persons ADD COLUMN avatar_url TEXT;');
+        }
+        if (!pCols.has('primary_face_id')) {
+          this.db.exec('ALTER TABLE persons ADD COLUMN primary_face_id TEXT;');
+        }
+        if (!pCols.has('updated_at')) {
+          this.db.exec("ALTER TABLE persons ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'));");
+        }
+      } catch {
+        // ignore
+      }
+
       // Seed default admin account if no users exist
       try {
         const userCount = (this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0;
@@ -431,6 +465,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_media_faces_source_file ON media_faces(source_file);
         CREATE INDEX IF NOT EXISTS idx_face_registry_person_id ON face_registry(person_id);
         CREATE INDEX IF NOT EXISTS idx_face_registry_face_id ON face_registry(face_id);
+        CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags(tag);
+        CREATE INDEX IF NOT EXISTS idx_media_tags_category ON media_tags(category);
+        CREATE INDEX IF NOT EXISTS idx_person_tags_person ON person_tags(person_id);
+        CREATE INDEX IF NOT EXISTS idx_face_rejections_face ON face_rejections(face_id);
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
         CREATE INDEX IF NOT EXISTS idx_org_items_job_id ON organization_items(job_id);
@@ -1300,7 +1338,452 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Fetch profile records from persons table (avatar_url, primary_face_id)
+    try {
+      const pRows = db.prepare('SELECT id, name, avatar_url, primary_face_id FROM persons').all() as any[];
+      for (const pr of pRows) {
+        if (!pr.name) continue;
+        const lower = pr.name.toLowerCase();
+        if (personsMap[lower]) {
+          if (pr.avatar_url !== undefined && pr.avatar_url !== null) {
+            personsMap[lower].avatar_url = pr.avatar_url;
+            personsMap[lower].avatarUrl = pr.avatar_url;
+          }
+          if (pr.primary_face_id !== undefined && pr.primary_face_id !== null) {
+            personsMap[lower].primary_face_id = pr.primary_face_id;
+            personsMap[lower].primaryFaceId = pr.primary_face_id;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    for (const p of Object.values(personsMap)) {
+      p.availableFaces = p.reference_faces;
+      p.tags = this.getPersonTags(p.name);
+    }
+
     return Object.values(personsMap);
+  }
+
+  // --- Face Recognition Correction & Manual Crop (BUG-017) ---
+
+  rejectFaceAssignment(faceId: string, personName?: string, _filePath?: string): void {
+    const db = this.getDb();
+    const cleanFaceId = (faceId || '').trim();
+    if (!cleanFaceId) return;
+
+    db.transaction(() => {
+      // 1. Mark in media_faces as unassigned
+      db.prepare(`
+        UPDATE media_faces
+        SET name = '', person_id = NULL
+        WHERE face_id = ? OR face_id LIKE ?
+      `).run(cleanFaceId, `%${cleanFaceId}%`);
+
+      // 2. Mark in face_registry as unassigned candidate
+      db.prepare(`
+        UPDATE face_registry
+        SET name = 'face_' || face_id, person_id = NULL, is_reference = 0
+        WHERE face_id = ?
+      `).run(cleanFaceId);
+
+      // 3. Record in face_rejections if person was known
+      if (personName && personName.trim()) {
+        try {
+          db.prepare(`
+            INSERT OR IGNORE INTO face_rejections (face_id, rejected_person_id, created_at)
+            VALUES (?, ?, datetime('now', 'localtime'))
+          `).run(cleanFaceId, personName.trim().toLowerCase());
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }
+
+  resetPrimaryFace(personId?: string, name?: string): void {
+    const db = this.getDb();
+    const pId = (personId || '').trim();
+    const pName = (name || '').trim();
+
+    db.transaction(() => {
+      if (pId) {
+        db.prepare(`
+          UPDATE persons
+          SET primary_face_id = NULL, avatar_url = NULL, updated_at = datetime('now', 'localtime')
+          WHERE id = ? OR name = ?
+        `).run(pId, pName || pId);
+      }
+      if (pName) {
+        db.prepare(`
+          UPDATE persons
+          SET primary_face_id = NULL, avatar_url = NULL, updated_at = datetime('now', 'localtime')
+          WHERE name = ?
+        `).run(pName);
+        db.prepare(`
+          UPDATE face_registry
+          SET is_reference = 0
+          WHERE LOWER(name) = LOWER(?)
+        `).run(pName);
+      }
+    })();
+  }
+
+  setPrimaryFace(personId: string, name: string, faceId: string): void {
+    const db = this.getDb();
+    const pId = (personId || '').trim();
+    const pName = (name || '').trim();
+    const fId = (faceId || '').trim();
+    if (!fId) return;
+
+    db.transaction(() => {
+      const targetName = pName || pId;
+      const targetId = pId || `person_${Buffer.from(targetName).toString('hex').slice(0, 12)}`;
+      db.prepare(`
+        INSERT INTO persons (id, name, avatar_url, primary_face_id, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+        ON CONFLICT(name) DO UPDATE SET
+          avatar_url = excluded.avatar_url,
+          primary_face_id = excluded.primary_face_id,
+          updated_at = datetime('now', 'localtime')
+      `).run(targetId, targetName, `/api/faces/image/${fId}`, fId);
+
+      if (targetName) {
+        db.prepare(`
+          UPDATE face_registry
+          SET is_reference = CASE WHEN face_id = ? THEN 1 ELSE 0 END
+          WHERE LOWER(name) = LOWER(?)
+        `).run(fId, targetName);
+      }
+    })();
+  }
+
+  saveManualCropFace(faceId: string, personName: string, _imageBuffer: Buffer, sourceFile?: string, setPrimary: boolean = false): any {
+    const db = this.getDb();
+    const cleanId = (faceId || '').trim();
+    const cleanName = (personName || '').trim();
+
+    return db.transaction(() => {
+      // 1. Insert into face_registry
+      db.prepare(`
+        INSERT OR REPLACE INTO face_registry (face_id, person_id, name, image_path, confidence, source_file, is_reference, created_at)
+        VALUES (?, ?, ?, ?, 1.0, ?, ?, datetime('now', 'localtime'))
+      `).run(
+        cleanId,
+        cleanName || null,
+        cleanName || `face_${cleanId}`,
+        cleanId,
+        sourceFile || null,
+        setPrimary ? 1 : 0
+      );
+
+      // 2. If sourceFile exists, add to media_faces
+      if (sourceFile) {
+        const mediaRow = db.prepare('SELECT id FROM media_items WHERE file_path = ?').get(sourceFile) as any;
+        const mediaId = mediaRow?.id || `media_${Buffer.from(sourceFile).toString('hex').slice(0, 16)}`;
+        db.prepare(`
+          INSERT INTO media_faces (media_id, face_id, person_id, name, confidence, image_path, source_file, is_reference)
+          VALUES (?, ?, ?, ?, 1.0, ?, ?, ?)
+        `).run(
+          mediaId,
+          cleanId,
+          cleanName || null,
+          cleanName || '',
+          cleanId,
+          sourceFile,
+          setPrimary ? 1 : 0
+        );
+      }
+
+      // 3. Set as primary if requested
+      if (setPrimary && cleanName) {
+        this.setPrimaryFace(cleanName, cleanName, cleanId);
+      }
+
+      return {
+        face_id: cleanId,
+        name: cleanName,
+        source_file: sourceFile,
+        is_primary: setPrimary,
+      };
+    })();
+  }
+
+  // --- Tag Management & Inheritance (FEAT-032) ---
+
+  getTagsCatalog(search?: string, category?: string, sort: string = 'count_desc', limit: number = 200, offset: number = 0): {
+    total: number;
+    categories: { category: string; count: number }[];
+    tags: { tag: string; category: string; media_count: number; source: string }[];
+  } {
+    const db = this.getDb();
+    const conditions: string[] = ["tag IS NOT NULL AND tag != ''"];
+    const params: any[] = [];
+
+    if (search && search.trim()) {
+      conditions.push("LOWER(tag) LIKE ?");
+      params.push(`%${search.trim().toLowerCase()}%`);
+    }
+
+    if (category && category !== 'all' && category.trim()) {
+      conditions.push("category = ?");
+      params.push(category.trim().toLowerCase());
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const totalRow = db.prepare(`
+      SELECT COUNT(DISTINCT tag) as total
+      FROM media_tags
+      ${whereClause}
+    `).get(...params) as any;
+    const total = totalRow?.total || 0;
+
+    const catRows = db.prepare(`
+      SELECT category, COUNT(DISTINCT tag) as count
+      FROM media_tags
+      WHERE tag IS NOT NULL AND tag != ''
+      GROUP BY category
+      ORDER BY count DESC
+    `).all() as any[];
+
+    let orderBy = 'COUNT(DISTINCT media_id) DESC, tag ASC';
+    if (sort === 'name_asc') {
+      orderBy = 'tag ASC';
+    } else if (sort === 'name_desc') {
+      orderBy = 'tag DESC';
+    } else if (sort === 'count_asc') {
+      orderBy = 'COUNT(DISTINCT media_id) ASC, tag ASC';
+    }
+
+    const tagsQuery = `
+      SELECT 
+        tag,
+        category,
+        COUNT(DISTINCT media_id) as media_count
+      FROM media_tags
+      ${whereClause}
+      GROUP BY tag, category
+      ORDER BY ${orderBy}
+      LIMIT ? OFFSET ?
+    `;
+
+    const tagRows = db.prepare(tagsQuery).all(...params, limit, offset) as any[];
+
+    return {
+      total,
+      categories: catRows.map(r => ({ category: r.category || 'general', count: Number(r.count) || 0 })),
+      tags: tagRows.map(r => ({
+        tag: r.tag,
+        category: r.category || 'general',
+        media_count: Number(r.media_count) || 0,
+        source: ['people', 'relationship', 'friends'].includes(r.category) ? 'Face/AI' : 'AI Vision',
+      })),
+    };
+  }
+
+  createGlobalTag(tag: string, category: string = 'general'): { tag: string; category: string } {
+    const cleanTag = (tag || '').trim().toLowerCase();
+    const cleanCat = (category || 'general').trim().toLowerCase();
+    if (!cleanTag) throw new BadRequestException('Tag name cannot be empty');
+
+    return { tag: cleanTag, category: cleanCat };
+  }
+
+  renameOrMergeTag(oldTag: string, newTag: string, category?: string): { merged: boolean; target_tag: string; total_media_count: number } {
+    const db = this.getDb();
+    const cleanOld = (oldTag || '').trim().toLowerCase();
+    const cleanNew = (newTag || '').trim().toLowerCase();
+    if (!cleanOld || !cleanNew) {
+      throw new BadRequestException('Old tag and new tag must be specified');
+    }
+
+    const cleanCategory = category ? category.trim().toLowerCase() : undefined;
+
+    return db.transaction(() => {
+      const existingNew = db.prepare('SELECT COUNT(*) as cnt FROM media_tags WHERE tag = ?').get(cleanNew) as any;
+      const isMerge = (existingNew?.cnt || 0) > 0 && cleanOld !== cleanNew;
+
+      if (isMerge) {
+        db.prepare('UPDATE media_tags SET tag = ?, category = COALESCE(?, category) WHERE tag = ?')
+          .run(cleanNew, cleanCategory || null, cleanOld);
+        db.prepare(`
+          DELETE FROM media_tags
+          WHERE tag = ? AND id NOT IN (
+            SELECT MIN(id) FROM media_tags WHERE tag = ? GROUP BY media_id
+          )
+        `).run(cleanNew, cleanNew);
+        db.prepare('UPDATE person_tags SET tag = ?, category = COALESCE(?, category) WHERE tag = ?')
+          .run(cleanNew, cleanCategory || null, cleanOld);
+        db.prepare(`
+          DELETE FROM person_tags
+          WHERE tag = ? AND rowid NOT IN (
+            SELECT MIN(rowid) FROM person_tags WHERE tag = ? GROUP BY person_id
+          )
+        `).run(cleanNew, cleanNew);
+      } else {
+        db.prepare('UPDATE media_tags SET tag = ?, category = COALESCE(?, category) WHERE tag = ?')
+          .run(cleanNew, cleanCategory || null, cleanOld);
+        db.prepare('UPDATE person_tags SET tag = ?, category = COALESCE(?, category) WHERE tag = ?')
+          .run(cleanNew, cleanCategory || null, cleanOld);
+      }
+
+      const totalCountRow = db.prepare('SELECT COUNT(DISTINCT media_id) as cnt FROM media_tags WHERE tag = ?').get(cleanNew) as any;
+      return {
+        merged: isMerge,
+        target_tag: cleanNew,
+        total_media_count: totalCountRow?.cnt || 0,
+      };
+    })();
+  }
+
+  deleteGlobalTag(tag: string): { deleted_count: number } {
+    const db = this.getDb();
+    const cleanTag = (tag || '').trim().toLowerCase();
+    if (!cleanTag) return { deleted_count: 0 };
+
+    return db.transaction(() => {
+      const res = db.prepare('DELETE FROM media_tags WHERE tag = ?').run(cleanTag);
+      db.prepare('DELETE FROM person_tags WHERE tag = ?').run(cleanTag);
+      return { deleted_count: res.changes };
+    })();
+  }
+
+  addMediaTag(mediaIdOrPath: string, tag: string, category: string = 'general'): void {
+    const db = this.getDb();
+    const cleanTag = (tag || '').trim().toLowerCase();
+    if (!cleanTag) return;
+
+    let mediaId = mediaIdOrPath;
+    if (mediaIdOrPath.includes('/') || mediaIdOrPath.includes('\\')) {
+      const row = db.prepare('SELECT id FROM media_items WHERE file_path = ?').get(mediaIdOrPath) as any;
+      if (row?.id) mediaId = row.id;
+      else mediaId = `media_${Buffer.from(mediaIdOrPath).toString('hex').slice(0, 16)}`;
+    }
+
+    db.prepare(`
+      INSERT INTO media_tags (media_id, tag, category, confidence)
+      VALUES (?, ?, ?, 1.0)
+      ON CONFLICT(media_id, tag, category) DO NOTHING
+    `).run(mediaId, cleanTag, category.trim().toLowerCase());
+  }
+
+  removeMediaTag(mediaIdOrPath: string, tag: string): void {
+    const db = this.getDb();
+    const cleanTag = (tag || '').trim().toLowerCase();
+    if (!cleanTag) return;
+
+    let mediaId = mediaIdOrPath;
+    if (mediaIdOrPath.includes('/') || mediaIdOrPath.includes('\\')) {
+      const row = db.prepare('SELECT id FROM media_items WHERE file_path = ?').get(mediaIdOrPath) as any;
+      if (row?.id) mediaId = row.id;
+    }
+
+    db.prepare('DELETE FROM media_tags WHERE media_id = ? AND tag = ?').run(mediaId, cleanTag);
+  }
+
+  getPersonTags(personIdOrName: string): { tag: string; category: string }[] {
+    const db = this.getDb();
+    const clean = (personIdOrName || '').trim();
+    if (!clean) return [];
+
+    try {
+      const rows = db.prepare(`
+        SELECT tag, category FROM person_tags
+        WHERE person_id = ? OR person_id = LOWER(?) OR person_id IN (
+          SELECT id FROM persons WHERE LOWER(name) = LOWER(?)
+        )
+        ORDER BY created_at ASC
+      `).all(clean, clean, clean) as any[];
+
+      return rows.map(r => ({ tag: r.tag, category: r.category || 'general' }));
+    } catch {
+      return [];
+    }
+  }
+
+  setPersonTags(personIdOrName: string, tags: { tag: string; category?: string }[]): void {
+    const db = this.getDb();
+    const clean = (personIdOrName || '').trim();
+    if (!clean) return;
+
+    db.transaction(() => {
+      let targetId = clean;
+      let targetName = clean;
+      try {
+        const personRow = db.prepare('SELECT id, name FROM persons WHERE id = ? OR LOWER(name) = LOWER(?) LIMIT 1').get(clean, clean) as any;
+        if (personRow) {
+          targetId = personRow.id || clean;
+          targetName = personRow.name || clean;
+        }
+      } catch {}
+
+      db.prepare('DELETE FROM person_tags WHERE person_id = ? OR person_id = ?').run(targetId, targetName);
+
+      const insertStmt = db.prepare(`
+        INSERT OR IGNORE INTO person_tags (person_id, tag, category, created_at)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+      `);
+
+      for (const t of tags) {
+        if (!t.tag || !t.tag.trim()) continue;
+        const tag = t.tag.trim().toLowerCase();
+        const category = (t.category || 'general').trim().toLowerCase();
+        insertStmt.run(targetId, tag, category);
+      }
+
+      // Auto-inherit to all media files where this person appears!
+      if (tags.length > 0) {
+        try {
+          const mediaRows = db.prepare(`
+            SELECT DISTINCT media_id FROM media_faces
+            WHERE (person_id = ? OR LOWER(name) = LOWER(?)) AND media_id IS NOT NULL
+          `).all(targetId, targetName) as any[];
+
+          const insertMediaTag = db.prepare(`
+            INSERT INTO media_tags (media_id, tag, category, confidence)
+            VALUES (?, ?, ?, 1.0)
+            ON CONFLICT(media_id, tag, category) DO NOTHING
+          `);
+
+          for (const m of mediaRows) {
+            for (const t of tags) {
+              if (!t.tag) continue;
+              insertMediaTag.run(m.media_id, t.tag.trim().toLowerCase(), (t.category || 'general').trim().toLowerCase());
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }
+
+  getMediaTags(mediaIdOrPath: string): { tag: string; category: string; confidence: number }[] {
+    const db = this.getDb();
+    let mediaId = mediaIdOrPath;
+    if (mediaIdOrPath.includes('/') || mediaIdOrPath.includes('\\')) {
+      const row = db.prepare('SELECT id FROM media_items WHERE file_path = ?').get(mediaIdOrPath) as any;
+      if (row?.id) mediaId = row.id;
+    }
+
+    try {
+      const rows = db.prepare(`
+        SELECT tag, category, confidence FROM media_tags
+        WHERE media_id = ?
+        ORDER BY id ASC
+      `).all(mediaId) as any[];
+
+      return rows.map(r => ({
+        tag: r.tag,
+        category: r.category || 'general',
+        confidence: r.confidence ?? 1.0
+      }));
+    } catch {
+      return [];
+    }
   }
 
   getUnrecognizedFaces(): any[] {

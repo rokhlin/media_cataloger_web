@@ -383,4 +383,150 @@ export class FacesService {
       deleted_count: count,
     };
   }
+
+  async rejectAssignment(faceId: string, name?: string, filePath?: string) {
+    if (!faceId) {
+      throw new BadRequestException('face_id is required');
+    }
+    const cleanId = faceId.trim();
+    this.db.rejectFaceAssignment(cleanId, name, filePath);
+
+    // Update sidecar if filePath is known
+    if (filePath) {
+      const baseName = path.basename(filePath);
+      const possibleSidecars = [
+        path.join(this.outputFolder, `${baseName}.json`),
+        path.join(path.dirname(filePath), `${baseName}.json`),
+        path.join(this.outputFolder, `${filePath}.json`),
+      ];
+      for (const sc of possibleSidecars) {
+        try {
+          if (fs.existsSync(sc)) {
+            const raw = fs.readFileSync(sc, 'utf-8');
+            const data = JSON.parse(raw);
+            let modified = false;
+            for (const key of ['faces', 'detected_faces']) {
+              if (Array.isArray(data[key])) {
+                for (const f of data[key]) {
+                  const fid = typeof f === 'string' ? f : (f.face_id || f.id);
+                  if (fid === cleanId) {
+                    f.name = '';
+                    f.person_id = null;
+                    modified = true;
+                  }
+                }
+              }
+            }
+            if (modified) {
+              fs.writeFileSync(sc, JSON.stringify(data, null, 2), 'utf-8');
+            }
+          }
+        } catch {}
+      }
+    }
+
+    return {
+      status: 'success',
+      message: `Face '${cleanId}' disassociated from person '${name || ''}'.`,
+    };
+  }
+
+  async resetPrimary(personId?: string, name?: string) {
+    if (!personId && !name) {
+      throw new BadRequestException('person_id or name is required');
+    }
+    this.db.resetPrimaryFace(personId, name);
+    return {
+      status: 'success',
+      message: `Primary photo reset to default silhouette for ${name || personId}.`,
+    };
+  }
+
+  async setPrimary(personId?: string, name?: string, faceId?: string) {
+    if (!faceId) {
+      throw new BadRequestException('face_id is required');
+    }
+    const targetName = (name || personId || '').trim();
+    if (!targetName) {
+      throw new BadRequestException('Person name or ID is required');
+    }
+    this.db.setPrimaryFace(personId || targetName, targetName, faceId);
+    return {
+      status: 'success',
+      message: `Set face ${faceId} as primary avatar for ${targetName}.`,
+    };
+  }
+
+  async manualCrop(dto: {
+    name: string;
+    file_path?: string;
+    image_base64?: string;
+    box?: number[];
+    set_primary?: boolean;
+  }) {
+    if (!dto.name || !dto.name.trim()) {
+      throw new BadRequestException('Person name is required');
+    }
+    const personName = dto.name.trim();
+    const faceId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const facesFolder = this.facesFolder || (this.outputFolder ? path.join(this.outputFolder, 'facess') : path.join(process.cwd(), 'data', 'faces'));
+    if (!fs.existsSync(facesFolder)) {
+      fs.mkdirSync(facesFolder, { recursive: true });
+    }
+    const faceFilename = `${faceId}.jpg`;
+    const targetPath = path.join(facesFolder, faceFilename);
+
+    let cropBuffer: Buffer | null = null;
+
+    if (dto.image_base64 && dto.image_base64.trim()) {
+      const base64Data = dto.image_base64.replace(/^data:image\/\w+;base64,/, '');
+      cropBuffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(targetPath, cropBuffer);
+    } else if (dto.file_path && fs.existsSync(dto.file_path)) {
+      try {
+        const sharpModule = await import('sharp');
+        const sharp = sharpModule.default;
+        const img = sharp(dto.file_path);
+        const meta = await img.metadata();
+        const width = meta.width || 800;
+        const height = meta.height || 600;
+
+        if (Array.isArray(dto.box) && dto.box.length === 4) {
+          const [ymin, xmin, ymax, xmax] = dto.box;
+          const left = Math.max(0, Math.round(xmin * width));
+          const top = Math.max(0, Math.round(ymin * height));
+          const extractWidth = Math.min(width - left, Math.round((xmax - xmin) * width));
+          const extractHeight = Math.min(height - top, Math.round((ymax - ymin) * height));
+          cropBuffer = await img.extract({ left, top, width: extractWidth, height: extractHeight }).jpeg().toBuffer();
+        } else {
+          cropBuffer = await img.resize(300, 300, { fit: 'cover' }).jpeg().toBuffer();
+        }
+        fs.writeFileSync(targetPath, cropBuffer);
+      } catch (err: any) {
+        throw new BadRequestException(`Failed to crop face from file: ${err.message}`);
+      }
+    } else {
+      throw new BadRequestException('Either image_base64 or a valid file_path must be provided');
+    }
+
+    const saved = this.db.saveManualCropFace(
+      faceId,
+      personName,
+      cropBuffer,
+      dto.file_path,
+      dto.set_primary !== false
+    );
+
+    return {
+      status: 'success',
+      face: {
+        face_id: faceId,
+        name: personName,
+        image_path: faceFilename,
+        image_url: `/api/faces/image/${faceFilename}`,
+        is_reference: dto.set_primary !== false,
+      },
+      ...saved,
+    };
+  }
 }

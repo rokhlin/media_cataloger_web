@@ -13,6 +13,7 @@ import { DuplicatesModule } from './duplicates/duplicates.module.js';
 import { BackupModule } from './backup/backup.module.js';
 import { OrganizeModule } from './organize/organize.module.js';
 import { GeminiModule } from './gemini/gemini.module.js';
+import { TagsModule } from './tags/tags.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { GeminiModule } from './gemini/gemini.module.js';
     BackupModule,
     OrganizeModule,
     GeminiModule,
+    TagsModule,
   ],
 })
 export class AppModule {}

@@ -45,6 +45,19 @@ export class SettingsService {
       ? normalizeConfigPath(process.env.OUTPUT_FOLDER, this.config.projectRoot, { isDev: this.config.isDev, fallbackType: 'output' })
       : (this.config.isDev ? normalizeConfigPath('media_output', this.config.projectRoot, { isDev: true }) : '/app/media_output');
 
+    const analysisProvider = saved.AI_ANALYSIS_PROVIDER || saved.MODEL_PROVIDER || process.env.AI_ANALYSIS_PROVIDER || process.env.MODEL_PROVIDER || 'gemini';
+    const analysisModel = saved.AI_ANALYSIS_MODEL || (analysisProvider === 'gemini' ? (saved.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash') : (saved.LOCAL_MODEL_NAME || process.env.LOCAL_MODEL_NAME || ''));
+    const analysisFallback = saved.AI_ANALYSIS_FALLBACK_ENABLED !== undefined
+      ? Boolean(saved.AI_ANALYSIS_FALLBACK_ENABLED)
+      : (saved.FALLBACK_TO_GEMINI !== undefined ? Boolean(saved.FALLBACK_TO_GEMINI) : true);
+    const analysisWorkers = saved.AI_ANALYSIS_MAX_WORKERS ? Number(saved.AI_ANALYSIS_MAX_WORKERS) : (analysisProvider === 'gemini' ? Number(saved.GEMINI_MAX_WORKERS || 3) : Number(saved.LOCAL_MAX_WORKERS || 2));
+
+    const editingProvider = saved.AI_EDITING_PROVIDER || process.env.AI_EDITING_PROVIDER || 'gemini';
+    const editingModel = saved.AI_EDITING_MODEL || process.env.AI_EDITING_MODEL || (editingProvider === 'gemini' ? 'gemini-nano-banana' : 'janus-pro-7b');
+    const editingFallback = saved.AI_EDITING_FALLBACK_ENABLED !== undefined ? Boolean(saved.AI_EDITING_FALLBACK_ENABLED) : true;
+    const editingStyleStrength = saved.AI_EDITING_STYLE_STRENGTH !== undefined ? Number(saved.AI_EDITING_STYLE_STRENGTH) : 0.40;
+    const editingPreserveFaces = saved.AI_EDITING_PRESERVE_FACES !== undefined ? Boolean(saved.AI_EDITING_PRESERVE_FACES) : true;
+
     return {
       input_folders: this.config.inputFolders.map(p => String(p)),
       output_folder: String(this.config.outputFolder),
@@ -73,6 +86,29 @@ export class SettingsService {
       fallback_to_gemini: saved.FALLBACK_TO_GEMINI !== undefined
         ? Boolean(saved.FALLBACK_TO_GEMINI)
         : (saved.ai_gemini_fallback_enabled !== undefined ? Boolean(saved.ai_gemini_fallback_enabled) : true),
+      ai_analysis_provider: analysisProvider,
+      ai_analysis_model: analysisModel,
+      ai_analysis_fallback_enabled: analysisFallback,
+      ai_analysis_max_workers: analysisWorkers,
+      ai_editing_provider: editingProvider,
+      ai_editing_model: editingModel,
+      ai_editing_fallback_enabled: editingFallback,
+      ai_editing_style_strength: editingStyleStrength,
+      ai_editing_preserve_faces: editingPreserveFaces,
+      ai_analysis: {
+        provider: analysisProvider,
+        model: analysisModel,
+        fallback_to_gemini: analysisFallback,
+        max_workers: analysisWorkers,
+        custom_prompt_template: this.config.visionPromptTemplate,
+      },
+      ai_editing: {
+        provider: editingProvider,
+        model: editingModel,
+        fallback_to_gemini: editingFallback,
+        default_style_strength: editingStyleStrength,
+        preserve_facial_features: editingPreserveFaces,
+      },
     };
   }
 
@@ -115,6 +151,62 @@ export class SettingsService {
     } else if (dto.fallback_to_gemini !== undefined) {
       additional.FALLBACK_TO_GEMINI = Boolean(dto.fallback_to_gemini);
       additional.ai_gemini_fallback_enabled = Boolean(dto.fallback_to_gemini);
+    }
+
+    // Decoupled AI Settings
+    if (dto.ai_analysis_provider !== undefined) {
+      additional.AI_ANALYSIS_PROVIDER = dto.ai_analysis_provider;
+      additional.MODEL_PROVIDER = dto.ai_analysis_provider;
+    }
+    if (dto.ai_analysis_model !== undefined) {
+      additional.AI_ANALYSIS_MODEL = dto.ai_analysis_model;
+      if (dto.ai_analysis_provider === 'local' || (!dto.ai_analysis_provider && additional.MODEL_PROVIDER === 'local')) {
+        additional.LOCAL_MODEL_NAME = dto.ai_analysis_model;
+      } else {
+        additional.GEMINI_MODEL = dto.ai_analysis_model;
+      }
+    }
+    if (dto.ai_analysis_fallback_enabled !== undefined) {
+      additional.AI_ANALYSIS_FALLBACK_ENABLED = Boolean(dto.ai_analysis_fallback_enabled);
+      additional.FALLBACK_TO_GEMINI = Boolean(dto.ai_analysis_fallback_enabled);
+    }
+    if (dto.ai_analysis_max_workers !== undefined) {
+      additional.AI_ANALYSIS_MAX_WORKERS = Number(dto.ai_analysis_max_workers);
+    }
+    if (dto.ai_editing_provider !== undefined) additional.AI_EDITING_PROVIDER = dto.ai_editing_provider;
+    if (dto.ai_editing_model !== undefined) additional.AI_EDITING_MODEL = dto.ai_editing_model;
+    if (dto.ai_editing_fallback_enabled !== undefined) additional.AI_EDITING_FALLBACK_ENABLED = Boolean(dto.ai_editing_fallback_enabled);
+    if (dto.ai_editing_style_strength !== undefined) additional.AI_EDITING_STYLE_STRENGTH = Number(dto.ai_editing_style_strength);
+    if (dto.ai_editing_preserve_faces !== undefined) additional.AI_EDITING_PRESERVE_FACES = Boolean(dto.ai_editing_preserve_faces);
+
+    if (dto.ai_analysis) {
+      if (dto.ai_analysis.provider) {
+        additional.AI_ANALYSIS_PROVIDER = dto.ai_analysis.provider;
+        additional.MODEL_PROVIDER = dto.ai_analysis.provider;
+      }
+      if (dto.ai_analysis.model) {
+        additional.AI_ANALYSIS_MODEL = dto.ai_analysis.model;
+        if (dto.ai_analysis.provider === 'local') {
+          additional.LOCAL_MODEL_NAME = dto.ai_analysis.model;
+        } else {
+          additional.GEMINI_MODEL = dto.ai_analysis.model;
+        }
+      }
+      if (dto.ai_analysis.fallback_to_gemini !== undefined) {
+        additional.AI_ANALYSIS_FALLBACK_ENABLED = Boolean(dto.ai_analysis.fallback_to_gemini);
+        additional.FALLBACK_TO_GEMINI = Boolean(dto.ai_analysis.fallback_to_gemini);
+      }
+      if (dto.ai_analysis.max_workers !== undefined) {
+        additional.AI_ANALYSIS_MAX_WORKERS = Number(dto.ai_analysis.max_workers);
+      }
+    }
+
+    if (dto.ai_editing) {
+      if (dto.ai_editing.provider) additional.AI_EDITING_PROVIDER = dto.ai_editing.provider;
+      if (dto.ai_editing.model) additional.AI_EDITING_MODEL = dto.ai_editing.model;
+      if (dto.ai_editing.fallback_to_gemini !== undefined) additional.AI_EDITING_FALLBACK_ENABLED = Boolean(dto.ai_editing.fallback_to_gemini);
+      if (dto.ai_editing.default_style_strength !== undefined) additional.AI_EDITING_STYLE_STRENGTH = Number(dto.ai_editing.default_style_strength);
+      if (dto.ai_editing.preserve_facial_features !== undefined) additional.AI_EDITING_PRESERVE_FACES = Boolean(dto.ai_editing.preserve_facial_features);
     }
 
     // Identify removed or renamed folders for recalculating cache
@@ -338,6 +430,7 @@ export class SettingsService {
       id: string;
       name: string;
       isVision: boolean;
+      isGenerative?: boolean;
       isLoaded: boolean;
       arch?: string;
       size?: string;
@@ -351,6 +444,7 @@ export class SettingsService {
       id: string;
       name: string;
       isVision: boolean;
+      isGenerative?: boolean;
       isLoaded: boolean;
       arch?: string;
       size?: string;
@@ -391,10 +485,24 @@ export class SettingsService {
             lowerKey.includes('olmocr')
           );
 
+          const isGen = Boolean(
+            lowerKey.includes('janus') ||
+            lowerKey.includes('pix2pix') ||
+            lowerKey.includes('instruct') ||
+            lowerKey.includes('sdxl') ||
+            lowerKey.includes('diffus') ||
+            lowerKey.includes('banana') ||
+            lowerKey.includes('paint') ||
+            lowerKey.includes('edit') ||
+            lowerKey.includes('flux') ||
+            lowerKey.includes('generat')
+          );
+
           models.push({
             id: key,
             name: item.displayName || key,
             isVision: isVis,
+            isGenerative: isGen,
             isLoaded: loadedKeys.has(key),
             arch: item.architecture,
             size: item.sizeBytes ? `${(item.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB` : undefined,
@@ -457,10 +565,24 @@ export class SettingsService {
                 lowerId.includes('olmocr')
               );
 
+              const isGen = Boolean(
+                lowerId.includes('janus') ||
+                lowerId.includes('pix2pix') ||
+                lowerId.includes('instruct') ||
+                lowerId.includes('sdxl') ||
+                lowerId.includes('diffus') ||
+                lowerId.includes('banana') ||
+                lowerId.includes('paint') ||
+                lowerId.includes('edit') ||
+                lowerId.includes('flux') ||
+                lowerId.includes('generat')
+              );
+
               models.push({
                 id,
                 name: id,
                 isVision: isVis,
+                isGenerative: isGen,
                 isLoaded: m.state === 'loaded',
               });
             }

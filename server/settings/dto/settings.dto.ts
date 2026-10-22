@@ -81,4 +81,58 @@ export class SettingsUpdateRequestDto {
   @IsOptional()
   @IsBoolean()
   fallback_to_gemini?: boolean;
+
+  @ApiPropertyOptional({ description: 'AI Media Analysis Provider (gemini / local)', example: 'gemini' })
+  @IsOptional()
+  @IsString()
+  ai_analysis_provider?: string;
+
+  @ApiPropertyOptional({ description: 'AI Media Analysis Model', example: 'gemini-3.8-flash' })
+  @IsOptional()
+  @IsString()
+  ai_analysis_model?: string;
+
+  @ApiPropertyOptional({ description: 'AI Media Analysis Fallback to Gemini', example: true })
+  @IsOptional()
+  @IsBoolean()
+  ai_analysis_fallback_enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'AI Media Analysis Max Parallel Workers', example: 3 })
+  @IsOptional()
+  @IsNumber()
+  ai_analysis_max_workers?: number;
+
+  @ApiPropertyOptional({ description: 'AI Image Editing Provider (gemini / local)', example: 'gemini' })
+  @IsOptional()
+  @IsString()
+  ai_editing_provider?: string;
+
+  @ApiPropertyOptional({ description: 'AI Image Editing Model', example: 'gemini-nano-banana' })
+  @IsOptional()
+  @IsString()
+  ai_editing_model?: string;
+
+  @ApiPropertyOptional({ description: 'AI Image Editing Fallback to Gemini', example: true })
+  @IsOptional()
+  @IsBoolean()
+  ai_editing_fallback_enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'AI Image Editing Default Style Strength (0.1 - 1.0)', example: 0.40 })
+  @IsOptional()
+  @IsNumber()
+  ai_editing_style_strength?: number;
+
+  @ApiPropertyOptional({ description: 'Preserve facial features in AI Image Editing', example: true })
+  @IsOptional()
+  @IsBoolean()
+  ai_editing_preserve_faces?: boolean;
+
+  @ApiPropertyOptional({ description: 'Nested AI Analysis configuration object' })
+  @IsOptional()
+  ai_analysis?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: 'Nested AI Editing configuration object' })
+  @IsOptional()
+  ai_editing?: Record<string, any>;
 }
+
