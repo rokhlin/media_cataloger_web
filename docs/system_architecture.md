@@ -11,6 +11,9 @@
 
 ## 1. Architectural Overview
 
+> ⚠️ **Repository Scope & Consolidation**:
+> `media_cataloger_web` is the single source of truth fullstack application combining the React 19 Frontend and NestJS Backend. The legacy `media_catalog` repository is obsolete, deprecated, and scheduled for removal from the workspace. All ongoing development, bugfixes, and feature additions strictly target `media_cataloger_web` and `ai_engine`.
+
 `media_cataloger_web` is a modern, high-performance personal media management platform engineered to deliver an advanced, intuitive user experience. The system is designed as a cohesive full-stack web application:
 
 - **Client Architecture**:
