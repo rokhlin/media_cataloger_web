@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Folder,
   Sparkles,
@@ -15,8 +15,6 @@ import {
   CopyCheck,
   Mic,
   Eye,
-  CheckSquare,
-  Square,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 import { useLanguage } from '../../i18n/LanguageContext';
