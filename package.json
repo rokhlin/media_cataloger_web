@@ -2,6 +2,11 @@
   "name": "media_cataloger_web",
   "private": true,
   "version": "2.6.0",
+  "packageManager": "npm@12.2.1",
+  "engines": {
+    "node": ">=22.22.0",
+    "npm": ">=12.2.1"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +29,7 @@
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.10",
     "@nestjs/platform-express": "^11.0.10",
-    "@nestjs/swagger": "^11.0.4",
+    "@nestjs/swagger": "^11.4.7",
     "@radix-ui/react-slot": "^1.4.0",
     "@tanstack/react-virtual": "^3.14.14",
     "@types/adm-zip": "^0.5.8",
@@ -73,6 +78,13 @@
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vite": "^8.2.0"
+  },
+  "overrides": {
+    "tailwindcss": {
+      "chokidar": "^4.0.3"
+    },
+    "js-yaml": "^5.5.0",
+    "postcss-selector-parser": "^7.1.7"
   },
   "description": "Modern Web UI, Family Tree Explorer, Media Viewer & REST Server for Media Archive Cataloger"
 }

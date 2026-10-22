@@ -3,6 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Ensure latest supported npm version
+RUN npm install -g npm@12.2.1
+
 # Install dependencies
 COPY package*.json ./
 RUN npm ci
@@ -22,6 +25,9 @@ ENV PORT=8000
 
 # Install runtime dependencies for video thumbnail generation and EXIF metadata handling
 RUN apk add --no-cache ffmpeg perl
+
+# Ensure latest supported npm version
+RUN npm install -g npm@12.2.1
 
 # Install production dependencies only
 COPY package*.json ./

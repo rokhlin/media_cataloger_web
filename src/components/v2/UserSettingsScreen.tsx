@@ -205,6 +205,31 @@ export const UserSettingsScreen: React.FC = () => {
     }
   }, [currentUser]);
 
+  const fetchStorageTelemetry = useCallback(async () => {
+    setLoadingStorage(true);
+    try {
+      const res = await authFetch('/api/storage/telemetry');
+      if (res.ok) {
+        const data = await res.json();
+        setStorageTelemetry({
+          totalDiskBytes: data.disk?.total ?? data.totalDiskBytes ?? 0,
+          freeDiskBytes: data.disk?.free ?? data.freeDiskBytes ?? 0,
+          usedDiskBytes: data.disk?.used ?? data.usedDiskBytes ?? 0,
+          photosBytes: data.breakdown?.photos?.bytes ?? data.photosBytes ?? 0,
+          photosCount: data.breakdown?.photos?.count ?? data.photosCount ?? 0,
+          videosBytes: data.breakdown?.videos?.bytes ?? data.videosBytes ?? 0,
+          videosCount: data.breakdown?.videos?.count ?? data.videosCount ?? 0,
+          databaseBytes: data.breakdown?.database?.bytes ?? data.databaseBytes ?? 0,
+          cacheBytes: data.breakdown?.cacheAndThumbnails?.bytes ?? data.cacheBytes ?? 0,
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch storage telemetry:', e);
+    } finally {
+      setLoadingStorage(false);
+    }
+  }, [authFetch]);
+
   // Fetch settings & storage telemetry on mount
   useEffect(() => {
     fetch('/api/settings')
@@ -271,32 +296,7 @@ export const UserSettingsScreen: React.FC = () => {
       .catch(() => {});
 
     fetchStorageTelemetry();
-  }, []);
-
-  const fetchStorageTelemetry = useCallback(async () => {
-    setLoadingStorage(true);
-    try {
-      const res = await authFetch('/api/storage/telemetry');
-      if (res.ok) {
-        const data = await res.json();
-        setStorageTelemetry({
-          totalDiskBytes: data.disk?.total ?? data.totalDiskBytes ?? 0,
-          freeDiskBytes: data.disk?.free ?? data.freeDiskBytes ?? 0,
-          usedDiskBytes: data.disk?.used ?? data.usedDiskBytes ?? 0,
-          photosBytes: data.breakdown?.photos?.bytes ?? data.photosBytes ?? 0,
-          photosCount: data.breakdown?.photos?.count ?? data.photosCount ?? 0,
-          videosBytes: data.breakdown?.videos?.bytes ?? data.videosBytes ?? 0,
-          videosCount: data.breakdown?.videos?.count ?? data.videosCount ?? 0,
-          databaseBytes: data.breakdown?.database?.bytes ?? data.databaseBytes ?? 0,
-          cacheBytes: data.breakdown?.cacheAndThumbnails?.bytes ?? data.cacheBytes ?? 0,
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to fetch storage telemetry:', e);
-    } finally {
-      setLoadingStorage(false);
-    }
-  }, [authFetch]);
+  }, [authFetch, fetchStorageTelemetry]);
 
   const toggleSection = (id: string) => {
     setExpandedSection(expandedSection === id ? null : id);
@@ -598,7 +598,7 @@ export const UserSettingsScreen: React.FC = () => {
     } finally {
       setLoadingLocalModels(false);
     }
-  }, [aiModel]);
+  }, [aiModel, setAiModel]);
 
   const handleLoadModelIntoRam = async (targetId: string) => {
     if (!targetId || loadingModelIntoRam) return;

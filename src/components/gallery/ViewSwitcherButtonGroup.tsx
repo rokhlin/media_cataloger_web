@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { GalleryViewMode } from '../../models/media';
 import type { GalleryTranslations } from '../../models/i18n';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { useFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
+import { useOptionalFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
 import './ViewSwitcherButtonGroup.css';
 
 export interface ViewSwitcherOption {
@@ -47,13 +47,10 @@ export const ViewSwitcherButtonGroup: React.FC<ViewSwitcherButtonGroupProps> = (
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Feature Flag: show list (dropdown) if flag is active, and buttons if inactive
-  let isFeatureFlagDropdownActive = false;
-  try {
-    const { isFeatureEnabled } = useFeatureFlags();
-    isFeatureFlagDropdownActive = isFeatureEnabled('view_switcher_dropdown');
-  } catch {
-    isFeatureFlagDropdownActive = FlagsManager.IsActive('view_switcher_dropdown', false);
-  }
+  const featureFlags = useOptionalFeatureFlags();
+  const isFeatureFlagDropdownActive = featureFlags
+    ? featureFlags.isFeatureEnabled('view_switcher_dropdown')
+    : FlagsManager.IsActive('view_switcher_dropdown', false);
 
   const renderAsDropdown = asDropdown !== undefined ? asDropdown : isFeatureFlagDropdownActive;
 

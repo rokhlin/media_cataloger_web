@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { MediaSortField, MediaSortOrder } from '../../models';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { useFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
+import { useOptionalFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
 import './FilterSortSearchBar.css';
 
 export interface SearchBarProps {
@@ -127,13 +127,10 @@ export const FilterSortSearchBar: React.FC<FilterSortSearchBarProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  let isFeatureFlagDropdownActive = false;
-  try {
-    const { isFeatureEnabled } = useFeatureFlags();
-    isFeatureFlagDropdownActive = isFeatureEnabled('filter_bar_dropdown');
-  } catch {
-    isFeatureFlagDropdownActive = FlagsManager.IsActive('filter_bar_dropdown', false);
-  }
+  const featureFlags = useOptionalFeatureFlags();
+  const isFeatureFlagDropdownActive = featureFlags
+    ? featureFlags.isFeatureEnabled('filter_bar_dropdown')
+    : FlagsManager.IsActive('filter_bar_dropdown', false);
 
   const renderAsDropdown = asDropdown !== undefined ? asDropdown : isFeatureFlagDropdownActive;
 
