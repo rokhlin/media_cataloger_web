@@ -1859,14 +1859,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       return db.prepare(`
         SELECT h.file_path, h.content_hash, h.phash, h.width, h.height, h.file_size, h.mtime, m.media_date
         FROM media_hashes h
-        LEFT JOIN media_items m ON (m.file_path = h.file_path OR LOWER(m.file_path) = LOWER(h.file_path))
+        LEFT JOIN media_items m ON (
+          m.file_path = h.file_path 
+          OR LOWER(REPLACE(m.file_path, '\\', '/')) = LOWER(REPLACE(h.file_path, '\\', '/'))
+        )
         UNION ALL
         SELECT m.file_path, NULL as content_hash, m.phash, NULL as width, NULL as height, m.file_size, m.mtime, m.media_date
         FROM media_items m
         WHERE m.phash IS NOT NULL AND m.phash != ''
           AND NOT EXISTS (
             SELECT 1 FROM media_hashes h2
-            WHERE h2.file_path = m.file_path OR LOWER(h2.file_path) = LOWER(m.file_path)
+            WHERE h2.file_path = m.file_path 
+               OR LOWER(REPLACE(h2.file_path, '\\', '/')) = LOWER(REPLACE(m.file_path, '\\', '/'))
           )
       `).all();
     } catch {
@@ -1920,6 +1924,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       fileSize: data.fileSize || 0,
       mtime: data.mtime || 0,
     });
+
+    if (data.phash) {
+      try {
+        db.prepare(`
+          UPDATE media_items
+          SET phash = ?
+          WHERE (LOWER(REPLACE(file_path, '\\', '/')) = LOWER(?) OR LOWER(file_path) = LOWER(?))
+            AND (phash IS NULL OR phash = '')
+        `).run(data.phash, norm, data.filePath);
+      } catch {
+        // ignore if media_items doesn't exist or is locked
+      }
+    }
   }
 
   deleteMediaHash(filePath: string): void {

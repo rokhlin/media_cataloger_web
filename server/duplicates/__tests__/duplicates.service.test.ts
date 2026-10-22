@@ -355,6 +355,113 @@ describe('DuplicatesService', () => {
       // Should NOT cluster because real capture dates differ by 12 hours
       assert.equal(groups.length, 0);
     });
+
+    it('should correctly cluster burst photo series in all mode before visual similarity swallows them (BUG-018)', async () => {
+      // 3 photos taken within 1.5s in the same folder with high visual similarity
+      const testHashes = [
+        {
+          file_path: '/photos/burst/shot_01.jpg',
+          content_hash: 'md5_b1',
+          phash: '0000000000000000',
+          file_size: 3000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000000,
+          media_date: '2026-06-01T08:00:00Z',
+        },
+        {
+          file_path: '/photos/burst/shot_02.jpg',
+          content_hash: 'md5_b2',
+          phash: '0000000000000001', // 1 bit diff = 98.4% visual similarity
+          file_size: 3050000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001,
+          media_date: '2026-06-01T08:00:01Z',
+        },
+        {
+          file_path: '/photos/burst/shot_03.jpg',
+          content_hash: 'md5_b3',
+          phash: '0000000000000002', // 1 bit diff
+          file_size: 3020000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001.8,
+          media_date: '2026-06-01T08:00:01.8Z',
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      // In 'all' mode, these burst photos MUST be classified as 'burst', NOT swallowed as 'visual'
+      const groups = await duplicatesService.getDuplicateGroups('all', 0.85, 3.0, 'highest_resolution');
+      assert.equal(groups.length, 1);
+      assert.equal(groups[0].matchType, 'burst', 'Must be classified as burst series group, not visual duplicate');
+      assert.equal(groups[0].totalFiles, 3);
+    });
+
+    it('should correctly parse standard EXIF colon-separated timestamps for burst grouping (BUG-018)', async () => {
+      // Camera EXIF date format uses colons: "YYYY:MM:DD HH:MM:SS"
+      const testHashes = [
+        {
+          file_path: '/photos/camera/DSC_0001.JPG',
+          content_hash: 'md5_c1',
+          phash: '1111222233334444',
+          file_size: 5000000,
+          width: 6000,
+          height: 4000,
+          mtime: 1700000999, // Irrelevant copy mtime
+          media_date: '2026:08:15 14:30:00',
+        },
+        {
+          file_path: '/photos/camera/DSC_0002.JPG',
+          content_hash: 'md5_c2',
+          phash: '1111222233334445', // 1 bit diff
+          file_size: 5020000,
+          width: 6000,
+          height: 4000,
+          mtime: 1700000999,
+          media_date: '2026:08:15 14:30:01', // 1 sec later in EXIF
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      assert.equal(groups.length, 1, 'Must cluster burst photos with EXIF colon-separated dates');
+      assert.equal(groups[0].matchType, 'burst');
+    });
+
+    it('should cluster burst photos across mixed Windows backslash and forward slash paths (BUG-018)', async () => {
+      const testHashes = [
+        {
+          file_path: 'C:\\Users\\Photos\\Burst\\IMG_1001.JPG',
+          content_hash: 'md5_w1',
+          phash: 'aaaaaaaaaaaaaaaa',
+          file_size: 4000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000000,
+          media_date: '2026-07-10T12:00:00Z',
+        },
+        {
+          file_path: 'C:/Users/Photos/Burst/IMG_1002.JPG',
+          content_hash: 'md5_w2',
+          phash: 'aaaaaaaaaaaaaaab', // 1 bit diff
+          file_size: 4050000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001,
+          media_date: '2026-07-10T12:00:01Z',
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('burst', 0.85, 3.0, 'highest_resolution');
+      assert.equal(groups.length, 1, 'Must cluster burst photos with mixed path separators in same folder');
+      assert.equal(groups[0].matchType, 'burst');
+    });
   });
 
   describe('Non-Destructive Principle Verification', () => {

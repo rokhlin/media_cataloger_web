@@ -360,17 +360,30 @@ export class DuplicatesService {
       burst_window_seconds: opts.burstWindowSeconds,
     };
 
-    const res = await axios.post(`${baseUrl}/api/duplicates/scan`, payload, {
-      timeout: 300000, // 5 min timeout for GPU batch
-    });
+    try {
+      const res = await axios.post(`${baseUrl}/api/duplicates/scan`, payload, {
+        timeout: 300000, // 5 min timeout for GPU batch
+      });
 
-    if (res.data && Array.isArray(res.data.groups)) {
-      this.cachedGroups = this.formatRawGroups(res.data.groups);
-      this.finishScan();
-      return;
+      if (res.data && Array.isArray(res.data.groups)) {
+        if (res.data.groups.length === 0 && filesToScan.length > 1) {
+          this.logger.warn(`GPU duplicate scan returned 0 groups for ${filesToScan.length} files. Falling back to local CPU scan.`);
+          this.scanStatus.engine = 'cpu';
+          await this.runCpuScan(opts);
+          return;
+        }
+
+        this.cachedGroups = this.formatRawGroups(res.data.groups);
+        this.finishScan();
+        return;
+      }
+
+      throw new Error('Invalid response from GPU duplicate service');
+    } catch (err: any) {
+      this.logger.warn(`GPU scan error, falling back to low-memory CPU engine: ${err.message}`);
+      this.scanStatus.engine = 'cpu';
+      await this.runCpuScan(opts);
     }
-
-    throw new Error('Invalid response from GPU duplicate service');
   }
 
   /**
@@ -643,7 +656,12 @@ export class DuplicatesService {
 
   getItemTimestamp(item: DuplicateItemInfo): number {
     if (item.captureDate) {
-      const dt = Date.parse(item.captureDate);
+      let str = item.captureDate.trim();
+      // Handle EXIF "YYYY:MM:DD HH:MM:SS" format
+      if (/^\d{4}:\d{2}:\d{2}/.test(str)) {
+        str = str.slice(0, 10).replace(/:/g, '-') + str.slice(10);
+      }
+      const dt = Date.parse(str);
       if (!isNaN(dt) && dt > 0) {
         return dt / 1000;
       }
@@ -707,7 +725,61 @@ export class DuplicatesService {
       }
     }
 
-    // 2. Visual Similarity Clustering (Perceptual Hash distance <= threshold) with BigInt & periodic yielding
+    // 2. Burst Photo Series Clustering (within time delta + high visual similarity to anchor photo)
+    if (opts.mode === 'all' || opts.mode === 'burst') {
+      const normFolder = (p: string) => (p || '').replace(/\\/g, '/').toLowerCase();
+      // Must be an image and must have a valid perceptual hash; without phash, visual burst match is forbidden
+      const remaining = files.filter((f) => !assignedFiles.has(f.filePath) && f.isImage && f.phash);
+      remaining.sort((a, b) => this.getItemTimestamp(a) - this.getItemTimestamp(b));
+
+      let currentBurst: DuplicateItemInfo[] = [];
+      const requiredSimilarity = opts.similarityThreshold ?? 0.85;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const item = remaining[i];
+        if (assignedFiles.has(item.filePath)) continue;
+
+        if (currentBurst.length === 0) {
+          currentBurst.push(item);
+          continue;
+        }
+
+        const anchor = currentBurst[0];
+        const prev = currentBurst[currentBurst.length - 1];
+        const itemTime = this.getItemTimestamp(item);
+        const anchorTime = this.getItemTimestamp(anchor);
+        const prevTime = this.getItemTimestamp(prev);
+
+        const timeDiffFromAnchor = Math.abs(itemTime - anchorTime);
+        const timeDiffFromPrev = Math.abs(itemTime - prevTime);
+
+        // Strict condition: within burst window relative to anchor AND within step window from prev
+        const isTimeMatch = timeDiffFromAnchor <= opts.burstWindowSeconds && timeDiffFromPrev <= opts.burstWindowSeconds;
+        const isFolderMatch = normFolder(item.folder) === normFolder(anchor.folder);
+
+        // Strict condition: candidate MUST have phash AND match anchor with high similarity
+        let isVisualMatch = false;
+        if (item.phash && anchor.phash) {
+          const sim = this.calculateSimilarity(anchor.phash, item.phash);
+          isVisualMatch = sim >= requiredSimilarity;
+        }
+
+        if (isTimeMatch && isFolderMatch && isVisualMatch) {
+          currentBurst.push(item);
+        } else {
+          if (currentBurst.length > 1) {
+            this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
+          }
+          currentBurst = [item];
+        }
+      }
+
+      if (currentBurst.length > 1) {
+        this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
+      }
+    }
+
+    // 3. Visual Similarity Clustering (Perceptual Hash distance <= threshold) with BigInt & periodic yielding
     if (opts.mode === 'all' || opts.mode === 'visual') {
       const remainingImages = files.filter((f) => f.isImage && f.phash && !assignedFiles.has(f.filePath));
       const maxDistance = Math.floor((1.0 - opts.similarityThreshold) * 64);
@@ -784,59 +856,6 @@ export class DuplicatesService {
           this.scanStatus.stage = `Clustering visual duplicates (${Math.round((i / Math.max(1, prepared.length)) * 100)}%)...`;
           await new Promise((resolve) => setImmediate(resolve));
         }
-      }
-    }
-
-    // 3. Burst Photo Series Clustering (within time delta + high visual similarity to anchor photo)
-    if (opts.mode === 'all' || opts.mode === 'burst') {
-      // Must be an image and must have a valid perceptual hash; without phash, visual burst match is forbidden
-      const remaining = files.filter((f) => !assignedFiles.has(f.filePath) && f.isImage && f.phash);
-      remaining.sort((a, b) => this.getItemTimestamp(a) - this.getItemTimestamp(b));
-
-      let currentBurst: DuplicateItemInfo[] = [];
-      const requiredSimilarity = opts.similarityThreshold ?? 0.85;
-
-      for (let i = 0; i < remaining.length; i++) {
-        const item = remaining[i];
-        if (assignedFiles.has(item.filePath)) continue;
-
-        if (currentBurst.length === 0) {
-          currentBurst.push(item);
-          continue;
-        }
-
-        const anchor = currentBurst[0];
-        const prev = currentBurst[currentBurst.length - 1];
-        const itemTime = this.getItemTimestamp(item);
-        const anchorTime = this.getItemTimestamp(anchor);
-        const prevTime = this.getItemTimestamp(prev);
-
-        const timeDiffFromAnchor = Math.abs(itemTime - anchorTime);
-        const timeDiffFromPrev = Math.abs(itemTime - prevTime);
-
-        // Strict condition: within burst window relative to anchor AND within step window from prev
-        const isTimeMatch = timeDiffFromAnchor <= opts.burstWindowSeconds && timeDiffFromPrev <= opts.burstWindowSeconds;
-        const isFolderMatch = item.folder === anchor.folder;
-
-        // Strict condition: candidate MUST have phash AND match anchor with high similarity
-        let isVisualMatch = false;
-        if (item.phash && anchor.phash) {
-          const sim = this.calculateSimilarity(anchor.phash, item.phash);
-          isVisualMatch = sim >= requiredSimilarity;
-        }
-
-        if (isTimeMatch && isFolderMatch && isVisualMatch) {
-          currentBurst.push(item);
-        } else {
-          if (currentBurst.length > 1) {
-            this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
-          }
-          currentBurst = [item];
-        }
-      }
-
-      if (currentBurst.length > 1) {
-        this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
       }
     }
 

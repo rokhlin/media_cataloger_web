@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   DuplicateGroup,
   DuplicateItemInfo,
@@ -47,6 +47,7 @@ export default function DuplicatesManagerTab({
   const [, setConfig] = useState<DuplicateConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const prevIsScanningRef = useRef(false);
   const GROUPS_PER_PAGE = 25;
 
   // Scan settings state
@@ -147,17 +148,24 @@ export default function DuplicatesManagerTab({
   // Poll scan status
   useEffect(() => {
     let timer: any;
+    let isCancelled = false;
+
     const checkStatus = async () => {
       try {
         const res = await fetch('/api/duplicates/scan-status');
-        if (res.ok) {
+        if (res.ok && !isCancelled) {
           const st: DuplicateScanStatus = await res.json();
           setScanStatus(st);
           if (st.isScanning) {
+            prevIsScanningRef.current = true;
             timer = setTimeout(checkStatus, 1000);
-          } else if (scanStatus?.isScanning) {
-            // Just finished scanning -> refresh groups
-            loadData();
+          } else {
+            if (prevIsScanningRef.current) {
+              prevIsScanningRef.current = false;
+              // Just finished scanning -> refresh groups and update media gallery
+              loadData();
+              onRefreshMedia?.();
+            }
           }
         }
       } catch {
@@ -167,9 +175,10 @@ export default function DuplicatesManagerTab({
 
     checkStatus();
     return () => {
+      isCancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [loadData, scanStatus?.isScanning]);
+  }, [loadData, onRefreshMedia]);
 
   // Keyboard listener for Escape to close modals
   useEffect(() => {
@@ -218,6 +227,7 @@ export default function DuplicatesManagerTab({
       if (res.ok) {
         const st = await res.json();
         setScanStatus(st);
+        prevIsScanningRef.current = true;
       } else {
         const err = await res.json();
         alert(`Error: ${err.message || 'Failed to start duplicate scan'}`);

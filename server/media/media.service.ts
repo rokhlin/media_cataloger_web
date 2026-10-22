@@ -60,6 +60,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   private hydrateItemsFromPersisted(rows: any[]): any[] {
     const faceCounts = this.db.getFacesCountBySourceFile();
     const allFacesByFile = this.db.getAllFacesBySourceFile();
+    let phashLookup: Map<string, string> | null = null;
 
     return rows.map((r) => {
       const ext = path.extname(r.file_path || r.filename || '').toLowerCase();
@@ -67,6 +68,21 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       const isImage = this.config.supportedPhotoExts.has(ext) || r.media_type === 'photo';
       const fileFaces = allFacesByFile[r.file_path] || [];
       const faceNames = fileFaces.map((f: any) => f.name || f.person_name).filter(Boolean);
+
+      let effectivePhash = r.phash;
+      if (!effectivePhash && isImage) {
+        if (!phashLookup) {
+          phashLookup = new Map<string, string>();
+          const allHashes = this.db.getAllMediaHashes();
+          for (const h of allHashes) {
+            if (h.phash) {
+              phashLookup.set(h.file_path.replace(/\\/g, '/').toLowerCase(), h.phash);
+            }
+          }
+        }
+        const normPath = (r.file_path || '').replace(/\\/g, '/').toLowerCase();
+        effectivePhash = phashLookup.get(normPath) || null;
+      }
 
       return {
         file_path: r.file_path,
@@ -76,7 +92,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         mtime: r.mtime,
         capture_date: r.media_date,
         media_date: r.media_date,
-        phash: r.phash,
+        phash: effectivePhash,
         is_video: isVideo,
         is_image: isImage,
         status: r.status || 'PROCESSED',
