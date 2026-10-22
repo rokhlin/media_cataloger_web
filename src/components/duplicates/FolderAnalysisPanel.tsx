@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Folder,
   Sparkles,
@@ -11,34 +11,108 @@ import {
   AlertCircle,
   Layers,
   FileText,
+  UserCheck,
+  CopyCheck,
+  Mic,
+  Eye,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '../../services/authContext';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { mediaCacheService } from '../../services/mediaCacheService';
 
 interface FolderAnalysisPanelProps {
   configuredFolders?: string[];
   onRefreshMedia?: () => void;
 }
 
+interface AnalysisCategoryItem {
+  id: string;
+  icon: any;
+  labelKey: string;
+  descKey: string;
+  defaultLabel: string;
+  defaultDesc: string;
+}
+
+const ANALYSIS_CATEGORIES: AnalysisCategoryItem[] = [
+  {
+    id: 'vision',
+    icon: Eye,
+    labelKey: 'categoryVision',
+    descKey: 'categoryVisionDesc',
+    defaultLabel: 'Метаданные и AI-описание',
+    defaultDesc: 'Извлечение EXIF, теги, категории и визуальное AI-описание',
+  },
+  {
+    id: 'faces',
+    icon: UserCheck,
+    labelKey: 'categoryFaces',
+    descKey: 'categoryFacesDesc',
+    defaultLabel: 'Поиск и распознавание лиц',
+    defaultDesc: 'Детекция лиц, эмбеддинги и кластеризация персон',
+  },
+  {
+    id: 'duplicates',
+    icon: CopyCheck,
+    labelKey: 'categoryDuplicates',
+    descKey: 'categoryDuplicatesDesc',
+    defaultLabel: 'Поиск дубликатов и похожих',
+    defaultDesc: 'Перцептивные хеши (pHash) и группировка похожих кадров',
+  },
+  {
+    id: 'transcribe',
+    icon: Mic,
+    labelKey: 'categoryTranscribe',
+    descKey: 'categoryTranscribeDesc',
+    defaultLabel: 'Транскрибация аудио и видео',
+    defaultDesc: 'Распознавание речи через Whisper для видеофайлов',
+  },
+];
+
 export default function FolderAnalysisPanel({
   configuredFolders = [],
   onRefreshMedia,
 }: FolderAnalysisPanelProps) {
   const { authFetch } = useAuth();
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
   const isRu = language === 'ru';
 
   const [availableFolders, setAvailableFolders] = useState<string[]>(configuredFolders);
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set(configuredFolders));
+  
+  // Analysis categories / modes - all selected by default per user specification
+  const [selectedModes, setSelectedModes] = useState<Set<string>>(
+    new Set(['vision', 'faces', 'duplicates', 'transcribe'])
+  );
+
   const [pipelineStatus, setPipelineStatus] = useState<any>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  // Load configured input folders if not passed
+  // Load configured input folders and distinct cached subdirectories
   useEffect(() => {
+    let combined = new Set<string>();
+
     if (configuredFolders.length > 0) {
-      setAvailableFolders(configuredFolders);
-      setSelectedFolders(new Set(configuredFolders));
+      configuredFolders.forEach((f) => combined.add(f));
+    }
+
+    // Check media cache for distinct indexed folders/subfolders
+    try {
+      const cached = mediaCacheService.getAll();
+      for (const item of cached) {
+        if (item.folder) combined.add(item.folder);
+      }
+    } catch {
+      // cache read optional
+    }
+
+    if (combined.size > 0) {
+      const arr = Array.from(combined);
+      setAvailableFolders(arr);
+      setSelectedFolders(new Set(arr));
     } else {
       authFetch('/api/settings')
         .then((r) => (r.ok ? r.json() : null))
@@ -72,6 +146,7 @@ export default function FolderAnalysisPanel({
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
+  // Folder toggling
   const handleToggleFolder = (folder: string) => {
     setSelectedFolders((prev) => {
       const next = new Set(prev);
@@ -84,21 +159,53 @@ export default function FolderAnalysisPanel({
     });
   };
 
-  const handleSelectAll = () => {
+  const handleSelectAllFolders = () => {
     setSelectedFolders(new Set(availableFolders));
   };
 
-  const handleDeselectAll = () => {
+  const handleDeselectAllFolders = () => {
     setSelectedFolders(new Set());
   };
 
+  // Category / Mode toggling
+  const handleToggleMode = (modeId: string) => {
+    setSelectedModes((prev) => {
+      const next = new Set(prev);
+      if (next.has(modeId)) {
+        next.delete(modeId);
+      } else {
+        next.add(modeId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllModes = () => {
+    setSelectedModes(new Set(ANALYSIS_CATEGORIES.map((c) => c.id)));
+  };
+
+  const handleDeselectAllModes = () => {
+    setSelectedModes(new Set());
+  };
+
+  // Trigger analysis execution
   const handleTriggerAnalysis = async (force: boolean) => {
     if (selectedFolders.size === 0) {
       setFeedback({
         type: 'error',
-        message: isRu
+        message: t('atLeastOneFolder' as any) || (isRu
           ? 'Пожалуйста, выберите хотя бы одну папку для анализа'
-          : 'Please select at least one folder for analysis',
+          : 'Please select at least one folder for analysis'),
+      });
+      return;
+    }
+
+    if (selectedModes.size === 0) {
+      setFeedback({
+        type: 'error',
+        message: t('atLeastOneCategory' as any) || (isRu
+          ? 'Пожалуйста, выберите хотя бы одну категорию анализа'
+          : 'Please select at least one analysis category'),
       });
       return;
     }
@@ -111,33 +218,39 @@ export default function FolderAnalysisPanel({
 
     try {
       const targetFoldersArray = Array.from(selectedFolders);
-      const res = await authFetch(`/api/run?force=${force}`, {
+      const targetModesArray = Array.from(selectedModes);
+      const modesQuery = `&modes=${encodeURIComponent(targetModesArray.join(','))}`;
+
+      const res = await authFetch(`/api/run?force=${force}${modesQuery}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           force,
           folders: targetFoldersArray,
           folder_paths: targetFoldersArray,
+          modes: targetModesArray,
           incremental: !force,
           only_unprocessed: !force,
         }),
       });
 
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const count = targetFoldersArray.length;
+        const modesCount = targetModesArray.length;
         setFeedback({
           type: 'success',
-          message: isRu
+          message: data.message || (isRu
             ? (force
-              ? `Запущен полный переанализ в ${targetFoldersArray.length} папках. Обработка выполняется в фоне.`
-              : `Запущен выборочный анализ файлов без метаданных в ${targetFoldersArray.length} папках.`)
+              ? `Запущен полный переанализ в ${count} папках (${modesCount} видов обработки). Обработка выполняется в фоне.`
+              : `Запущен анализ файлов без метаданных в ${count} папках (${modesCount} видов обработки).`)
             : (force
-              ? `Full re-analysis started across ${targetFoldersArray.length} folders in background.`
-              : `Selective analysis of unanalyzed files started across ${targetFoldersArray.length} folders.`),
+              ? `Full re-analysis started across ${count} folder(s) (${modesCount} mode(s)) in background.`
+              : `Selective analysis of unanalyzed files started across ${count} folder(s) (${modesCount} mode(s)).`)),
         });
         fetchStatus();
       } else {
         const err = await res.json().catch(() => ({}));
-        // If 409 conflict: already running
         if (res.status === 409) {
           setIsExecuting(true);
           setFeedback({
@@ -230,7 +343,7 @@ export default function FolderAnalysisPanel({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* 1. Multi-Folder Selection Tree Card */}
+      {/* 1. Target Folders Selection Card */}
       <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -238,13 +351,18 @@ export default function FolderAnalysisPanel({
               <Folder className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-foreground">
-                {isRu ? 'Выбор папок для анализа' : 'Target Input Folders'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-foreground">
+                  {t('selectFoldersToAnalyze' as any) || (isRu ? 'Выбор папок для анализа' : 'Target Input Folders')}
+                </h3>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {selectedFolders.size} / {availableFolders.length}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground">
-                {isRu
+                {t('selectFoldersDesc' as any) || (isRu
                   ? 'Отметьте папки, в которых необходимо произвести анализ или переанализ файлов'
-                  : 'Select specific folders to run incremental analysis or full re-processing'}
+                  : 'Select specific folders to run incremental analysis or full re-processing')}
               </p>
             </div>
           </div>
@@ -252,14 +370,14 @@ export default function FolderAnalysisPanel({
           <div className="flex items-center gap-2 text-xs">
             <button
               type="button"
-              onClick={handleSelectAll}
+              onClick={handleSelectAllFolders}
               className="px-2.5 py-1 rounded-lg border border-border/70 bg-muted/30 hover:bg-muted text-foreground transition-colors cursor-pointer"
             >
               {isRu ? 'Выбрать все' : 'Select all'}
             </button>
             <button
               type="button"
-              onClick={handleDeselectAll}
+              onClick={handleDeselectAllFolders}
               className="px-2.5 py-1 rounded-lg border border-border/70 bg-muted/30 hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
             >
               {isRu ? 'Снять выбор' : 'Deselect all'}
@@ -303,7 +421,87 @@ export default function FolderAnalysisPanel({
         )}
       </div>
 
-      {/* 2. Analysis Triggers & Resource Management Card */}
+      {/* 2. Analysis Categories & Processing Modes Selection Card */}
+      <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+              <Layers className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-foreground">
+                  {t('analysisCategories' as any) || (isRu ? 'Категории анализа и виды обработки' : 'Analysis Categories & Processing Modes')}
+                </h3>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                  {selectedModes.size} / {ANALYSIS_CATEGORIES.length}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('analysisCategoriesDesc' as any) || (isRu
+                  ? 'Выберите, какие виды обработки применять (по умолчанию включены все)'
+                  : 'Select which processing stages to execute (all enabled by default)')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={handleSelectAllModes}
+              className="px-2.5 py-1 rounded-lg border border-border/70 bg-muted/30 hover:bg-muted text-foreground transition-colors cursor-pointer"
+            >
+              {isRu ? 'Выбрать все' : 'Select all'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeselectAllModes}
+              className="px-2.5 py-1 rounded-lg border border-border/70 bg-muted/30 hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+            >
+              {isRu ? 'Снять выбор' : 'Deselect all'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {ANALYSIS_CATEGORIES.map((cat) => {
+            const isChecked = selectedModes.has(cat.id);
+            const Icon = cat.icon;
+            const label = t(cat.labelKey as any) || cat.defaultLabel;
+            const desc = t(cat.descKey as any) || cat.defaultDesc;
+
+            return (
+              <div
+                key={cat.id}
+                onClick={() => handleToggleMode(cat.id)}
+                className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                  isChecked
+                    ? 'bg-indigo-500/10 border-indigo-500/40 text-foreground shadow-2xs'
+                    : 'bg-muted/20 border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                }`}
+              >
+                <div className="mt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {}}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
+                  />
+                </div>
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Icon size={15} className={isChecked ? 'text-indigo-500' : 'text-muted-foreground'} />
+                    <span className="text-xs font-bold text-foreground truncate">{label}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">{desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Analysis Triggers & Resource Management Card */}
       <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-[#23a6f0]/10 text-[#23a6f0]">
@@ -315,8 +513,8 @@ export default function FolderAnalysisPanel({
             </h3>
             <p className="text-xs text-muted-foreground">
               {isRu
-                ? 'Запустите выборочный или полный анализ для выбранных папок'
-                : 'Execute selective incremental scan or complete force re-processing'}
+                ? 'Запустите выборочный или полный анализ для выбранных папок и категорий'
+                : 'Execute selective incremental scan or complete force re-processing for chosen folders and categories'}
             </p>
           </div>
         </div>
@@ -326,7 +524,7 @@ export default function FolderAnalysisPanel({
           <button
             type="button"
             onClick={() => handleTriggerAnalysis(false)}
-            disabled={isExecuting || selectedFolders.size === 0}
+            disabled={isExecuting || selectedFolders.size === 0 || selectedModes.size === 0}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
             title={isRu ? 'Анализировать только файлы без сформированных метаданных' : 'Analyze only files missing metadata sidecars'}
           >
@@ -338,7 +536,7 @@ export default function FolderAnalysisPanel({
           <button
             type="button"
             onClick={() => handleTriggerAnalysis(true)}
-            disabled={isExecuting || selectedFolders.size === 0}
+            disabled={isExecuting || selectedFolders.size === 0 || selectedModes.size === 0}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/50 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
             title={isRu ? 'Принудительно переанализировать все файлы заново, перезаписывая метаданные' : 'Force re-process all files, ignoring and overwriting metadata'}
           >
@@ -401,7 +599,7 @@ export default function FolderAnalysisPanel({
         )}
       </div>
 
-      {/* 3. Live Pipeline Status & Progress Monitor */}
+      {/* 4. Live Pipeline Status & Progress Monitor */}
       <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
