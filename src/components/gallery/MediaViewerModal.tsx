@@ -53,7 +53,7 @@ import {
 } from 'lucide-react';
 import SaveChoiceDialog from './SaveChoiceDialog';
 import StylePresetCarousel, { STYLE_PRESETS, type StylePreset } from './StylePresetCarousel';
-import CropFrameOverlay, { type AspectRatioType, type ResolutionOption } from './CropFrameOverlay';
+import CropFrameOverlay, { type AspectRatioType, type ResolutionOption, type CropShape } from './CropFrameOverlay';
 import { UniversalTagModal } from '../common/UniversalTagModal';
 import { cn } from '../../utils';
 import './MediaViewerModal.css';
@@ -433,7 +433,295 @@ export default function MediaViewerModal({
   const [isComparingBefore, setIsComparingBefore] = useState(false);
   const [editorRotationDeg, setEditorRotationDeg] = useState(0);
   const [cropAspectRatio, setCropAspectRatio] = useState<AspectRatioType>('1:1');
+  const [cropShape, setCropShape] = useState<CropShape>('rect');
   const [cropResolution, setCropResolution] = useState<ResolutionOption | null>(null);
+  const [cropRectPct, setCropRectPct] = useState<{ x: number; y: number; width: number; height: number }>({
+    x: 10,
+    y: 10,
+    width: 80,
+    height: 80,
+  });
+
+  const imageWrapperRef = useRef<HTMLDivElement>(null);
+  const isDraggingCropRef = useRef<{
+    type: 'move' | 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w';
+    startX: number;
+    startY: number;
+    initialRect: { x: number; y: number; width: number; height: number };
+    containerWidth: number;
+    containerHeight: number;
+  } | null>(null);
+
+  const computeInitialCropRect = (ratioKey: AspectRatioType, shape: CropShape = cropShape, nw?: number, nh?: number) => {
+    const w = nw || imageNaturalDimensions?.width || 1920;
+    const h = nh || imageNaturalDimensions?.height || 1080;
+
+    if (shape === 'circle') {
+      const diameter = Math.min(w, h) * 0.85;
+      const wPct = (diameter / w) * 100;
+      const hPct = (diameter / h) * 100;
+      return {
+        x: Math.max(0, (100 - wPct) / 2),
+        y: Math.max(0, (100 - hPct) / 2),
+        width: Math.min(100, wPct),
+        height: Math.min(100, hPct),
+      };
+    }
+
+    if (ratioKey === 'original') {
+      return { x: 0, y: 0, width: 100, height: 100 };
+    }
+
+    let targetRatio = 1;
+    if (ratioKey === '1:1') targetRatio = 1;
+    else if (ratioKey === '3:4') targetRatio = 3 / 4;
+    else if (ratioKey === '4:3') targetRatio = 4 / 3;
+    else if (ratioKey === '16:9') targetRatio = 16 / 9;
+    else if (ratioKey === '9:16') targetRatio = 9 / 16;
+    else if (ratioKey === 'free') {
+      return cropRectPct;
+    }
+
+    let cropW = w * 0.9;
+    let cropH = cropW / targetRatio;
+    if (cropH > h * 0.9) {
+      cropH = h * 0.9;
+      cropW = cropH * targetRatio;
+    }
+
+    const wPct = Math.min(100, (cropW / w) * 100);
+    const hPct = Math.min(100, (cropH / h) * 100);
+    return {
+      x: Math.max(0, (100 - wPct) / 2),
+      y: Math.max(0, (100 - hPct) / 2),
+      width: wPct,
+      height: hPct,
+    };
+  };
+
+  const naturalCropDimensions = useMemo(() => {
+    const nw = imageNaturalDimensions?.width || 1920;
+    const nh = imageNaturalDimensions?.height || 1080;
+    const w = Math.round((cropRectPct.width / 100) * nw);
+    const h = Math.round((cropRectPct.height / 100) * nh);
+    if (cropShape === 'circle') {
+      const d = Math.min(w, h);
+      return { width: d, height: d };
+    }
+    return { width: w, height: h };
+  }, [cropRectPct, cropShape, imageNaturalDimensions]);
+
+  const handleCropBoxPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
+    const container = imageWrapperRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    isDraggingCropRef.current = {
+      type: 'move',
+      startX: e.clientX,
+      startY: e.clientY,
+      initialRect: { ...cropRectPct },
+      containerWidth: rect.width,
+      containerHeight: rect.height,
+    };
+  };
+
+  const handleHandlePointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w'
+  ) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
+    const container = imageWrapperRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    isDraggingCropRef.current = {
+      type: handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialRect: { ...cropRectPct },
+      containerWidth: rect.width,
+      containerHeight: rect.height,
+    };
+  };
+
+  const handleCropPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = isDraggingCropRef.current;
+    if (!drag) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const nw = imageNaturalDimensions?.width || 1920;
+    const nh = imageNaturalDimensions?.height || 1080;
+    const imgRatio = nw / nh;
+
+    const deltaX_pct = ((e.clientX - drag.startX) / drag.containerWidth) * 100;
+    const deltaY_pct = ((e.clientY - drag.startY) / drag.containerHeight) * 100;
+
+    const { x: initX, y: initY, width: initW, height: initH } = drag.initialRect;
+
+    if (drag.type === 'move') {
+      const nextX = Math.max(0, Math.min(100 - initW, initX + deltaX_pct));
+      const nextY = Math.max(0, Math.min(100 - initH, initY + deltaY_pct));
+      setCropRectPct({ x: nextX, y: nextY, width: initW, height: initH });
+      setHasUnsavedEdits(true);
+      return;
+    }
+
+    let nextX = initX;
+    let nextY = initY;
+    let nextW = initW;
+    let nextH = initH;
+
+    const isConstrained = cropShape === 'circle' || cropAspectRatio !== 'free';
+
+    let desiredRatio = imgRatio;
+    if (cropShape === 'circle' || cropAspectRatio === '1:1') desiredRatio = 1;
+    else if (cropAspectRatio === '3:4') desiredRatio = 3 / 4;
+    else if (cropAspectRatio === '4:3') desiredRatio = 4 / 3;
+    else if (cropAspectRatio === '16:9') desiredRatio = 16 / 9;
+    else if (cropAspectRatio === '9:16') desiredRatio = 9 / 16;
+    else if (cropAspectRatio === 'original') desiredRatio = imgRatio;
+
+    const ratioPct = desiredRatio / imgRatio;
+
+    switch (drag.type) {
+      case 'se': {
+        nextW = Math.max(5, Math.min(100 - initX, initW + deltaX_pct));
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + nextH > 100) {
+            nextH = 100 - initY;
+            nextW = nextH * ratioPct;
+          }
+        } else {
+          nextH = Math.max(5, Math.min(100 - initY, initH + deltaY_pct));
+        }
+        break;
+      }
+      case 'sw': {
+        const rawW = initW - deltaX_pct;
+        nextW = Math.max(5, Math.min(initX + initW, rawW));
+        nextX = initX + (initW - nextW);
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + nextH > 100) {
+            nextH = 100 - initY;
+            nextW = nextH * ratioPct;
+            nextX = initX + (initW - nextW);
+          }
+        } else {
+          nextH = Math.max(5, Math.min(100 - initY, initH + deltaY_pct));
+        }
+        break;
+      }
+      case 'ne': {
+        nextW = Math.max(5, Math.min(100 - initX, initW + deltaX_pct));
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + initH - nextH < 0) {
+            nextH = initY + initH;
+            nextW = nextH * ratioPct;
+          }
+          nextY = initY + initH - nextH;
+        } else {
+          const rawH = initH - deltaY_pct;
+          nextH = Math.max(5, Math.min(initY + initH, rawH));
+          nextY = initY + (initH - nextH);
+        }
+        break;
+      }
+      case 'nw': {
+        const rawW = initW - deltaX_pct;
+        nextW = Math.max(5, Math.min(initX + initW, rawW));
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + initH - nextH < 0) {
+            nextH = initY + initH;
+            nextW = nextH * ratioPct;
+          }
+          nextX = initX + (initW - nextW);
+          nextY = initY + initH - nextH;
+        } else {
+          const rawH = initH - deltaY_pct;
+          nextH = Math.max(5, Math.min(initY + initH, rawH));
+          nextX = initX + (initW - nextW);
+          nextY = initY + (initH - nextH);
+        }
+        break;
+      }
+      case 'e': {
+        nextW = Math.max(5, Math.min(100 - initX, initW + deltaX_pct));
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + nextH > 100) {
+            nextH = 100 - initY;
+            nextW = nextH * ratioPct;
+          }
+        }
+        break;
+      }
+      case 'w': {
+        const rawW = initW - deltaX_pct;
+        nextW = Math.max(5, Math.min(initX + initW, rawW));
+        nextX = initX + (initW - nextW);
+        if (isConstrained) {
+          nextH = nextW / ratioPct;
+          if (initY + nextH > 100) {
+            nextH = 100 - initY;
+            nextW = nextH * ratioPct;
+            nextX = initX + (initW - nextW);
+          }
+        }
+        break;
+      }
+      case 's': {
+        nextH = Math.max(5, Math.min(100 - initY, initH + deltaY_pct));
+        if (isConstrained) {
+          nextW = nextH * ratioPct;
+          if (initX + nextW > 100) {
+            nextW = 100 - initX;
+            nextH = nextW / ratioPct;
+          }
+        }
+        break;
+      }
+      case 'n': {
+        const rawH = initH - deltaY_pct;
+        nextH = Math.max(5, Math.min(initY + initH, rawH));
+        nextY = initY + (initH - nextH);
+        if (isConstrained) {
+          nextW = nextH * ratioPct;
+          if (initX + nextW > 100) {
+            nextW = 100 - initX;
+            nextH = nextW / ratioPct;
+          }
+        }
+        break;
+      }
+    }
+
+    setCropRectPct({
+      x: Math.max(0, Math.min(100, nextX)),
+      y: Math.max(0, Math.min(100, nextY)),
+      width: Math.max(5, Math.min(100 - nextX, nextW)),
+      height: Math.max(5, Math.min(100 - nextY, nextH)),
+    });
+    setHasUnsavedEdits(true);
+  };
+
+  const handleCropPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDraggingCropRef.current) {
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      isDraggingCropRef.current = null;
+    }
+  };
+
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
   const [showSaveChoiceDialog, setShowSaveChoiceDialog] = useState(false);
   const [isSavingChoice, setIsSavingChoice] = useState(false);
@@ -452,8 +740,10 @@ export default function MediaViewerModal({
     setSelectedStylePreset(STYLE_PRESETS[0]);
     setIsComparingBefore(false);
     setEditorRotationDeg(0);
+    setCropShape('rect');
     setCropAspectRatio('1:1');
     setCropResolution(null);
+    setCropRectPct(computeInitialCropRect('1:1', 'rect'));
     setHasUnsavedEdits(false);
   };
 
@@ -538,21 +828,39 @@ export default function MediaViewerModal({
         showToast(language === 'ru' ? 'Поворот успешно сохранен!' : 'Rotation saved successfully!');
         window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.filePath || filePath } }));
       } else if (activeEditTool === 'crop') {
-        const targetW = cropResolution?.width || imageNaturalDimensions?.width || 1080;
-        const targetH = cropResolution?.height || imageNaturalDimensions?.height || 1080;
+        const nw = imageNaturalDimensions?.width || 1920;
+        const nh = imageNaturalDimensions?.height || 1080;
+        const cropLeft = Math.max(0, Math.min(nw - 1, Math.round((cropRectPct.x / 100) * nw)));
+        const cropTop = Math.max(0, Math.min(nh - 1, Math.round((cropRectPct.y / 100) * nh)));
+        let cropW = Math.max(1, Math.min(nw - cropLeft, Math.round((cropRectPct.width / 100) * nw)));
+        let cropH = Math.max(1, Math.min(nh - cropTop, Math.round((cropRectPct.height / 100) * nh)));
+
+        if (cropShape === 'circle') {
+          const d = Math.min(cropW, cropH);
+          cropW = d;
+          cropH = d;
+        }
+
+        const targetW = cropResolution?.width || cropW;
+        const targetH = cropResolution?.height || cropH;
         const res = await fetchFn('/api/media/edit/crop-scale', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             filePath,
-            crop: { left: 0, top: 0, width: targetW, height: targetH },
+            crop: { left: cropLeft, top: cropTop, width: cropW, height: cropH },
             targetResolution: { width: targetW, height: targetH },
+            shape: cropShape,
             saveAsCopy,
           }),
         });
         if (!res.ok) throw new Error('Crop & scale failed');
         const data = await res.json();
-        showToast(language === 'ru' ? 'Кадрирование успешно сохранено!' : 'Crop saved successfully!');
+        showToast(
+          language === 'ru'
+            ? (cropShape === 'circle' ? 'Круглая обрезка успешно сохранена!' : 'Кадрирование успешно сохранено!')
+            : 'Crop saved successfully!'
+        );
         window.dispatchEvent(new CustomEvent('media_updated', { detail: { filePath: data.filePath || filePath } }));
       }
 
@@ -1794,6 +2102,7 @@ export default function MediaViewerModal({
                   </div>
                 ) : (
                   <div
+                    ref={imageWrapperRef}
                     className={cn(
                       'relative inline-flex items-center justify-center max-w-full max-h-full select-none',
                       zoomScale > 1.0 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
@@ -1823,10 +2132,13 @@ export default function MediaViewerModal({
                       className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl pointer-events-none"
                       onLoad={(e) => {
                         const target = e.currentTarget;
+                        const nw = target.naturalWidth;
+                        const nh = target.naturalHeight;
                         setImageNaturalDimensions({
-                          width: target.naturalWidth,
-                          height: target.naturalHeight,
+                          width: nw,
+                          height: nh,
                         });
+                        setCropRectPct(computeInitialCropRect(cropAspectRatio, cropShape, nw, nh));
                       }}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -1835,6 +2147,80 @@ export default function MediaViewerModal({
                         if (fallback) fallback.style.display = 'flex';
                       }}
                     />
+
+                    {/* Interactive 8-point Scalable Crop Frame Overlay (CR-001) */}
+                    {isEditMode && activeEditTool === 'crop' && (
+                      <div
+                        className={cn('crop-frame-box', cropShape === 'circle' && 'is-circle')}
+                        style={{
+                          left: `${cropRectPct.x}%`,
+                          top: `${cropRectPct.y}%`,
+                          width: `${cropRectPct.width}%`,
+                          height: `${cropRectPct.height}%`,
+                        }}
+                        onPointerDown={handleCropBoxPointerDown}
+                        onPointerMove={handleCropPointerMove}
+                        onPointerUp={handleCropPointerUp}
+                      >
+                        {/* 8 Resize Handles */}
+                        <div
+                          className="crop-handle crop-handle-nw"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'nw')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-n"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'n')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-ne"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'ne')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-e"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'e')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-se"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'se')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-s"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 's')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-sw"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'sw')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+                        <div
+                          className="crop-handle crop-handle-w"
+                          onPointerDown={(e) => handleHandlePointerDown(e, 'w')}
+                          title={language === 'ru' ? 'Тянуть для изменения размера' : 'Drag to resize'}
+                        />
+
+                        {/* Dimension / Diameter Badge */}
+                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-primary text-white text-[11px] font-mono font-bold whitespace-nowrap shadow-md pointer-events-none select-none z-50">
+                          {cropShape === 'circle' ? (
+                            <span>⌀ {naturalCropDimensions.width} px</span>
+                          ) : (
+                            <span>
+                              {naturalCropDimensions.width} × {naturalCropDimensions.height} px
+                            </span>
+                          )}
+                          {cropResolution && (
+                            <span className="text-white/80 font-normal">
+                              {' '}→ {cropResolution.width} × {cropResolution.height}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Interactive green highlight for selected face (only in normal view when not zoomed) */}
                     {!isEditMode && zoomScale === 1.0 && (() => {
@@ -1901,23 +2287,6 @@ export default function MediaViewerModal({
                       100%
                     </button>
                   )}
-                </div>
-              )}
-
-              {/* Crop Frame Overlay & Rule-of-Thirds Grid */}
-              {isEditMode && activeEditTool === 'crop' && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
-                  <div
-                    className="crop-frame-box"
-                    style={{
-                      width: cropAspectRatio === '1:1' ? 440 : cropAspectRatio === '3:4' ? 360 : cropAspectRatio === '4:3' ? 480 : cropAspectRatio === '16:9' ? 560 : cropAspectRatio === '9:16' ? 315 : 520,
-                      height: cropAspectRatio === '1:1' ? 440 : cropAspectRatio === '3:4' ? 480 : cropAspectRatio === '4:3' ? 360 : cropAspectRatio === '16:9' ? 315 : cropAspectRatio === '9:16' ? 560 : 390,
-                    }}
-                  >
-                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-primary text-white text-[11px] font-mono font-bold whitespace-nowrap shadow-md">
-                      {cropAspectRatio} {cropResolution ? `(${cropResolution.width} × ${cropResolution.height})` : ''}
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -2128,9 +2497,21 @@ export default function MediaViewerModal({
 
                     {activeEditTool === 'crop' && (
                       <CropFrameOverlay
+                        shape={cropShape}
+                        onSelectShape={(s) => {
+                          setCropShape(s);
+                          if (s === 'circle') {
+                            setCropAspectRatio('1:1');
+                          }
+                          setCropResolution(null);
+                          setCropRectPct(computeInitialCropRect(s === 'circle' ? '1:1' : cropAspectRatio, s));
+                          setHasUnsavedEdits(true);
+                        }}
                         aspectRatio={cropAspectRatio}
                         onSelectAspectRatio={(ratio) => {
                           setCropAspectRatio(ratio);
+                          setCropResolution(null);
+                          setCropRectPct(computeInitialCropRect(ratio, cropShape));
                           setHasUnsavedEdits(true);
                         }}
                         selectedResolution={cropResolution}
@@ -2140,6 +2521,16 @@ export default function MediaViewerModal({
                         }}
                         naturalWidth={imageNaturalDimensions?.width || 1920}
                         naturalHeight={imageNaturalDimensions?.height || 1080}
+                        currentCropDimensions={naturalCropDimensions}
+                        onResetToFull={() => {
+                          if (cropShape === 'circle') {
+                            setCropRectPct(computeInitialCropRect('1:1', 'circle'));
+                          } else {
+                            setCropAspectRatio('original');
+                            setCropRectPct({ x: 0, y: 0, width: 100, height: 100 });
+                          }
+                          setHasUnsavedEdits(true);
+                        }}
                       />
                     )}
                   </div>

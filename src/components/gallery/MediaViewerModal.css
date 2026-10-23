@@ -53,16 +53,23 @@
   }
 }
 
-/* Crop Frame Overlay & Rule-of-Thirds Grid */
+/* Crop Frame Overlay & Interactive Handles (CR-001) */
 .crop-frame-box {
-  position: relative;
+  position: absolute;
   border: 2px solid #3b82f6;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
-  pointer-events: none;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+  cursor: move;
+  transition: border-radius 0.2s ease;
 }
 
-.crop-frame-box::before {
+.crop-frame-box.is-circle {
+  border-radius: 50%;
+}
+
+.crop-frame-box:not(.is-circle)::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -72,4 +79,50 @@
   background-size: 33.333% 33.333%;
   pointer-events: none;
 }
+
+.crop-frame-box.is-circle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.25) calc(50% - 0.5px), rgba(255, 255, 255, 0.25) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.25) calc(50% - 0.5px), rgba(255, 255, 255, 0.25) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  pointer-events: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background-color: #ffffff;
+  border: 2px solid #3b82f6;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  z-index: 40;
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+.crop-handle:hover,
+.crop-handle:active {
+  background-color: #3b82f6;
+  border-color: #ffffff;
+  transform: scale(1.25);
+}
+
+.crop-handle-nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.crop-handle-ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.crop-handle-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+.crop-handle-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+
+.crop-handle-n { top: -7px; left: calc(50% - 7px); cursor: ns-resize; }
+.crop-handle-s { bottom: -7px; left: calc(50% - 7px); cursor: ns-resize; }
+.crop-handle-w { top: calc(50% - 7px); left: -7px; cursor: ew-resize; }
+.crop-handle-e { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
+
+.crop-frame-box.is-circle .crop-handle {
+  border-radius: 50%;
+}
+
 

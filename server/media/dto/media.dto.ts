@@ -156,6 +156,9 @@ export class CropScaleMediaDto {
     height?: number;
   };
 
+  @ApiProperty({ required: false, description: 'Crop shape: rect or circle', default: 'rect', enum: ['rect', 'circle'] })
+  shape?: 'rect' | 'circle';
+
   @ApiProperty({ required: false, description: 'Rotation angle in degrees (0, 90, 180, 270)' })
   rotation?: number;
 

@@ -2297,6 +2297,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     filePath: string;
     crop?: { left: number; top: number; width: number; height: number };
     targetResolution?: { width?: number; height?: number };
+    shape?: 'rect' | 'circle';
     rotation?: number;
     saveAsCopy?: boolean;
   }): Promise<{ success: boolean; filePath: string; filename: string; isCopy: boolean }> {
@@ -2310,15 +2311,19 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     }
 
     const saveAsCopy = options.saveAsCopy !== false;
+    let targetExt = ext;
+    if (options.shape === 'circle' && saveAsCopy && (ext === '.jpg' || ext === '.jpeg')) {
+      targetExt = '.png';
+    }
     let targetPath = resolved;
 
     if (saveAsCopy) {
       const dir = path.dirname(resolved);
       const base = path.basename(resolved, ext);
-      let candidate = path.join(dir, `${base}_edited${ext}`);
+      let candidate = path.join(dir, `${base}_edited${targetExt}`);
       let counter = 1;
       while (fs.existsSync(candidate)) {
-        candidate = path.join(dir, `${base}_edited_${counter}${ext}`);
+        candidate = path.join(dir, `${base}_edited_${counter}${targetExt}`);
         counter++;
       }
       targetPath = candidate;
@@ -2332,22 +2337,71 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       pipeline = pipeline.rotate(options.rotation);
     }
 
+    let croppedW = meta.width || 1000;
+    let croppedH = meta.height || 1000;
+
     if (options.crop && options.crop.width > 0 && options.crop.height > 0) {
       const imgW = meta.width || 1000;
       const imgH = meta.height || 1000;
       const left = Math.max(0, Math.min(Math.round(options.crop.left), imgW - 1));
       const top = Math.max(0, Math.min(Math.round(options.crop.top), imgH - 1));
-      const width = Math.max(1, Math.min(Math.round(options.crop.width), imgW - left));
-      const height = Math.max(1, Math.min(Math.round(options.crop.height), imgH - top));
+      let width = Math.max(1, Math.min(Math.round(options.crop.width), imgW - left));
+      let height = Math.max(1, Math.min(Math.round(options.crop.height), imgH - top));
 
-      pipeline = pipeline.extract({ left, top, width, height });
+      if (options.shape === 'circle') {
+        const diameter = Math.min(width, height);
+        const adjLeft = Math.max(0, left + Math.round((width - diameter) / 2));
+        const adjTop = Math.max(0, top + Math.round((height - diameter) / 2));
+        croppedW = diameter;
+        croppedH = diameter;
+        pipeline = pipeline.extract({ left: adjLeft, top: adjTop, width: diameter, height: diameter });
+      } else {
+        croppedW = width;
+        croppedH = height;
+        pipeline = pipeline.extract({ left, top, width, height });
+      }
+    } else if (options.shape === 'circle') {
+      const diameter = Math.min(croppedW, croppedH);
+      const adjLeft = Math.max(0, Math.round((croppedW - diameter) / 2));
+      const adjTop = Math.max(0, Math.round((croppedH - diameter) / 2));
+      croppedW = diameter;
+      croppedH = diameter;
+      pipeline = pipeline.extract({ left: adjLeft, top: adjTop, width: diameter, height: diameter });
     }
 
-    if (options.targetResolution?.width && options.targetResolution?.height) {
-      pipeline = pipeline.resize(options.targetResolution.width, options.targetResolution.height, {
+    let targetW = options.targetResolution?.width;
+    let targetH = options.targetResolution?.height;
+
+    if (options.shape === 'circle' && targetW && targetH) {
+      const d = Math.min(targetW, targetH);
+      targetW = d;
+      targetH = d;
+    }
+
+    if (targetW && targetH && (targetW < croppedW || targetH < croppedH)) {
+      pipeline = pipeline.resize(targetW, targetH, {
         fit: 'inside',
         withoutEnlargement: true,
       });
+      croppedW = targetW;
+      croppedH = targetH;
+    }
+
+    if (options.shape === 'circle') {
+      const diameter = Math.min(croppedW, croppedH);
+      const radius = diameter / 2;
+      const circleSvg = Buffer.from(
+        `<svg width="${diameter}" height="${diameter}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#ffffff"/></svg>`
+      );
+      pipeline = pipeline.ensureAlpha().composite([{ input: circleSvg, blend: 'dest-in' }]);
+
+      if (targetExt === '.png') {
+        pipeline = pipeline.png();
+      } else if (targetExt === '.jpg' || targetExt === '.jpeg') {
+        pipeline = pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: 92 });
+      } else if (targetExt === '.webp') {
+        pipeline = pipeline.webp();
+      }
     }
 
     await pipeline.toFile(tempFile);

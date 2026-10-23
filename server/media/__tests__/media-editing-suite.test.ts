@@ -157,4 +157,51 @@ describe('Media Editing Suite (FEAT-030: Crop, Scale, Rotate, Style Transfer)', 
     assert.strictEqual(meta.width, 60);
     assert.strictEqual(meta.height, 120);
   });
+
+  it('6. should crop image in circular mode and save as PNG copy with transparency (CR-001)', async () => {
+    const result = await mediaService.cropAndScaleImage({
+      filePath: testPhotoPath,
+      crop: { left: 20, top: 10, width: 60, height: 60 },
+      targetResolution: { width: 50, height: 50 },
+      shape: 'circle',
+      saveAsCopy: true,
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.isCopy, true);
+    assert.ok(result.filename.endsWith('.png'), 'Circular crop copy should be saved as PNG for transparency');
+    assert.ok(fs.existsSync(result.filePath));
+
+    const meta = await sharp(result.filePath).metadata();
+    assert.strictEqual(meta.width, 50);
+    assert.strictEqual(meta.height, 50);
+    assert.strictEqual(meta.channels, 4, 'PNG should have 4 channels including alpha transparency');
+    assert.strictEqual(meta.hasAlpha, true);
+  });
+
+  it('7. should crop image in circular mode with in-place overwrite flattening background (CR-001)', async () => {
+    const circleOverwritePath = path.join(inputDir, 'photo_circle_overwrite.jpg');
+    await sharp({
+      create: { width: 100, height: 100, channels: 3, background: { r: 10, g: 100, b: 200 } },
+    })
+      .jpeg()
+      .toFile(circleOverwritePath);
+
+    const result = await mediaService.cropAndScaleImage({
+      filePath: circleOverwritePath,
+      crop: { left: 10, top: 10, width: 80, height: 80 },
+      shape: 'circle',
+      saveAsCopy: false,
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.isCopy, false);
+    assert.strictEqual(result.filePath, circleOverwritePath);
+
+    const meta = await sharp(circleOverwritePath).metadata();
+    assert.strictEqual(meta.width, 80);
+    assert.strictEqual(meta.height, 80);
+    assert.strictEqual(meta.format, 'jpeg');
+  });
 });
+
