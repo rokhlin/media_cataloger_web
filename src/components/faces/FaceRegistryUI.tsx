@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { useOptionalFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
+import { useFeatureFlags, FlagsManager } from '../../services/featureFlagsContext';
 import './FaceRegistryUI.css';
 
 export type FaceRegistryTabKey = 'groups' | 'persons' | 'all-unrecognized';
@@ -34,10 +34,13 @@ export const FaceRegistryUI: React.FC<FaceRegistryUIProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const featureFlags = useOptionalFeatureFlags();
-  const isFeatureFlagDropdownActive = featureFlags
-    ? featureFlags.isFeatureEnabled('face_registry_dropdown')
-    : FlagsManager.IsActive('face_registry_dropdown', false);
+  let isFeatureFlagDropdownActive = false;
+  try {
+    const { isFeatureEnabled } = useFeatureFlags();
+    isFeatureFlagDropdownActive = isFeatureEnabled('face_registry_dropdown');
+  } catch {
+    isFeatureFlagDropdownActive = FlagsManager.IsActive('face_registry_dropdown', false);
+  }
 
   const renderAsDropdown = asDropdown !== undefined ? asDropdown : isFeatureFlagDropdownActive;
 

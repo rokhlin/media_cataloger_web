@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type {
   GalleryMediaFile,
   DetectedFaceRecord,
@@ -172,7 +172,7 @@ export default function MediaViewerModal({
     }
   });
 
-  const toggleSidebar = useCallback(() => {
+  const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
       try {
@@ -180,7 +180,7 @@ export default function MediaViewerModal({
       } catch {}
       return next;
     });
-  }, []);
+  };
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -190,7 +190,7 @@ export default function MediaViewerModal({
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
-  const handleToggleFullscreen = useCallback(async () => {
+  const handleToggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement) {
         if (containerRef.current?.requestFullscreen) {
@@ -204,7 +204,7 @@ export default function MediaViewerModal({
     } catch (err) {
       console.error('Fullscreen toggle error:', err);
     }
-  }, []);
+  };
 
   // FEAT-027: Rotate Left 90°
   const [rotationDeg, setRotationDeg] = useState(0);
@@ -952,7 +952,6 @@ export default function MediaViewerModal({
   }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename]);
 
   // Fetch detected faces for current file
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isOpen || !selectedMedia) {
       setFacesForSelected([]);
@@ -1000,7 +999,6 @@ export default function MediaViewerModal({
   }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename, vaultTokenQuery, authFetch]);
 
   // Family tree kinship context fetching
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isOpen || !selectedMedia) return;
     let isMounted = true;
@@ -1070,13 +1068,13 @@ export default function MediaViewerModal({
               milestones: data.contextualMilestones || [],
             };
 
-            setSelectedMedia((prev) => {
-              const updated = prev ? { ...prev, family_context: updatedContext } : null;
-              if (onMediaUpdated && isMounted && updated) {
-                onMediaUpdated(updated);
-              }
-              return updated;
-            });
+            setSelectedMedia((prev) => (prev ? { ...prev, family_context: updatedContext } : null));
+            if (onMediaUpdated && isMounted) {
+              onMediaUpdated({
+                ...selectedMedia,
+                family_context: updatedContext,
+              });
+            }
           }
         }
       } catch (err) {
@@ -1344,7 +1342,7 @@ export default function MediaViewerModal({
     } else {
       setMediaTags([]);
     }
-  }, [selectedMedia]);
+  }, [selectedMedia?.file_path, selectedMedia?.filename, selectedMedia?.tags]);
 
   const handleAddMediaTag = async (data: { tag: string; category: string }) => {
     if (!selectedMedia) return;

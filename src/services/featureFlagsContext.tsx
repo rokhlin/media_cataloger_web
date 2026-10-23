@@ -493,7 +493,3 @@ export const useFeatureFlags = (): FeatureFlagsContextValue => {
   }
   return ctx;
 };
-
-export const useOptionalFeatureFlags = (): FeatureFlagsContextValue | null => {
-  return useContext(FeatureFlagsContext);
-};
