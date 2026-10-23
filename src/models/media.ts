@@ -241,6 +241,7 @@ export interface DuplicateConfig {
   default_keep_strategy: 'highest_resolution' | 'largest_file_size' | 'newest' | 'oldest';
   target_move_folder: string | null;
   auto_scan_on_sync: boolean;
+  include_videos?: boolean;
   updated_at?: string;
 }
 

@@ -541,6 +541,7 @@ export const LockedFolderScreen: React.FC = () => {
                 fetchVaultMediaItems();
               }
             }}
+            onNavigateToDuplicates={() => navigate('/duplicates')}
           />
         )}
       </div>

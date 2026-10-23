@@ -22,6 +22,8 @@ export interface DuplicateDetectionRulesProps {
   setSelectedFolderScope?: (folder: string) => void;
   forceRehash?: boolean;
   setForceRehash?: (val: boolean) => void;
+  includeVideos?: boolean;
+  setIncludeVideos?: (val: boolean) => void;
   isScanning?: boolean;
   scanStatus?: DuplicateScanStatus | null;
   onStartScan?: () => void;
@@ -45,6 +47,8 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
   setSelectedFolderScope: setControlledFolderScope,
   forceRehash: controlledForceRehash,
   setForceRehash: setControlledForceRehash,
+  includeVideos: controlledIncludeVideos,
+  setIncludeVideos: setControlledIncludeVideos,
   isScanning: controlledIsScanning,
   scanStatus: controlledScanStatus,
   onStartScan: controlledStartScan,
@@ -60,6 +64,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
   const [localBurstWindow, setLocalBurstWindow] = useState<number>(3.0);
   const [localFolderScope, setLocalFolderScope] = useState<string>('all');
   const [localForceRehash, setLocalForceRehash] = useState<boolean>(false);
+  const [localIncludeVideos, setLocalIncludeVideos] = useState<boolean>(false);
   const [localScanStatus, setLocalScanStatus] = useState<DuplicateScanStatus | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -84,6 +89,9 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
   const forceRehash = isControlled ? controlledForceRehash : localForceRehash;
   const setForceRehash = isControlled && setControlledForceRehash ? setControlledForceRehash : setLocalForceRehash;
 
+  const includeVideos = isControlled && controlledIncludeVideos !== undefined ? controlledIncludeVideos : localIncludeVideos;
+  const setIncludeVideos = isControlled && setControlledIncludeVideos ? setControlledIncludeVideos : setLocalIncludeVideos;
+
   const scanStatus = isControlled && controlledScanStatus !== undefined ? controlledScanStatus : localScanStatus;
   const isScanning = isControlled && controlledIsScanning !== undefined ? controlledIsScanning : Boolean(scanStatus?.isScanning);
 
@@ -100,6 +108,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
             if (cfg.default_engine) setLocalEngine(cfg.default_engine);
             if (cfg.similarity_threshold) setLocalThreshold(cfg.similarity_threshold);
             if (cfg.burst_window_seconds) setLocalBurstWindow(cfg.burst_window_seconds);
+            if (cfg.include_videos !== undefined) setLocalIncludeVideos(Boolean(cfg.include_videos));
           }
         }
       } catch (err) {
@@ -155,6 +164,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
           burst_window_seconds: burstWindow,
           folders,
           force_rehash: forceRehash,
+          include_videos: includeVideos,
         }),
       });
 
@@ -168,7 +178,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
     } catch (err: any) {
       alert(`Network error: ${err.message}`);
     }
-  }, [authFetch, burstWindow, controlledStartScan, engine, folderScope, forceRehash, mode, threshold]);
+  }, [authFetch, burstWindow, controlledStartScan, engine, folderScope, forceRehash, includeVideos, mode, threshold]);
 
   // Handle stop scan
   const handleStopScan = useCallback(async () => {
@@ -195,6 +205,7 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
           default_engine: engine,
           similarity_threshold: threshold,
           burst_window_seconds: burstWindow,
+          include_videos: includeVideos,
         }),
       });
       if (res.ok) {
@@ -335,6 +346,18 @@ export const DuplicateDetectionRules: React.FC<DuplicateDetectionRulesProps> = (
               disabled={isScanning}
             />
             <span>Force Re-hash Files</span>
+          </label>
+        </div>
+
+        <div className="dup-form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.4rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }} title="Сканировать видеофайлы строго после завершения обработки фотографий">
+            <input
+              type="checkbox"
+              checked={includeVideos}
+              onChange={(e) => setIncludeVideos(e.target.checked)}
+              disabled={isScanning}
+            />
+            <span>Include Videos (After Photos)</span>
           </label>
         </div>
       </div>

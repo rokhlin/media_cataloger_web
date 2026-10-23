@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Heart, Play, Share2, Video, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useFavorites } from '../../services/favoritesService';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import type { GalleryMediaFile } from '../../models';
 import MediaViewerModal from '../gallery/MediaViewerModal';
 
 export const FavoritesScreen: React.FC = () => {
+  const navigate = useNavigate();
   const { favorites, isFavorite, toggleFavorite } = useFavorites();
   const [allFiles, setAllFiles] = useState<GalleryMediaFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,6 +173,7 @@ export const FavoritesScreen: React.FC = () => {
             mediaCacheService.upsert(updated);
             loadMedia();
           }}
+          onNavigateToDuplicates={() => navigate('/duplicates')}
         />
       )}
     </div>

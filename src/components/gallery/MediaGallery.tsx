@@ -50,6 +50,7 @@ interface InputSourcesGalleryProps {
   scannedFilesCount?: number;
   activeInputFolders?: string[];
   isEngineConnected?: boolean;
+  onNavigateToDuplicates?: (filePath: string) => void;
 }
 
 export default function InputSourcesGallery({
@@ -71,6 +72,7 @@ export default function InputSourcesGallery({
   scannedFilesCount = 0,
   activeInputFolders = [],
   isEngineConnected = true,
+  onNavigateToDuplicates,
 }: InputSourcesGalleryProps) {
   const { language, t } = useLanguage();
 
@@ -1459,6 +1461,7 @@ export default function InputSourcesGallery({
           mediaCacheService.upsert(updated);
           if (onRefresh) onRefresh();
         }}
+        onNavigateToDuplicates={onNavigateToDuplicates}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { mediaCacheService } from '../../services/mediaCacheService';
 import { useFavorites } from '../../services/favoritesService';
@@ -13,6 +13,7 @@ import MediaViewerModal from './MediaViewerModal';
 import { CategoryFilterChips, type CategoryFilterKey } from './CategoryFilterChips';
 
 export default function GalleryPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const folderParam = searchParams.get('folder');
   const queryParam = searchParams.get('q') || '';
@@ -557,6 +558,7 @@ export default function GalleryPage() {
             mediaCacheService.upsert(updated);
             setMediaFiles(mediaCacheService.getAll());
           }}
+          onNavigateToDuplicates={() => navigate('/duplicates')}
         />
       )}
     </div>

@@ -60,6 +60,12 @@ function AppMain() {
 
   // Tab navigation: 'main' (Sources / Gallery) or 'media_library' (Face Registry & Controls)
   const [activeTab, setActiveTab] = useState<'main' | 'media_library' | string>('main');
+  const [duplicatesFocusFilePath, setDuplicatesFocusFilePath] = useState<string | null>(null);
+
+  const handleNavigateToDuplicates = useCallback((filePath: string) => {
+    setDuplicatesFocusFilePath(filePath);
+    setActiveTab('duplicates');
+  }, []);
 
   // Navigation sidebar expanded state
   const [isNavExpanded, setIsNavExpanded] = useState<boolean>(() => {
@@ -932,6 +938,7 @@ function AppMain() {
               scannedFilesCount={scanProgress?.scanned_count || 0}
               activeInputFolders={settings?.input_folders || []}
               isEngineConnected={Boolean(statusInfo.connected)}
+              onNavigateToDuplicates={handleNavigateToDuplicates}
             />
           )}
 
@@ -939,6 +946,8 @@ function AppMain() {
             <DuplicatesScreen
               onRefreshMedia={() => loadMediaFiles(true)}
               activeInputFolders={settings?.input_folders || []}
+              focusFilePath={duplicatesFocusFilePath}
+              onClearFocus={() => setDuplicatesFocusFilePath(null)}
             />
           )}
 

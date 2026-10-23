@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Copy,
   Heart,
   Edit3,
   Lock,
@@ -109,6 +110,7 @@ export interface MediaViewerModalProps {
   isEngineConnected?: boolean;
   onMediaUpdated?: (updated: GalleryMediaFile) => void;
   vaultToken?: string | null;
+  onNavigateToDuplicates?: (filePath: string) => void;
 }
 
 export default function MediaViewerModal({
@@ -132,6 +134,7 @@ export default function MediaViewerModal({
   isEngineConnected = true,
   onMediaUpdated,
   vaultToken: propVaultToken,
+  onNavigateToDuplicates,
 }: MediaViewerModalProps) {
   const { t, language } = useLanguage();
   const { authFetch, isAdmin, canEdit, canManageFaces } = useAuth();
@@ -160,6 +163,40 @@ export default function MediaViewerModal({
   const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [videoPlaybackError, setVideoPlaybackError] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    isDuplicate: boolean;
+    duplicateCount: number;
+    matchType?: string;
+    groupId?: string;
+    isPrimary?: boolean;
+  } | null>(null);
+
+  // Check duplicate membership on media change
+  useEffect(() => {
+    if (!isOpen || !selectedMedia) {
+      setDuplicateInfo(null);
+      return;
+    }
+    const targetPath = selectedMedia.file_path || selectedMedia.filename;
+    if (!targetPath) return;
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/duplicates/membership?filePath=${encodeURIComponent(targetPath)}`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setDuplicateInfo(data);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, selectedMedia?.file_path, selectedMedia?.filename]);
 
   // FEAT-027: Fullscreen and Collapsible Sidebar
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1534,6 +1571,21 @@ export default function MediaViewerModal({
                       <Lock size={10} />
                       <span>Личная папка</span>
                     </span>
+                  )}
+                  {duplicateInfo?.isDuplicate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetPath = selectedMedia.file_path || selectedMedia.filename;
+                        onClose();
+                        onNavigateToDuplicates?.(targetPath);
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-400 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                      title="Перейти к найденным дубликатам этого файла в окне поиска дубликатов"
+                    >
+                      <Copy size={10} />
+                      <span>обнаружены дубликаты ({duplicateInfo.duplicateCount})</span>
+                    </button>
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground truncate">

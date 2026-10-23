@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { DuplicatesService } from './duplicates.service.js';
 
@@ -27,11 +27,14 @@ export class DuplicatesController {
       folders?: string[];
       force_rehash?: boolean;
       forceRehash?: boolean;
+      include_videos?: boolean;
+      includeVideos?: boolean;
     },
   ) {
     const threshold = body?.similarity_threshold ?? body?.similarityThreshold;
     const burstWindow = body?.burst_window_seconds ?? body?.burstWindowSeconds;
     const forceRehash = body?.force_rehash ?? body?.forceRehash;
+    const includeVideos = body?.include_videos ?? body?.includeVideos;
 
     return this.duplicatesService.startScan({
       engine: body?.engine,
@@ -40,6 +43,7 @@ export class DuplicatesController {
       burstWindowSeconds: burstWindow,
       folders: body?.folders,
       forceRehash: forceRehash,
+      includeVideos: includeVideos,
     });
   }
 
@@ -94,5 +98,18 @@ export class DuplicatesController {
     const files = body.files || body.file_paths || [];
     const dest = body.destination_folder || body.destinationFolder || '';
     return this.duplicatesService.moveFiles(files, dest);
+  }
+
+  @Post('unmark')
+  @ApiOperation({ summary: 'Unmark file from duplicates and persist exclusion in database' })
+  unmarkDuplicate(@Body() body: { filePath?: string; file_path?: string }) {
+    const filePath = body?.filePath || body?.file_path;
+    return this.duplicatesService.unmarkDuplicate(filePath);
+  }
+
+  @Get('membership')
+  @ApiOperation({ summary: 'Check if a specific file is part of any duplicate or burst group' })
+  getDuplicateMembership(@Query('filePath') filePath?: string) {
+    return this.duplicatesService.getDuplicateMembership(filePath);
   }
 }

@@ -24,6 +24,7 @@ export interface GalleryScreenProps {
   scannedFilesCount?: number;
   activeInputFolders?: string[];
   isEngineConnected?: boolean;
+  onNavigateToDuplicates?: (filePath: string) => void;
 }
 
 export default function GalleryScreen({
@@ -45,6 +46,7 @@ export default function GalleryScreen({
   scannedFilesCount,
   activeInputFolders,
   isEngineConnected,
+  onNavigateToDuplicates,
 }: GalleryScreenProps) {
   return (
     <div className="tab-pane active" id="pane-main">
@@ -67,6 +69,7 @@ export default function GalleryScreen({
         scannedFilesCount={scannedFilesCount}
         activeInputFolders={activeInputFolders}
         isEngineConnected={isEngineConnected}
+        onNavigateToDuplicates={onNavigateToDuplicates}
       />
     </div>
   );

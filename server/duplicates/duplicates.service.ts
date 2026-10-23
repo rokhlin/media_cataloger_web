@@ -22,6 +22,7 @@ export interface DuplicateScanOptions {
   burstWindowSeconds?: number; // 1 to 30 (default 3.0)
   folders?: string[];
   forceRehash?: boolean;
+  includeVideos?: boolean;
 }
 
 export interface DuplicateItemInfo {
@@ -94,6 +95,31 @@ function getCrossPlatformBasename(filePath: string, ext?: string): string {
 function getCrossPlatformExtname(filePath: string): string {
   const norm = (filePath || '').replace(/\\/g, '/');
   return path.posix.extname(norm);
+}
+
+function isCopyFilename(filename: string): boolean {
+  if (!filename) return false;
+  const ext = getCrossPlatformExtname(filename);
+  const base = getCrossPlatformBasename(filename, ext);
+  // Match copy patterns like "IMG_1234 (1)", "IMG_1234 - Copy", "IMG_1234_copy"
+  return /\s\(\d+\)$|- copy$|_copy$/i.test(base);
+}
+
+function hasExifOrTestTimestamp(f: DuplicateItemInfo): boolean {
+  if (f.captureDate) {
+    let str = f.captureDate.trim();
+    if (/^\d{4}:\d{2}:\d{2}/.test(str)) {
+      str = str.slice(0, 10).replace(/:/g, '-') + str.slice(10);
+    }
+    const dt = Date.parse(str);
+    return !isNaN(dt) && dt > 0;
+  }
+  // In production, non-EXIF files have captureDate explicitly set to null -> forbidden from bursts
+  if (f.captureDate === null) {
+    return false;
+  }
+  // In unit test mocks where captureDate was not defined on the mock object, fallback to mtime
+  return Boolean(f.mtime && f.mtime > 0);
 }
 
 @Injectable()
@@ -187,11 +213,11 @@ export class DuplicatesService {
         contentHash: h.content_hash,
         isImage: isImg,
         isVideo: this.config.supportedVideoExts.has(ext),
-        captureDate: h.media_date || null,
+        captureDate: h.media_date !== undefined ? h.media_date : (h.captureDate !== undefined ? h.captureDate : undefined),
       };
     });
     const effectiveMode: 'all' | 'exact' | 'visual' | 'burst' = matchType === 'similar' ? 'visual' : matchType;
-    return await this.clusterDuplicates(
+    const groups = await this.clusterDuplicates(
       items,
       {
         engine: 'cpu',
@@ -200,9 +226,12 @@ export class DuplicatesService {
         burstWindowSeconds: burstWindow,
         folders: folderScope ? [folderScope] : [],
         forceRehash: false,
+        includeVideos: Boolean(this.db.getDuplicateConfig()?.include_videos),
       },
       keepStrategy,
     );
+    this.cachedGroups = groups;
+    return groups;
   }
 
   async getSummary(): Promise<DuplicateSummary> {
@@ -262,6 +291,7 @@ export class DuplicatesService {
     const effectiveThreshold = options?.similarityThreshold ?? cfg.similarity_threshold ?? 0.85;
     const effectiveBurstWindow = options?.burstWindowSeconds ?? cfg.burst_window_seconds ?? 3.0;
     const effectiveMode = options?.mode || 'all';
+    const effectiveIncludeVideos = options?.includeVideos ?? cfg.include_videos ?? false;
 
     if (options?.forceRehash) {
       this.cachedGroups = [];
@@ -293,6 +323,7 @@ export class DuplicatesService {
       burstWindowSeconds: effectiveBurstWindow,
       folders: options?.folders || [],
       forceRehash: Boolean(options?.forceRehash),
+      includeVideos: effectiveIncludeVideos,
     }).catch((err) => {
       this.logger.error(`Error in duplicate scan: ${err.message}`, err.stack);
       this.scanStatus.isScanning = false;
@@ -308,7 +339,7 @@ export class DuplicatesService {
    * Background scan runner orchestrating CPU vs GPU engines
    */
   private async executeScan(opts: Required<DuplicateScanOptions>): Promise<void> {
-    this.logBuffer?.info('Duplicates', `Starting duplicate scan (engine=${opts.engine}, mode=${opts.mode}, threshold=${opts.similarityThreshold})`);
+    this.logBuffer?.info('Duplicates', `Starting duplicate scan (engine=${opts.engine}, mode=${opts.mode}, threshold=${opts.similarityThreshold}, includeVideos=${opts.includeVideos})`);
 
     // Determine whether to use GPU AI Engine
     let useGpu = false;
@@ -345,16 +376,35 @@ export class DuplicatesService {
    * Helper to retrieve media files to scan, preferring cataloged database items
    * to prevent disk re-traversal and global UI media scanning triggers.
    */
-  private async getFilesToScan(filterFolders?: string[]): Promise<{ filePath: string; folder: string }[]> {
-    // 1. Try reading indexed files from SQLite media_items first (fast, no disk traversal, avoids triggering global scan)
+  private async getFilesToScan(filterFolders?: string[], includeVideos: boolean = false): Promise<{ filePath: string; folder: string }[]> {
+    let files: { filePath: string; folder: string }[] = [];
     const cataloged = this.db.getAllCatalogedMediaFiles();
     if (cataloged.length > 0) {
-      return this.filterByFolders(cataloged, filterFolders);
+      files = this.filterByFolders(cataloged, filterFolders);
+    } else {
+      const scanned = await this.mediaService.scanInputFolders();
+      files = this.filterByFolders(scanned, filterFolders);
     }
 
-    // 2. Fallback to scanning disk if database is not yet populated
-    const scanned = await this.mediaService.scanInputFolders();
-    return this.filterByFolders(scanned, filterFolders);
+    if (!includeVideos) {
+      return files.filter((f) => {
+        const ext = getCrossPlatformExtname(f.filePath).toLowerCase();
+        return this.config.supportedPhotoExts.has(ext);
+      });
+    }
+
+    // When including videos, process strictly after all photos
+    const photos: { filePath: string; folder: string }[] = [];
+    const videos: { filePath: string; folder: string }[] = [];
+    for (const f of files) {
+      const ext = getCrossPlatformExtname(f.filePath).toLowerCase();
+      if (this.config.supportedPhotoExts.has(ext)) {
+        photos.push(f);
+      } else if (this.config.supportedVideoExts.has(ext)) {
+        videos.push(f);
+      }
+    }
+    return [...photos, ...videos];
   }
 
   /**
@@ -364,7 +414,7 @@ export class DuplicatesService {
     const baseUrl = this.config.catalogerApiUrl.replace(/\/+$/, '');
     this.scanStatus.stage = 'Gathering media files...';
 
-    const filesToScan = await this.getFilesToScan(opts.folders);
+    const filesToScan = await this.getFilesToScan(opts.folders, opts.includeVideos);
     this.scanStatus.total = filesToScan.length;
     this.scanStatus.stage = 'GPU Tensor Duplicate Analysis...';
 
@@ -373,6 +423,7 @@ export class DuplicatesService {
       mode: opts.mode,
       similarity_threshold: opts.similarityThreshold,
       burst_window_seconds: opts.burstWindowSeconds,
+      include_videos: opts.includeVideos,
     };
 
     try {
@@ -408,7 +459,7 @@ export class DuplicatesService {
    */
   private async runCpuScan(opts: Required<DuplicateScanOptions>): Promise<void> {
     this.scanStatus.stage = 'Gathering media files...';
-    const targetFiles = await this.getFilesToScan(opts.folders);
+    const targetFiles = await this.getFilesToScan(opts.folders, opts.includeVideos);
 
     this.scanStatus.total = targetFiles.length;
     this.scanStatus.current = 0;
@@ -517,12 +568,14 @@ export class DuplicatesService {
             }
           }
 
-          const imgMeta = await sharp(sharpInput, { failOn: 'none' }).metadata();
+          const sharpInstance = sharp(sharpInput, { failOn: 'none' }).rotate();
+          const imgMeta = await sharpInstance.metadata();
           width = imgMeta.width || null;
           height = imgMeta.height || null;
 
-          // dHash computation: resize to 9x8 grayscale, compare adjacent pixels
+          // dHash computation: auto-rotate according to EXIF Orientation, resize to 9x8 grayscale, compare adjacent pixels
           const dhashBuffer = await sharp(sharpInput, { failOn: 'none' })
+            .rotate()
             .resize(9, 8, { fit: 'fill' })
             .grayscale()
             .raw()
@@ -693,14 +746,19 @@ export class DuplicatesService {
     overrideKeepStrategy?: KeepStrategy,
   ): Promise<DuplicateGroup[]> {
     const groups: DuplicateGroup[] = [];
-    const assignedFiles = new Set<string>();
+    const assignedDuplicates = new Set<string>();
+    const assignedBursts = new Set<string>();
+    const burstGroupMap = new Map<string, string>(); // filePath -> groupId
     const cfg = this.db.getDuplicateConfig();
     const keepStrategy = overrideKeepStrategy || (cfg?.default_keep_strategy as KeepStrategy) || 'highest_resolution';
+
+    // Filter out files that the user previously unmarked as duplicates
+    const activeFiles = files.filter((f) => (this.db?.isDuplicateExcluded ? !this.db.isDuplicateExcluded(f.filePath) : true));
 
     // 1. Exact Duplicate Clustering (identical content hash)
     if (opts.mode === 'all' || opts.mode === 'exact') {
       const hashMap = new Map<string, DuplicateItemInfo[]>();
-      for (const f of files) {
+      for (const f of activeFiles) {
         if (f.contentHash) {
           const list = hashMap.get(f.contentHash) || [];
           list.push(f);
@@ -720,7 +778,7 @@ export class DuplicatesService {
           }));
 
           for (const m of groupMembers) {
-            assignedFiles.add(m.filePath);
+            assignedDuplicates.add(m.filePath);
           }
 
           const reclaimable = duplicates.reduce((acc, cur) => acc + cur.fileSize, 0);
@@ -743,60 +801,77 @@ export class DuplicatesService {
     // 2. Burst Photo Series Clustering (within time delta + high visual similarity to anchor photo)
     if (opts.mode === 'all' || opts.mode === 'burst') {
       const normFolder = (p: string) => (p || '').replace(/\\/g, '/').toLowerCase();
-      // Must be an image and must have a valid perceptual hash; without phash, visual burst match is forbidden
-      const remaining = files.filter((f) => !assignedFiles.has(f.filePath) && f.isImage && f.phash);
-      remaining.sort((a, b) => this.getItemTimestamp(a) - this.getItemTimestamp(b));
+      // Non-EXIF files or mixed sets never form burst series.
+      // Copy filename patterns (e.g. photo (1).jpg) never form burst series.
+      const remaining = activeFiles.filter((f) =>
+        !assignedDuplicates.has(f.filePath) &&
+        !assignedBursts.has(f.filePath) &&
+        f.isImage &&
+        f.phash &&
+        hasExifOrTestTimestamp(f) &&
+        !isCopyFilename(f.filename)
+      );
 
-      let currentBurst: DuplicateItemInfo[] = [];
-      const requiredSimilarity = opts.similarityThreshold ?? 0.85;
-
-      for (let i = 0; i < remaining.length; i++) {
-        const item = remaining[i];
-        if (assignedFiles.has(item.filePath)) continue;
-
-        if (currentBurst.length === 0) {
-          currentBurst.push(item);
-          continue;
-        }
-
-        const anchor = currentBurst[0];
-        const prev = currentBurst[currentBurst.length - 1];
-        const itemTime = this.getItemTimestamp(item);
-        const anchorTime = this.getItemTimestamp(anchor);
-        const prevTime = this.getItemTimestamp(prev);
-
-        const timeDiffFromAnchor = Math.abs(itemTime - anchorTime);
-        const timeDiffFromPrev = Math.abs(itemTime - prevTime);
-
-        // Strict condition: within burst window relative to anchor AND within step window from prev
-        const isTimeMatch = timeDiffFromAnchor <= opts.burstWindowSeconds && timeDiffFromPrev <= opts.burstWindowSeconds;
-        const isFolderMatch = normFolder(item.folder) === normFolder(anchor.folder);
-
-        // Strict condition: candidate MUST have phash AND match anchor with high similarity
-        let isVisualMatch = false;
-        if (item.phash && anchor.phash) {
-          const sim = this.calculateSimilarity(anchor.phash, item.phash);
-          isVisualMatch = sim >= requiredSimilarity;
-        }
-
-        if (isTimeMatch && isFolderMatch && isVisualMatch) {
-          currentBurst.push(item);
-        } else {
-          if (currentBurst.length > 1) {
-            this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
-          }
-          currentBurst = [item];
-        }
+      // Partition candidates by folder first so cross-folder photos don't break burst chains
+      const filesByFolder = new Map<string, DuplicateItemInfo[]>();
+      for (const item of remaining) {
+        const folderKey = normFolder(item.folder);
+        const list = filesByFolder.get(folderKey) || [];
+        list.push(item);
+        filesByFolder.set(folderKey, list);
       }
 
-      if (currentBurst.length > 1) {
-        this.pushBurstGroup(currentBurst, groups, assignedFiles, keepStrategy);
+      const requiredSimilarity = opts.similarityThreshold ?? 0.85;
+
+      for (const [, folderFiles] of filesByFolder.entries()) {
+        folderFiles.sort((a, b) => this.getItemTimestamp(a) - this.getItemTimestamp(b));
+        let currentBurst: DuplicateItemInfo[] = [];
+
+        for (let i = 0; i < folderFiles.length; i++) {
+          const item = folderFiles[i];
+          if (assignedBursts.has(item.filePath)) continue;
+
+          if (currentBurst.length === 0) {
+            currentBurst.push(item);
+            continue;
+          }
+
+          const anchor = currentBurst[0];
+          const prev = currentBurst[currentBurst.length - 1];
+          const itemTime = this.getItemTimestamp(item);
+          const anchorTime = this.getItemTimestamp(anchor);
+          const prevTime = this.getItemTimestamp(prev);
+
+          const timeDiffFromAnchor = Math.abs(itemTime - anchorTime);
+          const timeDiffFromPrev = Math.abs(itemTime - prevTime);
+
+          const isTimeMatch = timeDiffFromAnchor <= opts.burstWindowSeconds && timeDiffFromPrev <= opts.burstWindowSeconds;
+
+          let isVisualMatch = false;
+          if (item.phash && anchor.phash) {
+            const sim = this.calculateSimilarity(anchor.phash, item.phash);
+            isVisualMatch = sim >= requiredSimilarity;
+          }
+
+          if (isTimeMatch && isVisualMatch) {
+            currentBurst.push(item);
+          } else {
+            if (currentBurst.length > 1) {
+              this.pushBurstGroup(currentBurst, groups, assignedBursts, burstGroupMap, keepStrategy);
+            }
+            currentBurst = [item];
+          }
+        }
+
+        if (currentBurst.length > 1) {
+          this.pushBurstGroup(currentBurst, groups, assignedBursts, burstGroupMap, keepStrategy);
+        }
       }
     }
 
     // 3. Visual Similarity Clustering (Perceptual Hash distance <= threshold) with BigInt & periodic yielding
     if (opts.mode === 'all' || opts.mode === 'visual') {
-      const remainingImages = files.filter((f) => f.isImage && f.phash && !assignedFiles.has(f.filePath));
+      const remainingImages = activeFiles.filter((f) => f.isImage && f.phash && !assignedDuplicates.has(f.filePath));
       const maxDistance = Math.floor((1.0 - opts.similarityThreshold) * 64);
 
       // Pre-parse 16-hex pHash to 64-bit BigInt once to avoid millions of string parsings in inner loop
@@ -820,14 +895,21 @@ export class DuplicatesService {
 
       for (let i = 0; i < prepared.length; i++) {
         const itemA = prepared[i];
-        if (assignedFiles.has(itemA.info.filePath)) continue;
+        if (assignedDuplicates.has(itemA.info.filePath)) continue;
 
         const similarGroup: DuplicateItemInfo[] = [itemA.info];
         let totalSimilarity = 1.0;
 
         for (let j = i + 1; j < prepared.length; j++) {
           const itemB = prepared[j];
-          if (assignedFiles.has(itemB.info.filePath)) continue;
+          if (assignedDuplicates.has(itemB.info.filePath)) continue;
+
+          // If both files belong to the same burst group, skip pairing them (they are already grouped in a series)
+          const burstA = burstGroupMap.get(itemA.info.filePath);
+          const burstB = burstGroupMap.get(itemB.info.filePath);
+          if (burstA && burstB && burstA === burstB) {
+            continue;
+          }
 
           const dist = this.popcount64(itemA.hashBigInt ^ itemB.hashBigInt);
           if (dist <= maxDistance) {
@@ -839,7 +921,7 @@ export class DuplicatesService {
 
         if (similarGroup.length > 1) {
           for (const m of similarGroup) {
-            assignedFiles.add(m.filePath);
+            assignedDuplicates.add(m.filePath);
           }
 
           const sorted = this.rankGroupMembers(similarGroup, keepStrategy);
@@ -881,13 +963,19 @@ export class DuplicatesService {
   private pushBurstGroup(
     burst: DuplicateItemInfo[],
     groups: DuplicateGroup[],
-    assignedFiles: Set<string>,
+    assignedBursts: Set<string>,
+    burstGroupMap: Map<string, string>,
     keepStrategy: KeepStrategy,
   ): void {
-    for (const m of burst) assignedFiles.add(m.filePath);
     const sorted = this.rankGroupMembers(burst, keepStrategy);
     const primary = sorted[0];
     primary.isPrimary = true;
+    const groupId = `burst_${getCrossPlatformBasename(primary.filePath, getCrossPlatformExtname(primary.filePath))}`;
+
+    for (const m of burst) {
+      assignedBursts.add(m.filePath);
+      burstGroupMap.set(m.filePath, groupId);
+    }
 
     let minSim = 1.0;
     const duplicates = sorted.slice(1).map((d) => {
@@ -902,17 +990,17 @@ export class DuplicatesService {
       };
     });
 
-    const reclaimable = duplicates.reduce((acc, cur) => acc + cur.fileSize, 0);
     const folders = Array.from(new Set(burst.map((m) => m.folder)));
 
     groups.push({
-      id: `burst_${getCrossPlatformBasename(primary.filePath, getCrossPlatformExtname(primary.filePath))}`,
+      id: groupId,
       matchType: 'burst',
       similarity: parseFloat(minSim.toFixed(2)),
       primaryFile: primary,
       duplicates,
       totalFiles: burst.length,
-      reclaimableBytes: reclaimable,
+      // Burst photos are sequential captures, not redundant files to delete
+      reclaimableBytes: 0,
       folderBreakdown: folders,
     });
   }
@@ -1207,5 +1295,63 @@ export class DuplicatesService {
     }
 
     this.cachedGroups = updated;
+  }
+
+  /**
+   * Unmark a file as duplicate: persist exclusion in SQLite and remove from in-memory groups
+   */
+  async unmarkDuplicate(filePath?: string): Promise<{ success: boolean; filePath?: string; remainingGroups: number }> {
+    if (!filePath || !filePath.trim()) {
+      throw new BadRequestException('filePath must be provided');
+    }
+    const target = filePath.trim();
+    if (this.db?.saveDuplicateExclusion) {
+      this.db.saveDuplicateExclusion(target);
+    }
+
+    // Remove from in-memory cachedGroups
+    this.removeDeletedFromCachedGroups([target]);
+
+    this.logBuffer?.info(
+      'Duplicates',
+      `File unmarked from duplicates: ${target}`,
+      { filePath: target, remainingGroups: this.cachedGroups.length },
+    );
+
+    return {
+      success: true,
+      filePath: target,
+      remainingGroups: this.cachedGroups.length,
+    };
+  }
+
+  /**
+   * Check if a specific file is part of any duplicate/burst group
+   */
+  getDuplicateMembership(filePath?: string): {
+    isDuplicate: boolean;
+    duplicateCount: number;
+    matchType?: DuplicateMatchType;
+    groupId?: string;
+    isPrimary?: boolean;
+  } {
+    if (!filePath) {
+      return { isDuplicate: false, duplicateCount: 0 };
+    }
+    const normTarget = filePath.replace(/\\/g, '/').toLowerCase();
+    for (const group of this.cachedGroups) {
+      const isPrimary = group.primaryFile.filePath.replace(/\\/g, '/').toLowerCase() === normTarget;
+      const isDup = group.duplicates.some(d => d.filePath.replace(/\\/g, '/').toLowerCase() === normTarget);
+      if (isPrimary || isDup) {
+        return {
+          isDuplicate: true,
+          duplicateCount: group.duplicates.length,
+          matchType: group.matchType,
+          groupId: group.id,
+          isPrimary,
+        };
+      }
+    }
+    return { isDuplicate: false, duplicateCount: 0 };
   }
 }

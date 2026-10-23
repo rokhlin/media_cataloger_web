@@ -30,12 +30,16 @@ export interface DuplicatesManagerTabProps {
   onRefreshMedia?: () => void;
   activeInputFolders?: string[];
   onOpenViewer?: (filePath: string) => void;
+  focusFilePath?: string | null;
+  onClearFocus?: () => void;
 }
 
 export default function DuplicatesManagerTab({
   onRefreshMedia,
   activeInputFolders = [],
   onOpenViewer,
+  focusFilePath,
+  onClearFocus,
 }: DuplicatesManagerTabProps) {
   const { t } = useLanguage();
   const { authFetch } = useAuth();
@@ -57,6 +61,7 @@ export default function DuplicatesManagerTab({
   const [burstWindowSec, setBurstWindowSec] = useState<number>(3.0);
   const [selectedFolderScope, setSelectedFolderScope] = useState<string>('all');
   const [forceRehash, setForceRehash] = useState(false);
+  const [includeVideos, setIncludeVideos] = useState(false);
   const [hasUserEditedConfig, setHasUserEditedConfig] = useState(false);
 
   // Selection state for batch actions (File paths selected for cleanup)
@@ -131,6 +136,7 @@ export default function DuplicatesManagerTab({
           if (data.default_engine) setSelectedEngine(data.default_engine);
           if (data.similarity_threshold) setSimilarityThreshold(data.similarity_threshold);
           if (data.burst_window_seconds) setBurstWindowSec(data.burst_window_seconds);
+          if (data.include_videos !== undefined) setIncludeVideos(Boolean(data.include_videos));
           if (data.target_move_folder) setTargetMoveFolder(data.target_move_folder);
         }
       }
@@ -208,6 +214,7 @@ export default function DuplicatesManagerTab({
             default_engine: selectedEngine,
             similarity_threshold: similarityThreshold,
             burst_window_seconds: burstWindowSec,
+            include_videos: includeVideos,
           }),
         });
       } catch {}
@@ -221,6 +228,7 @@ export default function DuplicatesManagerTab({
           burst_window_seconds: burstWindowSec,
           folders,
           force_rehash: forceRehash,
+          include_videos: includeVideos,
         }),
       });
 
@@ -363,6 +371,12 @@ export default function DuplicatesManagerTab({
   // Filter groups in real time based on active user controls (mode, similarity threshold, and folder)
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
+      if (focusFilePath) {
+        const normTarget = focusFilePath.replace(/\\/g, '/').toLowerCase();
+        const inPrimary = (g.primaryFile?.filePath || '').replace(/\\/g, '/').toLowerCase() === normTarget;
+        const inDups = g.duplicates?.some((d) => (d.filePath || '').replace(/\\/g, '/').toLowerCase() === normTarget);
+        if (!inPrimary && !inDups) return false;
+      }
       if (selectedMode !== 'all' && g.matchType !== selectedMode) {
         return false;
       }
@@ -377,11 +391,14 @@ export default function DuplicatesManagerTab({
       }
       return true;
     });
-  }, [groups, selectedMode, similarityThreshold, selectedFolderScope]);
+  }, [groups, selectedMode, similarityThreshold, selectedFolderScope, focusFilePath]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedMode, similarityThreshold, selectedFolderScope]);
+    if (focusFilePath) {
+      setIsDuplicatesOpen(true);
+    }
+  }, [selectedMode, similarityThreshold, selectedFolderScope, focusFilePath]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / GROUPS_PER_PAGE));
   const paginatedGroups = useMemo(() => {
@@ -575,6 +592,8 @@ export default function DuplicatesManagerTab({
               setSelectedFolderScope={setSelectedFolderScope}
               forceRehash={forceRehash}
               setForceRehash={setForceRehash}
+              includeVideos={includeVideos}
+              setIncludeVideos={setIncludeVideos}
               isScanning={Boolean(scanStatus?.isScanning)}
               scanStatus={scanStatus}
               onStartScan={handleStartScan}
@@ -633,6 +652,25 @@ export default function DuplicatesManagerTab({
               🗑️ {t('btnDeleteDuplicates' as any) || 'Delete Selected'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Focused File Chip Banner */}
+      {focusFilePath && (
+        <div className="flex items-center justify-between gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-sm">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="font-semibold text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 uppercase tracking-wider">Фокус</span>
+            <span className="truncate font-mono text-xs">{focusFilePath.split(/[\\/]/).pop()}</span>
+            <span className="text-xs text-amber-400/80">({filteredGroups.length} {filteredGroups.length === 1 ? 'группа' : 'групп'})</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClearFocus}
+            className="px-2.5 py-1 text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="Сбросить фильтр по выбранному файлу"
+          >
+            ✕ Сбросить фокус
+          </button>
         </div>
       )}
 

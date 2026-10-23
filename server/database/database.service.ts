@@ -246,11 +246,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         default_keep_strategy TEXT NOT NULL DEFAULT 'highest_resolution',
         target_move_folder TEXT,
         auto_scan_on_sync INTEGER NOT NULL DEFAULT 0,
+        include_videos INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
       );
 
-      INSERT OR IGNORE INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy)
-      VALUES (1, 'auto', 0.90, 3.0, 'highest_resolution');
+      INSERT OR IGNORE INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy, include_videos)
+      VALUES (1, 'auto', 0.90, 3.0, 'highest_resolution', 0);
+
+      CREATE TABLE IF NOT EXISTS duplicate_exclusions (
+        file_path TEXT PRIMARY KEY,
+        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
 
       CREATE TABLE IF NOT EXISTS cache_strategy (
         id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -415,6 +421,26 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         }
         if (!pCols.has('updated_at')) {
           this.db.exec("ALTER TABLE persons ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'));");
+        }
+      } catch {
+        // ignore
+      }
+
+      // Migrate duplicate_config columns if missing
+      try {
+        const dcCols = new Set((this.db.pragma('table_info(duplicate_config)') as any[]).map((c: any) => c.name.toLowerCase()));
+        if (!dcCols.has('include_videos')) {
+          this.db.exec('ALTER TABLE duplicate_config ADD COLUMN include_videos INTEGER NOT NULL DEFAULT 0;');
+        }
+      } catch {
+        // ignore
+      }
+
+      // Migrate media_hashes columns if missing
+      try {
+        const mhCols = new Set((this.db.pragma('table_info(media_hashes)') as any[]).map((c: any) => c.name.toLowerCase()));
+        if (!mhCols.has('hash_algo')) {
+          this.db.exec("ALTER TABLE media_hashes ADD COLUMN hash_algo TEXT DEFAULT 'dhash64_v2';");
         }
       } catch {
         // ignore
@@ -2462,6 +2488,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     default_keep_strategy: string;
     target_move_folder: string | null;
     auto_scan_on_sync: boolean;
+    include_videos: boolean;
     updated_at: string;
   } {
     const db = this.getDb();
@@ -2474,6 +2501,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         default_keep_strategy: 'highest_resolution',
         target_move_folder: null,
         auto_scan_on_sync: false,
+        include_videos: false,
         updated_at: new Date().toISOString(),
       };
     }
@@ -2484,6 +2512,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       default_keep_strategy: row.default_keep_strategy || 'highest_resolution',
       target_move_folder: row.target_move_folder || null,
       auto_scan_on_sync: Boolean(row.auto_scan_on_sync),
+      include_videos: Boolean(row.include_videos),
       updated_at: row.updated_at || new Date().toISOString(),
     };
   }
@@ -2495,6 +2524,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     default_keep_strategy?: string;
     target_move_folder?: string | null;
     auto_scan_on_sync?: boolean;
+    include_videos?: boolean;
   }): any {
     const db = this.getDb();
     const current = this.getDuplicateConfig();
@@ -2505,11 +2535,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       default_keep_strategy: config.default_keep_strategy !== undefined ? config.default_keep_strategy : current.default_keep_strategy,
       target_move_folder: config.target_move_folder !== undefined ? config.target_move_folder : current.target_move_folder,
       auto_scan_on_sync: config.auto_scan_on_sync !== undefined ? (config.auto_scan_on_sync ? 1 : 0) : (current.auto_scan_on_sync ? 1 : 0),
+      include_videos: config.include_videos !== undefined ? (config.include_videos ? 1 : 0) : (current.include_videos ? 1 : 0),
     };
 
     db.prepare(`
-      INSERT INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy, target_move_folder, auto_scan_on_sync, updated_at)
-      VALUES (1, @default_engine, @similarity_threshold, @burst_window_seconds, @default_keep_strategy, @target_move_folder, @auto_scan_on_sync, datetime('now', 'localtime'))
+      INSERT INTO duplicate_config (id, default_engine, similarity_threshold, burst_window_seconds, default_keep_strategy, target_move_folder, auto_scan_on_sync, include_videos, updated_at)
+      VALUES (1, @default_engine, @similarity_threshold, @burst_window_seconds, @default_keep_strategy, @target_move_folder, @auto_scan_on_sync, @include_videos, datetime('now', 'localtime'))
       ON CONFLICT(id) DO UPDATE SET
         default_engine = excluded.default_engine,
         similarity_threshold = excluded.similarity_threshold,
@@ -2517,10 +2548,53 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         default_keep_strategy = excluded.default_keep_strategy,
         target_move_folder = excluded.target_move_folder,
         auto_scan_on_sync = excluded.auto_scan_on_sync,
+        include_videos = excluded.include_videos,
         updated_at = datetime('now', 'localtime')
     `).run(updated);
 
     return this.getDuplicateConfig();
+  }
+
+  saveDuplicateExclusion(filePath: string): void {
+    if (!filePath) return;
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    db.prepare(`
+      INSERT OR IGNORE INTO duplicate_exclusions (file_path, created_at)
+      VALUES (?, datetime('now', 'localtime'))
+    `).run(norm);
+  }
+
+  isDuplicateExcluded(filePath: string): boolean {
+    if (!filePath) return false;
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    const row = db.prepare(`
+      SELECT 1 FROM duplicate_exclusions
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+      LIMIT 1
+    `).get(filePath, norm, norm);
+    return Boolean(row);
+  }
+
+  getDuplicateExclusions(): string[] {
+    const db = this.getDb();
+    try {
+      const rows = db.prepare(`SELECT file_path FROM duplicate_exclusions`).all() as any[];
+      return rows.map((r) => r.file_path);
+    } catch {
+      return [];
+    }
+  }
+
+  removeDuplicateExclusion(filePath: string): void {
+    if (!filePath) return;
+    const db = this.getDb();
+    const norm = filePath.replace(/\\/g, '/');
+    db.prepare(`
+      DELETE FROM duplicate_exclusions
+      WHERE file_path = ? OR file_path = ? OR LOWER(file_path) = LOWER(?)
+    `).run(filePath, norm, norm);
   }
 
   getCacheStrategyConfig(): {

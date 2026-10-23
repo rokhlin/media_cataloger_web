@@ -8,6 +8,7 @@ describe('DuplicatesService', () => {
   let mockConfigService: any;
 
   beforeEach(() => {
+    const excludedFiles = new Set<string>();
     mockDbService = {
       getDuplicateConfig: () => ({
         default_engine: 'cpu',
@@ -21,6 +22,8 @@ describe('DuplicatesService', () => {
       saveMediaHash: () => {},
       deleteMediaHashes: () => {},
       deleteMediaHash: () => {},
+      isDuplicateExcluded: (p: string) => excludedFiles.has(p),
+      saveDuplicateExclusion: (p: string) => excludedFiles.add(p),
     };
 
     mockConfigService = {
@@ -524,6 +527,190 @@ describe('DuplicatesService', () => {
 
       assert.ok(groups.length > 0, 'Should find groups among 500 items');
       assert.ok(elapsed < 500, `Clustering 500 items should take < 500ms, took ${elapsed}ms`);
+    });
+
+    it('should match visual duplicates across folders even if photos belong to a burst series (BUG-020 decoupled sets)', async () => {
+      // 2 photos in folder A forming a burst series, plus an exact/visual duplicate of shot1 in folder B
+      const testHashes = [
+        {
+          file_path: '/folderA/IMG_1001.jpg',
+          content_hash: 'md5_1',
+          phash: '0000000000000000',
+          file_size: 4000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000000,
+          media_date: '2026-07-01T10:00:00Z',
+        },
+        {
+          file_path: '/folderA/IMG_1002.jpg',
+          content_hash: 'md5_2',
+          phash: '0000000000000001', // 1 bit diff from IMG_1001
+          file_size: 4100000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001,
+          media_date: '2026-07-01T10:00:01Z',
+        },
+        {
+          file_path: '/folderB/IMG_1001_backup.jpg',
+          content_hash: 'md5_backup',
+          phash: '0000000000000000', // Identical phash to IMG_1001
+          file_size: 4000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1700000000,
+          media_date: '2026-07-01T10:00:00Z',
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const groups = await duplicatesService.getDuplicateGroups('all', 0.90, 3.0, 'highest_resolution');
+
+      // Must find BOTH: 1 burst group for folder A, AND 1 visual duplicate group linking IMG_1001 with backup
+      const burstGroups = groups.filter((g) => g.matchType === 'burst');
+      const visualGroups = groups.filter((g) => g.matchType === 'visual');
+
+      assert.equal(burstGroups.length, 1, 'Should find 1 burst group');
+      assert.equal(burstGroups[0].totalFiles, 2);
+      assert.equal(burstGroups[0].reclaimableBytes, 0, 'Burst groups must have 0 reclaimable bytes');
+
+      assert.equal(visualGroups.length, 1, 'Should find 1 visual duplicate group across folders');
+      const visualPaths = [visualGroups[0].primaryFile.filePath, ...visualGroups[0].duplicates.map((d) => d.filePath)];
+      assert.ok(visualPaths.includes('/folderA/IMG_1001.jpg'));
+      assert.ok(visualPaths.includes('/folderB/IMG_1001_backup.jpg'));
+    });
+
+    it('should NOT cluster copy filename patterns like (1) or - Copy into burst series (BUG-020)', async () => {
+      const testHashes = [
+        {
+          file_path: '/photos/IMG_5000.jpg',
+          content_hash: 'md5_p',
+          phash: '1111222233334444',
+          file_size: 3000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000000,
+          media_date: '2026-07-01T12:00:00Z',
+        },
+        {
+          file_path: '/photos/IMG_5000 (1).jpg',
+          content_hash: 'md5_copy',
+          phash: '1111222233334445',
+          file_size: 3000000,
+          width: 4000,
+          height: 3000,
+          mtime: 1600000001,
+          media_date: '2026-07-01T12:00:01Z',
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const burstGroups = await duplicatesService.getDuplicateGroups('burst', 0.90, 3.0, 'highest_resolution');
+      assert.equal(burstGroups.length, 0, 'Files with copy suffix (1) must NOT form bursts');
+    });
+
+    it('should NEVER cluster non-EXIF files (media_date = null) into burst series (BUG-020)', async () => {
+      const testHashes = [
+        {
+          file_path: '/downloads/downloaded_1.jpg',
+          content_hash: 'md5_d1',
+          phash: 'aaaaaaaaaaaaaaaa',
+          file_size: 500000,
+          width: 1920,
+          height: 1080,
+          mtime: 1600000000,
+          media_date: null, // No EXIF date
+        },
+        {
+          file_path: '/downloads/downloaded_2.jpg',
+          content_hash: 'md5_d2',
+          phash: 'aaaaaaaaaaaaaaab',
+          file_size: 500000,
+          width: 1920,
+          height: 1080,
+          mtime: 1600000001,
+          media_date: null, // No EXIF date
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      const burstGroups = await duplicatesService.getDuplicateGroups('burst', 0.90, 3.0, 'highest_resolution');
+      assert.equal(burstGroups.length, 0, 'Non-EXIF files must never form burst series');
+    });
+
+    it('should support unmarkDuplicate and exclude files from future groups', async () => {
+      const testHashes = [
+        {
+          file_path: '/photos/a.jpg',
+          content_hash: 'md5_same',
+          phash: '1234567890abcdef',
+          file_size: 1000,
+          width: 100,
+          height: 100,
+          mtime: 1000,
+        },
+        {
+          file_path: '/photos/b.jpg',
+          content_hash: 'md5_same',
+          phash: '1234567890abcdef',
+          file_size: 1000,
+          width: 100,
+          height: 100,
+          mtime: 1000,
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+
+      let groups = await duplicatesService.getDuplicateGroups('exact');
+      assert.equal(groups.length, 1);
+
+      // Unmark b.jpg
+      const unmarkResult = await duplicatesService.unmarkDuplicate('/photos/b.jpg');
+      assert.equal(unmarkResult.success, true);
+
+      // Now clustering again: b.jpg is excluded, so no duplicate group is formed
+      groups = await duplicatesService.getDuplicateGroups('exact');
+      assert.equal(groups.length, 0);
+    });
+
+    it('should return membership status for files in duplicate groups', async () => {
+      const testHashes = [
+        {
+          file_path: '/photos/file1.jpg',
+          content_hash: 'md5_test',
+          phash: '1234567890abcdef',
+          file_size: 2000,
+          width: 200,
+          height: 200,
+          mtime: 1000,
+        },
+        {
+          file_path: '/photos/file2.jpg',
+          content_hash: 'md5_test',
+          phash: '1234567890abcdef',
+          file_size: 2000,
+          width: 200,
+          height: 200,
+          mtime: 1000,
+        },
+      ];
+
+      mockDbService.getAllMediaHashes = () => testHashes;
+      await duplicatesService.getDuplicateGroups('exact');
+
+      const mem1 = duplicatesService.getDuplicateMembership('/photos/file1.jpg');
+      assert.equal(mem1.isDuplicate, true);
+      assert.equal(mem1.duplicateCount, 1);
+      assert.equal(mem1.matchType, 'exact');
+
+      const memNonExistent = duplicatesService.getDuplicateMembership('/photos/non_existent.jpg');
+      assert.equal(memNonExistent.isDuplicate, false);
+      assert.equal(memNonExistent.duplicateCount, 0);
     });
   });
 });
